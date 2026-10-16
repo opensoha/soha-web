@@ -1,13 +1,14 @@
-import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { ReadFeedback } from '@/components/request-feedback'
 import { StatusTag } from '@/components/status-tag'
 import { TableCellLink } from '@/components/table-cell-content'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
 import { formatAgeSeconds } from '@/utils/time'
+import { useQuery } from '@tanstack/react-query'
 import type { TableColumnsType } from 'antd'
-import { buildGatewayAPIRoutePath } from '../shared/paths'
+import { useNavigate } from 'react-router-dom'
 import { NetworkResourceListPage } from '../shared/list-page'
+import { buildGatewayAPIRoutePath } from '../shared/paths'
 import { gatewayAPIQueries } from './queries'
 import type { GatewayClass } from './types'
 
@@ -46,36 +47,39 @@ export function NetworkGatewayClassesPage() {
     },
   ]
   return (
-    <NetworkResourceListPage
-      buildAIPageContext={(items, searchKeyword) => ({
-        sourceWorkbench: 'platform',
-        sourceRoute: '/network/gateway-api/gatewayclasses',
-        sourceTitle: 'GatewayClasses',
-        entityKind: 'kubernetes.gatewayclass.list',
-        entityName: 'GatewayClasses',
-        clusterId: clusterId ?? undefined,
-        visibleFilters: { searchKeyword },
-        pinnedData: { total: items.length },
-      })}
-      columns={columns}
-      emptyDescription={{
-        zh_CN: '当前集群没有 GatewayClass，或未安装 Gateway API CRD',
-        en_US: 'No GatewayClasses in this cluster, or Gateway API CRDs are not installed',
-      }}
-      kind="gatewayclasses"
-      noMatchDescription={{ zh_CN: '没有匹配的资源', en_US: 'No matching resources' }}
-      query={query}
-      rowKey="name"
-      searchPlaceholder={{
-        zh_CN: '搜索 GatewayClass / controller',
-        en_US: 'Search GatewayClass / controller',
-      }}
-      searchValues={(record) => [
-        record.name,
-        record.controllerName,
-        record.accepted,
-        record.parametersRef,
-      ]}
-    />
+    <>
+      <ReadFeedback canRead={query.isEnabled} query={query} label="资源记录" />
+      <NetworkResourceListPage
+        buildAIPageContext={(items, searchKeyword) => ({
+          sourceWorkbench: 'platform',
+          sourceRoute: '/network/gateway-api/gatewayclasses',
+          sourceTitle: 'GatewayClasses',
+          entityKind: 'kubernetes.gatewayclass.list',
+          entityName: 'GatewayClasses',
+          clusterId: clusterId ?? undefined,
+          visibleFilters: { searchKeyword },
+          pinnedData: { total: items.length },
+        })}
+        columns={columns}
+        emptyDescription={{
+          zh_CN: '当前集群没有 GatewayClass，或未安装 Gateway API CRD',
+          en_US: 'No GatewayClasses in this cluster, or Gateway API CRDs are not installed',
+        }}
+        kind="gatewayclasses"
+        noMatchDescription={{ zh_CN: '没有匹配的资源', en_US: 'No matching resources' }}
+        query={query}
+        rowKey="name"
+        searchPlaceholder={{
+          zh_CN: '搜索 GatewayClass / controller',
+          en_US: 'Search GatewayClass / controller',
+        }}
+        searchValues={(record) => [
+          record.name,
+          record.controllerName,
+          record.accepted,
+          record.parametersRef,
+        ]}
+      />
+    </>
   )
 }

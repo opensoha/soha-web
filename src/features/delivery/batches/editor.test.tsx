@@ -99,6 +99,7 @@ beforeEach(() => {
     })),
   )
   vi.spyOn(deliveryApi.workflowTemplates, 'list').mockResolvedValue([])
+  vi.spyOn(deliveryApi.releaseBundles, 'list').mockResolvedValue([])
   vi.spyOn(deliveryApi.documents, 'source').mockResolvedValue({})
   vi.spyOn(deliveryApi.deliveryWorkflows, 'create').mockImplementation(async (input) => ({
     ...workflow,
@@ -262,6 +263,16 @@ async function click(label: string) {
     await new Promise((resolve) => setTimeout(resolve, 20))
   })
 }
+async function clickReady(label: string) {
+  await vi.waitFor(() => {
+    const button = [...document.querySelectorAll('button')].find(
+      (item) => item.textContent?.replace(/\s/g, '') === label.replace(/\s/g, ''),
+    )
+    expect(button, label).toBeDefined()
+    expect(button?.disabled).toBe(false)
+  })
+  await click(label)
+}
 async function toggleFailure() {
   const checkbox = document.querySelector<HTMLInputElement>('input[type="checkbox"]')
   expect(checkbox?.checked).toBe(true)
@@ -384,8 +395,8 @@ it('checks service delivery inputs before execution and retains its idempotency 
     )
     await new Promise((resolve) => setTimeout(resolve, 30))
   })
-  await click('检查交付参数')
-  expect(document.body.textContent).toContain('确认交付参数')
+  await clickReady('检查交付参数')
+  await vi.waitFor(() => expect(document.body.textContent).toContain('确认交付参数'))
   expect(deliveryApi.batches.create).not.toHaveBeenCalled()
   await click('确认并开始')
   await click('确认并开始')
@@ -424,9 +435,11 @@ it('allows an embedded pure build without an environment', async () => {
     )
     await new Promise((resolve) => setTimeout(resolve, 30))
   })
-  await click('检查交付参数')
-  expect(onSave).toHaveBeenCalledWith(
-    expect.objectContaining({ action: 'build', applicationEnvironmentId: undefined }),
+  await clickReady('检查交付参数')
+  await vi.waitFor(() =>
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'build', applicationEnvironmentId: undefined }),
+    ),
   )
 })
 

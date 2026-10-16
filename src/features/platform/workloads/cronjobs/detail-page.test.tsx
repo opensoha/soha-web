@@ -24,7 +24,10 @@ const testDetail = vi.hoisted(() => ({
   ],
 }))
 
-vi.mock('@/i18n', () => ({ useI18n: () => ({ localeCode: 'en_US' as const }) }))
+vi.mock('@/i18n', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/i18n')>()),
+  useI18n: () => ({ localeCode: 'en_US' as const }),
+}))
 vi.mock('@/stores/platform-scope-store', () => ({
   usePlatformScopeStore: () => ({ clusterId: 'cluster-a' }),
 }))

@@ -1,7 +1,20 @@
-import { useEffect, useMemo, useState } from 'react'
+import { ReadFeedback } from '@/components/request-feedback'
+import { StatusTag } from '@/components/status-tag'
+import { useYamlDraft } from '@/components/use-yaml-draft'
+import { hasAllowedAction } from '@/features/auth'
+import { useClusterCapability } from '@/features/platform/cluster-capabilities'
+import {
+  platformResourceTarget,
+  usePlatformMutation,
+} from '@/features/platform/shared/use-platform-mutation'
+import { useI18n } from '@/i18n'
+import { usePlatformScopeStore } from '@/stores/platform-scope-store'
+import { readableQueryData } from '@/utils/query-feedback'
+import { CloudDownloadOutlined, LinkOutlined } from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TableColumnsType } from 'antd'
 import {
   Alert,
-  App,
   Button,
   Card,
   Checkbox,
@@ -18,16 +31,8 @@ import {
   Tag,
   Typography,
 } from 'antd'
-import { CloudDownloadOutlined, LinkOutlined } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { StatusTag } from '@/components/status-tag'
-import { hasAllowedAction } from '@/features/auth'
-import { useClusterCapability } from '@/features/platform/cluster-capabilities'
-import { useI18n } from '@/i18n'
-import { usePlatformScopeStore } from '@/stores/platform-scope-store'
-import type { TableColumnsType } from 'antd'
-import { helmKeys } from '../keys'
 import { helmMutations } from '../mutations'
 import { helmQueries } from '../queries'
 import type {
@@ -46,10 +51,7 @@ import {
   getHelmChartBadges,
   getHelmChartVersionOptions,
   hasHelmChartSecuritySummary,
-  helmReleaseMatchesInstallTarget,
-  isHelmReleaseDeployed,
   isHelmReleaseNameConflictError,
-  mapObservedHelmReleaseToInstallResult,
   retryHelmReleaseName,
 } from './utils'
 
@@ -87,7 +89,6 @@ function Readme({ value }: { value?: string }) {
 
 export function HelmChartDrawer({ chart, initialTab, onClose }: HelmChartDrawerProps) {
   const { localeCode } = useI18n()
-  const { message } = App.useApp()
   const { clusterId, namespace } = usePlatformScopeStore()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -95,7 +96,6 @@ export function HelmChartDrawer({ chart, initialTab, onClose }: HelmChartDrawerP
   const [form] = Form.useForm<HelmChartInstallFormValues>()
   const [activeTab, setActiveTab] = useState<HelmChartDrawerTab>(initialTab)
   const [selectedVersion, setSelectedVersion] = useState(chart.latestVersion || '')
-  const [valuesDraft, setValuesDraft] = useState('')
   const [installTarget, setInstallTarget] = useState<HelmChartInstallTarget | null>(null)
   const [installResult, setInstallResult] = useState<HelmChartInstallResult | null>(null)
   const [installError, setInstallError] = useState('')
@@ -111,7 +111,8 @@ export function HelmChartDrawer({ chart, initialTab, onClose }: HelmChartDrawerP
         }
       : null
   const detailQuery = useQuery(helmQueries.chartDetail(detailInput))
-  const detail = detailQuery.data
+  const visibleDetailQueryData = readableQueryData(detailQuery)
+  const detail = visibleDetailQueryData
   const activeChart = detail ?? chart
   const activeVersion = selectedVersion || activeChart.latestVersion || ''
   const valuesInput: HelmChartValuesInput | null =
@@ -126,6 +127,9 @@ export function HelmChartDrawer({ chart, initialTab, onClose }: HelmChartDrawerP
   const valuesQuery = useQuery(
     helmQueries.chartValues(valuesInput, activeTab === 'values' || activeTab === 'install'),
   )
+  const visibleValuesQueryData = readableQueryData(valuesQuery)
+  const valuesState = useYamlDraft(JSON.stringify(valuesInput), visibleValuesQueryData?.content)
+  const { value: valuesDraft, setValue: setValuesDraft } = valuesState
   const mutationsDisabled = capability.status !== 'available'
   const capabilityReason = mutationsDisabled ? capability.reason : ''
   const canInstall = hasAllowedAction(activeChart.allowedActions, 'create') && !mutationsDisabled
@@ -146,7 +150,12 @@ export function HelmChartDrawer({ chart, initialTab, onClose }: HelmChartDrawerP
       ),
     ),
   )
-  const installMutation = useMutation(helmMutations.installChart(queryClient))
+  const visibleProgressQueryData = readableQueryData(progressQuery)
+  const installMutation = usePlatformMutation(helmMutations.installChart(queryClient), {
+    label: ['安装 Helm Chart', 'Install Helm chart'],
+    target: platformResourceTarget,
+  })
+  const platformWriteBlocked = installMutation.blocked
 
   useEffect(() => {
     form.setFieldsValue(defaultHelmChartInstallForm(chart, namespace))
@@ -163,10 +172,6 @@ export function HelmChartDrawer({ chart, initialTab, onClose }: HelmChartDrawerP
   }, [activeChart, chart, detail?.latestVersion, form, selectedVersion])
 
   useEffect(() => {
-    if (typeof valuesQuery.data?.content === 'string') setValuesDraft(valuesQuery.data.content)
-  }, [valuesQuery.data?.content])
-
-  useEffect(() => {
     if (!installStartedAt || installResult || installError) return undefined
     const updateElapsed = () =>
       setInstallElapsedSeconds(Math.max(0, Math.floor((Date.now() - installStartedAt) / 1000)))
@@ -175,32 +180,11 @@ export function HelmChartDrawer({ chart, initialTab, onClose }: HelmChartDrawerP
     return () => window.clearInterval(timer)
   }, [installError, installResult, installStartedAt])
 
-  useEffect(() => {
-    const release = progressQuery.data
-    if (!release || installResult || !installError || !installConflict) return
-    if (!helmReleaseMatchesInstallTarget(release, installTarget)) return
-    if (!isHelmReleaseDeployed(release.status)) return
-    setInstallResult(mapObservedHelmReleaseToInstallResult(release, localeCode))
-    setInstallError('')
-    if (clusterId) {
-      void queryClient.invalidateQueries({ queryKey: helmKeys.releases(clusterId) })
-    }
-  }, [
-    clusterId,
-    installConflict,
-    installError,
-    installResult,
-    installTarget,
-    localeCode,
-    progressQuery.data,
-    queryClient,
-  ])
-
   const versionOptions = getHelmChartVersionOptions(detail, chart)
   const drawerTitle = `Chart: ${activeChart.repositoryName ? `${activeChart.repositoryName}/` : ''}${activeChart.name}`
 
   const submitInstall = async () => {
-    if (!canInstall || !clusterId) {
+    if (!canInstall || !clusterId || installMutation.blocked) {
       setActiveTab('install')
       return
     }
@@ -224,9 +208,6 @@ export function HelmChartDrawer({ chart, initialTab, onClose }: HelmChartDrawerP
         onSuccess: (result) => {
           setInstallResult(result)
           setInstallError('')
-          void message.success(
-            localeCode === 'zh_CN' ? `已安装 ${result.name}` : `Installed ${result.name}`,
-          )
         },
         onError: (error) => setInstallError(error.message),
       },
@@ -246,7 +227,7 @@ export function HelmChartDrawer({ chart, initialTab, onClose }: HelmChartDrawerP
     ],
     [localeCode],
   )
-  const observedRelease = progressQuery.data
+  const observedRelease = visibleProgressQueryData
   const installInFlight = Boolean(installStartedAt && !installResult && !installError)
   const statusColor = installMutation.isPending
     ? 'processing'
@@ -279,10 +260,12 @@ export function HelmChartDrawer({ chart, initialTab, onClose }: HelmChartDrawerP
       open
       title={drawerTitle}
       size="large"
-      onClose={onClose}
+      onClose={() => {
+        if (!platformWriteBlocked) onClose?.()
+      }}
       extra={
         <Space>
-          <Button autoInsertSpace={false} onClick={onClose}>
+          <Button autoInsertSpace={false} disabled={platformWriteBlocked} onClick={onClose}>
             {localeCode === 'zh_CN' ? '取消' : 'Cancel'}
           </Button>
           <Button
@@ -298,6 +281,12 @@ export function HelmChartDrawer({ chart, initialTab, onClose }: HelmChartDrawerP
         </Space>
       }
     >
+      <ReadFeedback canRead={detailQuery.isEnabled} query={detailQuery} label="资源详情" />
+      <ReadFeedback canRead={valuesQuery.isEnabled} query={valuesQuery} label="Helm Values" />
+      <ReadFeedback canRead={progressQuery.isEnabled} query={progressQuery} label="安装进度" />
+
+      {installMutation.feedback}
+
       <Space orientation="vertical" size={14} style={{ width: '100%' }}>
         <Space align="start" size={14}>
           {activeChart.logoImageUrl ? (
@@ -430,15 +419,19 @@ export function HelmChartDrawer({ chart, initialTab, onClose }: HelmChartDrawerP
                   ) : null}
                   <Form form={form} layout="vertical" size="small">
                     <Form.Item name="releaseName" label="Release" rules={[{ required: true }]}>
-                      <Input disabled={!canInstall || installMutation.isPending} />
+                      <Input
+                        disabled={!canInstall || platformWriteBlocked || Boolean(valuesQuery.error)}
+                      />
                     </Form.Item>
                     <Form.Item name="namespace" label="Namespace" rules={[{ required: true }]}>
-                      <Input disabled={!canInstall || installMutation.isPending} />
+                      <Input
+                        disabled={!canInstall || platformWriteBlocked || Boolean(valuesQuery.error)}
+                      />
                     </Form.Item>
                     <Form.Item name="version" label="Version" rules={[{ required: true }]}>
                       <Select
                         showSearch
-                        disabled={!canInstall || installMutation.isPending}
+                        disabled={!canInstall || platformWriteBlocked || Boolean(valuesQuery.error)}
                         options={versionOptions}
                         onChange={(value) => {
                           setSelectedVersion(value)
@@ -451,10 +444,14 @@ export function HelmChartDrawer({ chart, initialTab, onClose }: HelmChartDrawerP
                       label="Chart Repository URL"
                       rules={[{ required: true }]}
                     >
-                      <Input disabled={!canInstall || installMutation.isPending} />
+                      <Input
+                        disabled={!canInstall || platformWriteBlocked || Boolean(valuesQuery.error)}
+                      />
                     </Form.Item>
                     <Form.Item name="chartName" label="Chart" rules={[{ required: true }]}>
-                      <Input disabled={!canInstall || installMutation.isPending} />
+                      <Input
+                        disabled={!canInstall || platformWriteBlocked || Boolean(valuesQuery.error)}
+                      />
                     </Form.Item>
                     <Form.Item
                       name="timeoutSeconds"

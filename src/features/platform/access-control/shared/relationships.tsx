@@ -1,13 +1,15 @@
-import type { ReactNode } from 'react'
-import { Button, Card, Descriptions, Tag, Typography } from 'antd'
-import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
 import { ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
 import { TableCellLink } from '@/components/table-cell-content'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
-import { accessControlQueries } from './queries'
+import { readableQueryData } from '@/utils/query-feedback'
+import { useQuery } from '@tanstack/react-query'
+import { Button, Card, Descriptions, Tag, Typography } from 'antd'
+import type { ReactNode } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { buildAccessControlDetailRoute } from './paths'
+import { accessControlQueries } from './queries'
 import { accessControlScopeFromSelection } from './scope'
 import type { AccessControlBindingRecord, AccessControlKind, AccessControlSubject } from './types'
 
@@ -209,6 +211,7 @@ export function AccessControlReferencedByRelationships({
       subjectFilter,
     ),
   )
+  const visibleRoleBindingsQueryData = readableQueryData(roleBindingsQuery)
   const clusterRoleBindingsQuery = useQuery(
     accessControlQueries.list<AccessControlBindingRecord>(
       'clusterrolebindings',
@@ -216,7 +219,8 @@ export function AccessControlReferencedByRelationships({
       subjectFilter,
     ),
   )
-  const roleBindings = (roleBindingsQuery.data ?? []).filter((binding) => {
+  const visibleClusterRoleBindingsQueryData = readableQueryData(clusterRoleBindingsQuery)
+  const roleBindings = (visibleRoleBindingsQueryData ?? []).filter((binding) => {
     if (kind === 'ServiceAccount') return true
     const ref = splitAccessControlRoleRef(binding.roleRef)
     return (
@@ -225,62 +229,74 @@ export function AccessControlReferencedByRelationships({
       (kind === 'ClusterRole' || binding.namespace === namespace)
     )
   })
-  const clusterRoleBindings = (clusterRoleBindingsQuery.data ?? []).filter((binding) => {
+  const clusterRoleBindings = (visibleClusterRoleBindingsQueryData ?? []).filter((binding) => {
     if (kind === 'ServiceAccount') return true
     const ref = splitAccessControlRoleRef(binding.roleRef)
     return ref?.kind === kind && ref.name === name
   })
   const loading = roleBindingsQuery.isLoading || clusterRoleBindingsQuery.isLoading
   return (
-    <RelationshipPanel
-      loading={loading}
-      items={[
-        {
-          key: 'roleBindings',
-          label: localeCode === 'zh_CN' ? 'RoleBindings 引用' : 'Referenced by RoleBindings',
-          children: roleBindings.length ? (
-            <div className="soha-rbac-subject-list">
-              {roleBindings.map((binding) => (
-                <AccessControlRelationshipLink
-                  key={`${binding.namespace}/${binding.name}`}
-                  kind="RoleBinding"
-                  name={binding.name}
-                  namespace={binding.namespace}
-                />
-              ))}
-            </div>
-          ) : (
-            <Text type="secondary">
-              {localeCode === 'zh_CN' ? '暂无 RoleBinding 引用' : 'No RoleBinding references'}
-            </Text>
-          ),
-        },
-        {
-          key: 'clusterRoleBindings',
-          label:
-            localeCode === 'zh_CN'
-              ? 'ClusterRoleBindings 引用'
-              : 'Referenced by ClusterRoleBindings',
-          children: clusterRoleBindings.length ? (
-            <div className="soha-rbac-subject-list">
-              {clusterRoleBindings.map((binding) => (
-                <AccessControlRelationshipLink
-                  key={binding.name}
-                  kind="ClusterRoleBinding"
-                  name={binding.name}
-                />
-              ))}
-            </div>
-          ) : (
-            <Text type="secondary">
-              {localeCode === 'zh_CN'
-                ? '暂无 ClusterRoleBinding 引用'
-                : 'No ClusterRoleBinding references'}
-            </Text>
-          ),
-        },
-      ]}
-    />
+    <>
+      <ReadFeedback
+        canRead={roleBindingsQuery.isEnabled}
+        query={roleBindingsQuery}
+        label="RoleBinding"
+      />
+      <ReadFeedback
+        canRead={clusterRoleBindingsQuery.isEnabled}
+        query={clusterRoleBindingsQuery}
+        label="ClusterRoleBinding"
+      />
+      <RelationshipPanel
+        loading={loading}
+        items={[
+          {
+            key: 'roleBindings',
+            label: localeCode === 'zh_CN' ? 'RoleBindings 引用' : 'Referenced by RoleBindings',
+            children: roleBindings.length ? (
+              <div className="soha-rbac-subject-list">
+                {roleBindings.map((binding) => (
+                  <AccessControlRelationshipLink
+                    key={`${binding.namespace}/${binding.name}`}
+                    kind="RoleBinding"
+                    name={binding.name}
+                    namespace={binding.namespace}
+                  />
+                ))}
+              </div>
+            ) : (
+              <Text type="secondary">
+                {localeCode === 'zh_CN' ? '暂无 RoleBinding 引用' : 'No RoleBinding references'}
+              </Text>
+            ),
+          },
+          {
+            key: 'clusterRoleBindings',
+            label:
+              localeCode === 'zh_CN'
+                ? 'ClusterRoleBindings 引用'
+                : 'Referenced by ClusterRoleBindings',
+            children: clusterRoleBindings.length ? (
+              <div className="soha-rbac-subject-list">
+                {clusterRoleBindings.map((binding) => (
+                  <AccessControlRelationshipLink
+                    key={binding.name}
+                    kind="ClusterRoleBinding"
+                    name={binding.name}
+                  />
+                ))}
+              </div>
+            ) : (
+              <Text type="secondary">
+                {localeCode === 'zh_CN'
+                  ? '暂无 ClusterRoleBinding 引用'
+                  : 'No ClusterRoleBinding references'}
+              </Text>
+            ),
+          },
+        ]}
+      />
+    </>
   )
 }
 

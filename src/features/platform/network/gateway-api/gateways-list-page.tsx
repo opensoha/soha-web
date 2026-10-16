@@ -1,13 +1,14 @@
-import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { ReadFeedback } from '@/components/request-feedback'
 import { TableCellLink } from '@/components/table-cell-content'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
 import { formatAgeSeconds } from '@/utils/time'
+import { useQuery } from '@tanstack/react-query'
 import type { TableColumnsType } from 'antd'
-import { buildGatewayAPIRoutePath } from '../shared/paths'
+import { useNavigate } from 'react-router-dom'
 import { NetworkResourceListPage } from '../shared/list-page'
+import { buildGatewayAPIRoutePath } from '../shared/paths'
 import { renderNetworkTextList } from '../shared/renderers'
 import { gatewayAPIQueries } from './queries'
 import type { Gateway } from './types'
@@ -28,9 +29,7 @@ export function NetworkGatewaysPage() {
       render: (value: string, record) => (
         <TableCellLink
           label={value}
-          onClick={() =>
-            navigate(buildGatewayAPIRoutePath('gateways', value, record.namespace))
-          }
+          onClick={() => navigate(buildGatewayAPIRoutePath('gateways', value, record.namespace))}
         />
       ),
     },
@@ -59,36 +58,39 @@ export function NetworkGatewaysPage() {
     },
   ]
   return (
-    <NetworkResourceListPage
-      buildAIPageContext={(items, searchKeyword) => ({
-        sourceWorkbench: 'platform',
-        sourceRoute: '/network/gateway-api/gateways',
-        sourceTitle: 'Gateways',
-        entityKind: 'kubernetes.gateway.list',
-        entityName: 'Gateways',
-        clusterId: clusterId ?? undefined,
-        namespace: namespace ?? undefined,
-        visibleFilters: { searchKeyword },
-        pinnedData: { total: items.length },
-      })}
-      columns={columns}
-      emptyDescription={{
-        zh_CN: '当前范围没有 Gateway，或未安装 Gateway API CRD',
-        en_US: 'No Gateways in the current scope, or Gateway API CRDs are not installed',
-      }}
-      kind="gateways"
-      noMatchDescription={{ zh_CN: '没有匹配的资源', en_US: 'No matching resources' }}
-      query={query}
-      searchPlaceholder={{
-        zh_CN: '搜索 Gateway / namespace / class / address',
-        en_US: 'Search gateway / namespace / class / address',
-      }}
-      searchValues={(record) => [
-        record.name,
-        record.namespace,
-        record.gatewayClass,
-        ...(record.addresses ?? []),
-      ]}
-    />
+    <>
+      <ReadFeedback canRead={query.isEnabled} query={query} label="资源记录" />
+      <NetworkResourceListPage
+        buildAIPageContext={(items, searchKeyword) => ({
+          sourceWorkbench: 'platform',
+          sourceRoute: '/network/gateway-api/gateways',
+          sourceTitle: 'Gateways',
+          entityKind: 'kubernetes.gateway.list',
+          entityName: 'Gateways',
+          clusterId: clusterId ?? undefined,
+          namespace: namespace ?? undefined,
+          visibleFilters: { searchKeyword },
+          pinnedData: { total: items.length },
+        })}
+        columns={columns}
+        emptyDescription={{
+          zh_CN: '当前范围没有 Gateway，或未安装 Gateway API CRD',
+          en_US: 'No Gateways in the current scope, or Gateway API CRDs are not installed',
+        }}
+        kind="gateways"
+        noMatchDescription={{ zh_CN: '没有匹配的资源', en_US: 'No matching resources' }}
+        query={query}
+        searchPlaceholder={{
+          zh_CN: '搜索 Gateway / namespace / class / address',
+          en_US: 'Search gateway / namespace / class / address',
+        }}
+        searchValues={(record) => [
+          record.name,
+          record.namespace,
+          record.gatewayClass,
+          ...(record.addresses ?? []),
+        ]}
+      />
+    </>
   )
 }

@@ -1,12 +1,12 @@
 /** @vitest-environment jsdom */
 
-import { act } from 'react'
-import { App as AntdApp } from 'antd'
+import type { RolloutHistory } from '@/types'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { App as AntdApp } from 'antd'
+import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RolloutHistory } from '@/types'
 import { DeploymentDetailPage } from './detail-page'
 
 const testState = vi.hoisted(() => ({
@@ -91,7 +91,8 @@ vi.mock('@/stores/platform-scope-store', () => ({
     selector ? selector(testState.scope) : testState.scope,
 }))
 
-vi.mock('@/i18n', () => ({
+vi.mock('@/i18n', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/i18n')>()),
   localeText: (localeCode: string, chinese: string, english: string) =>
     localeCode === 'zh_CN' ? chinese : english,
   useI18n: () => ({

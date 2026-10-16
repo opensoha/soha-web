@@ -1,3 +1,23 @@
+import { AdminTable } from '@/components/admin-table'
+import { ManagementState, ManagementTableToolbar } from '@/components/management-list'
+import { OverviewMetricCard, type OverviewMetricItem } from '@/components/overview-visuals'
+import { ReadFeedback } from '@/components/request-feedback'
+import { StatusTag } from '@/components/status-tag'
+import { TableCellText } from '@/components/table-cell-content'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { SecurityPosturePanel } from '@/features/platform/shared/resource-insights/security-posture-panel'
+import { buildKubernetesEventResourcePath } from '@/features/platform/shared/resource-ref'
+import { useKubernetesResourceStream } from '@/features/platform/shared/resource-stream'
+import { ResourceStreamStatus } from '@/features/platform/shared/resource-stream-status'
+import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
+import { buildWorkloadListPagePath } from '@/features/platform/workloads-model'
+import '@/features/platform/workloads/styles.css'
+import { useI18n } from '@/i18n'
+import { usePlatformScopeStore } from '@/stores/platform-scope-store'
+import { toScopeKey } from '@/types'
+import { readableQueryData } from '@/utils/query-feedback'
+import { tableColumnPresets } from '@/utils/table-columns'
+import { formatAgeSeconds } from '@/utils/time'
 import {
   AppstoreOutlined,
   CheckCircleOutlined,
@@ -8,23 +28,6 @@ import {
 import { useQuery } from '@tanstack/react-query'
 import type { TableColumnsType } from 'antd'
 import { Link } from 'react-router-dom'
-import { AdminTable } from '@/components/admin-table'
-import { ManagementState, ManagementTableToolbar } from '@/components/management-list'
-import { OverviewMetricCard, type OverviewMetricItem } from '@/components/overview-visuals'
-import { StatusTag } from '@/components/status-tag'
-import { TableCellText } from '@/components/table-cell-content'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
-import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
-import { buildKubernetesEventResourcePath } from '@/features/platform/shared/resource-ref'
-import { ResourceStreamStatus } from '@/features/platform/shared/resource-stream-status'
-import { useKubernetesResourceStream } from '@/features/platform/shared/resource-stream'
-import { SecurityPosturePanel } from '@/features/platform/shared/resource-insights/security-posture-panel'
-import { useI18n } from '@/i18n'
-import { usePlatformScopeStore } from '@/stores/platform-scope-store'
-import { toScopeKey } from '@/types'
-import { formatAgeSeconds } from '@/utils/time'
-import { tableColumnPresets } from '@/utils/table-columns'
-import { buildWorkloadListPagePath } from '@/features/platform/workloads-model'
 import {
   useWorkloadTableDensity,
   WorkloadRefreshButton,
@@ -33,7 +36,6 @@ import {
 import { workloadQueries } from '../shared/queries'
 import type { WorkloadEvent } from '../shared/types'
 import { workloadOverviewQueries } from './queries'
-import '@/features/platform/workloads/styles.css'
 
 type WorkloadOverviewMetricItem = OverviewMetricItem & { path: string }
 
@@ -54,31 +56,55 @@ export function WorkloadsOverviewPage() {
     ...workloadQueries.list<unknown>('deployments', scope),
     enabled: Boolean(clusterId) && workloadPermissions.deployments,
   })
+  const visibleDeploymentsQueryData =
+    Boolean(clusterId) && workloadPermissions.deployments
+      ? readableQueryData(deploymentsQuery)
+      : undefined
   const podsQuery = useQuery({
     ...workloadQueries.list<unknown>('pods', scope),
     enabled: Boolean(clusterId) && workloadPermissions.pods,
   })
+  const visiblePodsQueryData =
+    Boolean(clusterId) && workloadPermissions.pods ? readableQueryData(podsQuery) : undefined
   const statefulSetsQuery = useQuery({
     ...workloadQueries.list<unknown>('statefulsets', scope),
     enabled: Boolean(clusterId) && workloadPermissions.statefulsets,
   })
+  const visibleStatefulSetsQueryData =
+    Boolean(clusterId) && workloadPermissions.statefulsets
+      ? readableQueryData(statefulSetsQuery)
+      : undefined
   const daemonSetsQuery = useQuery({
     ...workloadQueries.list<unknown>('daemonsets', scope),
     enabled: Boolean(clusterId) && workloadPermissions.daemonsets,
   })
+  const visibleDaemonSetsQueryData =
+    Boolean(clusterId) && workloadPermissions.daemonsets
+      ? readableQueryData(daemonSetsQuery)
+      : undefined
   const jobsQuery = useQuery({
     ...workloadQueries.list<unknown>('jobs', scope),
     enabled: Boolean(clusterId) && workloadPermissions.jobs,
   })
+  const visibleJobsQueryData =
+    Boolean(clusterId) && workloadPermissions.jobs ? readableQueryData(jobsQuery) : undefined
   const cronJobsQuery = useQuery({
     ...workloadQueries.list<unknown>('cronjobs', scope),
     enabled: Boolean(clusterId) && workloadPermissions.cronjobs,
   })
+  const visibleCronJobsQueryData =
+    Boolean(clusterId) && workloadPermissions.cronjobs
+      ? readableQueryData(cronJobsQuery)
+      : undefined
   const eventsQuery = useQuery({
     ...workloadOverviewQueries.events(scope),
     enabled:
       Boolean(clusterId) && hasPermission(permissionSnapshot, 'platform.workloads.overview.view'),
   })
+  const visibleEventsQueryData =
+    Boolean(clusterId) && hasPermission(permissionSnapshot, 'platform.workloads.overview.view')
+      ? readableQueryData(eventsQuery)
+      : undefined
   const refreshOverview = () => {
     void deploymentsQuery.refetch()
     void podsQuery.refetch()
@@ -117,7 +143,7 @@ export function WorkloadsOverviewPage() {
         label: 'Deployments',
         helper:
           localeCode === 'zh_CN' ? '无状态应用副本控制面' : 'Stateless application controllers',
-        value: deploymentsQuery.data?.length ?? 0,
+        value: visibleDeploymentsQueryData?.length ?? 0,
         icon: <AppstoreOutlined />,
         tone: 'default',
         path: buildWorkloadListPagePath('deployments', namespace, clusterId),
@@ -126,7 +152,7 @@ export function WorkloadsOverviewPage() {
         key: 'pods',
         label: 'Pods',
         helper: localeCode === 'zh_CN' ? '当前范围内运行实例' : 'Runtime instances in scope',
-        value: podsQuery.data?.length ?? 0,
+        value: visiblePodsQueryData?.length ?? 0,
         icon: <ClusterOutlined />,
         tone: 'success',
         path: buildWorkloadListPagePath('pods', namespace, clusterId),
@@ -135,7 +161,7 @@ export function WorkloadsOverviewPage() {
         key: 'statefulsets',
         label: 'StatefulSets',
         helper: localeCode === 'zh_CN' ? '有状态服务控制面' : 'Stateful service controllers',
-        value: statefulSetsQuery.data?.length ?? 0,
+        value: visibleStatefulSetsQueryData?.length ?? 0,
         icon: <CheckCircleOutlined />,
         tone: 'default',
         path: buildWorkloadListPagePath('statefulsets', namespace, clusterId),
@@ -144,7 +170,7 @@ export function WorkloadsOverviewPage() {
         key: 'daemonsets',
         label: 'DaemonSets',
         helper: localeCode === 'zh_CN' ? '节点级守护进程' : 'Node-level daemon workloads',
-        value: daemonSetsQuery.data?.length ?? 0,
+        value: visibleDaemonSetsQueryData?.length ?? 0,
         icon: <ClusterOutlined />,
         tone: 'default',
         path: buildWorkloadListPagePath('daemonsets', namespace, clusterId),
@@ -153,7 +179,7 @@ export function WorkloadsOverviewPage() {
         key: 'jobs',
         label: 'Jobs',
         helper: localeCode === 'zh_CN' ? '一次性任务资源' : 'One-off workload runs',
-        value: jobsQuery.data?.length ?? 0,
+        value: visibleJobsQueryData?.length ?? 0,
         icon: <ClockCircleOutlined />,
         tone: 'default',
         path: buildWorkloadListPagePath('jobs', namespace, clusterId),
@@ -162,7 +188,7 @@ export function WorkloadsOverviewPage() {
         key: 'cronjobs',
         label: 'CronJobs',
         helper: localeCode === 'zh_CN' ? '周期调度任务' : 'Scheduled workload runs',
-        value: cronJobsQuery.data?.length ?? 0,
+        value: visibleCronJobsQueryData?.length ?? 0,
         icon: <ScheduleOutlined />,
         tone: 'default',
         path: buildWorkloadListPagePath('cronjobs', namespace, clusterId),
@@ -211,10 +237,26 @@ export function WorkloadsOverviewPage() {
       render: (value: number) => formatAgeSeconds(value),
     },
   ]
-  const events = eventsQuery.data ?? []
+  const events = visibleEventsQueryData ?? []
 
   return (
     <div className="soha-page soha-overview-page soha-workloads-overview-page">
+      <ReadFeedback
+        canRead={deploymentsQuery.isEnabled}
+        query={deploymentsQuery}
+        label="Deployment"
+      />
+      <ReadFeedback canRead={podsQuery.isEnabled} query={podsQuery} label="Pods" />
+      <ReadFeedback
+        canRead={statefulSetsQuery.isEnabled}
+        query={statefulSetsQuery}
+        label="StatefulSet"
+      />
+      <ReadFeedback canRead={daemonSetsQuery.isEnabled} query={daemonSetsQuery} label="DaemonSet" />
+      <ReadFeedback canRead={jobsQuery.isEnabled} query={jobsQuery} label="Job" />
+      <ReadFeedback canRead={cronJobsQuery.isEnabled} query={cronJobsQuery} label="CronJob" />
+      <ReadFeedback canRead={eventsQuery.isEnabled} query={eventsQuery} label="资源事件" />
+
       <div className="soha-overview-metric-grid soha-workload-overview-metric-grid">
         {stats.map((item) => (
           <Link

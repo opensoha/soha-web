@@ -1,11 +1,20 @@
-import { useState } from 'react'
-import { Button, Dropdown, Space, Tooltip } from 'antd'
-import { DownOutlined, FileTextOutlined, FormOutlined, PlusOutlined } from '@ant-design/icons'
-import { useQuery } from '@tanstack/react-query'
+import { ManagementIconButton } from '@/components/management-list'
+import { requestErrorMessage, useInlineApiError } from '@/components/request-feedback'
 import { useI18n } from '@/i18n'
+import { readableQueryData } from '@/utils/query-feedback'
+import {
+  DownOutlined,
+  FileTextOutlined,
+  FormOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+} from '@ant-design/icons'
+import { useQuery } from '@tanstack/react-query'
+import { Button, Dropdown, Space, Tooltip } from 'antd'
+import { useState } from 'react'
+import { resolveCreateEntryAvailability } from '../model'
 import { resourceCreationQueries } from '../queries'
 import { hasResourceCreateForm } from '../registry'
-import { resolveCreateEntryAvailability } from '../model'
 import type { ResourceCreateContext, ResourceCreateResult } from '../types'
 import { CreateShell, type ResourceCreateFormAdapter } from './create-shell'
 
@@ -36,9 +45,11 @@ export function CreateEntry({
       action: 'create',
     }),
   )
+  const visibleDecisionData = readableQueryData(decision)
+  useInlineApiError(decision.error)
   const { disabled, reason } = resolveCreateEntryAvailability({
     clusterId: context.clusterId,
-    decision: decision.data,
+    decision: visibleDecisionData,
     error: decision.isError ? decision.error : null,
     isLoading: decision.isLoading,
     localeCode,
@@ -51,6 +62,16 @@ export function CreateEntry({
 
   return (
     <>
+      {decision.isError ? (
+        <ManagementIconButton
+          aria-label={isChinese ? '重试读取创建权限' : 'Retry create permission lookup'}
+          icon={<ReloadOutlined />}
+          loading={decision.isFetching}
+          tooltip={requestErrorMessage(decision.error, localeCode)}
+          onClick={() => void decision.refetch()}
+        />
+      ) : null}
+
       <Tooltip title={disabled ? reason : ''}>
         <span>
           <Space.Compact>

@@ -1,19 +1,21 @@
-import { useState } from 'react'
-import { Card, Descriptions } from 'antd'
-import { useQuery } from '@tanstack/react-query'
+import { ReadFeedback } from '@/components/request-feedback'
 import { ResourceEventsTimeline } from '@/components/resource-events-timeline'
-import { useI18n } from '@/i18n'
-import { usePlatformScopeStore } from '@/stores/platform-scope-store'
-import { toScopeKey } from '@/types'
-import { formatDateTime } from '@/utils/time'
 import { WorkloadDetailShell } from '@/features/platform/workloads/shared/detail-shell'
 import {
   WorkloadPodsCard,
   WorkloadRelationsCard,
 } from '@/features/platform/workloads/shared/workload-relations'
+import '@/features/platform/workloads/styles.css'
+import { useI18n } from '@/i18n'
+import { usePlatformScopeStore } from '@/stores/platform-scope-store'
+import { toScopeKey } from '@/types'
+import { readableQueryData } from '@/utils/query-feedback'
+import { formatDateTime } from '@/utils/time'
+import { useQuery } from '@tanstack/react-query'
+import { Card, Descriptions } from 'antd'
+import { useState } from 'react'
 import { jobQueries } from './queries'
 import type { JobDetail } from './types'
-import '@/features/platform/workloads/styles.css'
 
 function JobOverview({ detail }: { detail: JobDetail }) {
   const { localeCode } = useI18n()
@@ -83,13 +85,18 @@ function JobEventsTab({ detail, enabled }: { detail: JobDetail; enabled: boolean
   const { clusterId } = usePlatformScopeStore()
   const options = jobQueries.events(toScopeKey(clusterId, detail.namespace), detail.name)
   const eventsQuery = useQuery({ ...options, enabled: Boolean(options.enabled) && enabled })
+  const visibleEventsQueryData =
+    Boolean(options.enabled) && enabled ? readableQueryData(eventsQuery) : undefined
 
   return (
-    <ResourceEventsTimeline
-      events={eventsQuery.data ?? []}
-      loading={eventsQuery.isLoading}
-      emptyDescription={localeCode === 'zh_CN' ? '当前 Job 暂无事件' : 'No Job events'}
-    />
+    <>
+      <ReadFeedback canRead={eventsQuery.isEnabled} query={eventsQuery} label="资源事件" />
+      <ResourceEventsTimeline
+        events={visibleEventsQueryData ?? []}
+        loading={eventsQuery.isLoading}
+        emptyDescription={localeCode === 'zh_CN' ? '当前 Job 暂无事件' : 'No Job events'}
+      />
+    </>
   )
 }
 

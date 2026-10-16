@@ -1,14 +1,3 @@
-import { useMemo } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { Button, Card, Space, Spin, Typography } from 'antd'
-import {
-  AppstoreOutlined,
-  ArrowRightOutlined,
-  FireOutlined,
-  ReloadOutlined,
-  WarningOutlined,
-} from '@ant-design/icons'
-import { useQuery } from '@tanstack/react-query'
 import { ManagementState } from '@/components/management-list'
 import {
   OverviewChip,
@@ -17,15 +6,29 @@ import {
   type OverviewChipItem,
   type OverviewMetricItem,
 } from '@/components/overview-visuals'
+import { ReadFeedback } from '@/components/request-feedback'
 import { StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { observabilityAlertQueries, useAlertEventStream } from '@/features/observability'
-import { buildWorkloadDetailPath } from '@/features/platform/workloads-model'
 import { ResourceStreamStatus } from '@/features/platform/shared/resource-stream-status'
+import { buildWorkloadDetailPath } from '@/features/platform/workloads-model'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
-import { formatAgeSeconds, formatDateTime } from '@/utils/time'
 import type { Cluster } from '@/types'
+import { readableQueryData } from '@/utils/query-feedback'
+import { formatAgeSeconds, formatDateTime } from '@/utils/time'
+import {
+  AppstoreOutlined,
+  ArrowRightOutlined,
+  FireOutlined,
+  ReloadOutlined,
+  WarningOutlined,
+} from '@ant-design/icons'
+import { useQuery } from '@tanstack/react-query'
+import { Button, Card, Space, Spin, Typography } from 'antd'
+import { useMemo } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import './overview.css'
 import {
   filterAlertsForCluster,
   formatPlatformOverviewAlertScope,
@@ -37,7 +40,6 @@ import { PlatformOperationsPanel } from './overview/operations-panel'
 import { platformOverviewQueries } from './overview/queries'
 import { ResourceFinder, type OverviewResourceKindOption } from './overview/resource-finder'
 import type { AggregatedWorkloadOverview } from './overview/types'
-import './overview.css'
 
 const { Text } = Typography
 
@@ -88,12 +90,16 @@ export function OverviewPage() {
   const canViewWorkloads = hasPermission(permissionSnapshot, 'platform.pods.view')
 
   const clustersQuery = useQuery(platformOverviewQueries.clusters(canViewClusters))
+  const visibleClustersQueryData = readableQueryData(clustersQuery)
 
   const summaryQuery = useQuery(platformOverviewQueries.monitoringSummary(canViewMonitoring))
+  const visibleSummaryQueryData = readableQueryData(summaryQuery)
   const alertEventsQuery = useQuery({
     ...observabilityAlertQueries.recent(50, clusterId ?? undefined),
     enabled: canViewAlerts && Boolean(clusterId),
   })
+  const visibleAlertEventsQueryData =
+    canViewAlerts && Boolean(clusterId) ? readableQueryData(alertEventsQuery) : undefined
   const refreshAlertOverview = () => {
     void alertEventsQuery.refetch?.()
     if (canViewMonitoring) void summaryQuery.refetch?.()
@@ -105,14 +111,14 @@ export function OverviewPage() {
     onFallback: refreshAlertOverview,
   })
 
-  const clusters = canViewClusters ? (clustersQuery.data ?? []) : []
-  const summary = canViewMonitoring ? summaryQuery.data?.data : undefined
+  const clusters = canViewClusters ? (visibleClustersQueryData ?? []) : []
+  const summary = canViewMonitoring ? visibleSummaryQueryData?.data : undefined
   const healthyClusters = clusters.filter((cluster) => cluster.health?.status === 'healthy').length
   const currentCluster = clusters.find((cluster) => cluster.id === clusterId) ?? null
   const fleetReadiness = summarizeFleetReadiness(clusters)
   const scopedAlertEvents = useMemo(
-    () => filterAlertsForCluster(alertEventsQuery.data ?? [], clusterId),
-    [alertEventsQuery.data, clusterId],
+    () => filterAlertsForCluster(visibleAlertEventsQueryData ?? [], clusterId),
+    [visibleAlertEventsQueryData, clusterId],
   )
   const activeAlertEvents = useMemo(
     () => selectActiveAlerts(scopedAlertEvents, 50),
@@ -193,9 +199,12 @@ export function OverviewPage() {
   const workloadOverviewQuery = useQuery(
     platformOverviewQueries.workload(clusterId, canViewWorkloads),
   )
+  const visibleWorkloadOverviewQueryData = readableQueryData(workloadOverviewQuery)
 
   const workloadOverviewLoading = canViewWorkloads && workloadOverviewQuery.isLoading
-  const workloadOverviewData = canViewWorkloads ? (workloadOverviewQuery.data?.data ?? null) : null
+  const workloadOverviewData = canViewWorkloads
+    ? (visibleWorkloadOverviewQueryData?.data ?? null)
+    : null
 
   const workloadOverview = useMemo<AggregatedWorkloadOverview | null>(() => {
     if (!workloadOverviewData) return null
@@ -396,6 +405,19 @@ export function OverviewPage() {
 
   return (
     <div className="soha-page soha-overview-page soha-platform-overview-page">
+      <ReadFeedback canRead={clustersQuery.isEnabled} query={clustersQuery} label="集群目录" />
+      <ReadFeedback canRead={summaryQuery.isEnabled} query={summaryQuery} label="监控汇总" />
+      <ReadFeedback
+        canRead={alertEventsQuery.isEnabled}
+        query={alertEventsQuery}
+        label="告警事件"
+      />
+      <ReadFeedback
+        canRead={workloadOverviewQuery.isEnabled}
+        query={workloadOverviewQuery}
+        label="工作负载总览"
+      />
+
       <h1 className="soha-platform-overview-heading">
         {localeCode === 'zh_CN' ? 'Kubernetes 总览' : 'Kubernetes overview'}
       </h1>

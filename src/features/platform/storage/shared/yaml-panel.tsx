@@ -1,15 +1,25 @@
-import { App } from 'antd'
 import { K8sYamlEditor } from '@/components/k8s-yaml-editor'
 import { useI18n } from '@/i18n'
+import { App } from 'antd'
 
 export default function StorageYAMLPanel({
   applying,
+  blocked,
+  error,
+  original,
+  serverChanged,
+  onCompareLatest,
   draft,
   onApply,
   onChange,
   onReset,
 }: {
   applying: boolean
+  blocked?: boolean
+  error?: Error | null
+  original?: string
+  serverChanged?: boolean
+  onCompareLatest?: () => void
   draft: string
   onApply: () => void
   onChange: (value: string) => void
@@ -20,6 +30,10 @@ export default function StorageYAMLPanel({
   return (
     <div style={{ height: 620 }}>
       <K8sYamlEditor
+        error={error}
+        original={original}
+        serverChanged={serverChanged}
+        onCompareLatest={onCompareLatest}
         value={draft}
         onChange={onChange}
         onReset={onReset}
@@ -30,7 +44,7 @@ export default function StorageYAMLPanel({
         }
         onApply={onApply}
         saveDisabled
-        applyDisabled={!draft.trim()}
+        applyDisabled={blocked || Boolean(error) || !draft.trim()}
         applying={applying}
       />
     </div>

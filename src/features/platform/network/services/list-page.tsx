@@ -1,15 +1,16 @@
-import { useState } from 'react'
-import { Button } from 'antd'
-import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { ReadFeedback } from '@/components/request-feedback'
 import { encodeAIContextForElement } from '@/features/copilot'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
 import { formatAgeSeconds } from '@/utils/time'
+import { useQuery } from '@tanstack/react-query'
 import type { TableColumnsType } from 'antd'
-import { buildNetworkRoutePath } from '../shared/paths'
+import { Button } from 'antd'
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { NetworkResourceListPage } from '../shared/list-page'
+import { buildNetworkRoutePath } from '../shared/paths'
 import { ServicePortDisplay, ServiceTypeTag } from './port-display'
 import { serviceQueries } from './queries'
 import { ServiceEditModal } from './service-edit-modal'
@@ -62,6 +63,8 @@ export function NetworkServicesPage() {
 
   return (
     <>
+      <ReadFeedback canRead={query.isEnabled} query={query} label="资源记录" />
+
       <NetworkResourceListPage
         buildAIPageContext={(items, searchKeyword) => ({
           sourceWorkbench: 'platform',

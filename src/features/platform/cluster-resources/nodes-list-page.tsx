@@ -1,16 +1,3 @@
-import { useMemo, useState } from 'react'
-import { Alert, App, Button, Checkbox, Form, Input, Modal, Popconfirm, Space, Spin } from 'antd'
-import {
-  ClearOutlined,
-  DeleteOutlined,
-  EditOutlined,
-  EyeOutlined,
-  PlayCircleOutlined,
-  StopOutlined,
-} from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
-import type { TableColumnsType } from 'antd'
 import { AdminTable } from '@/components/admin-table'
 import {
   ManagementDensityButton,
@@ -19,6 +6,7 @@ import {
   ManagementState,
   ManagementTableToolbar,
 } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
 import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { hasAllowedAction } from '@/features/auth'
 import { useAIPageContext } from '@/features/copilot'
@@ -29,22 +17,39 @@ import {
   stringifyMap,
   stringifyTaints,
 } from '@/features/platform/node-resource-utils'
-import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
-import { ResourceStreamStatus } from '@/features/platform/shared/resource-stream-status'
 import { useKubernetesResourceStream } from '@/features/platform/shared/resource-stream'
+import { ResourceStreamStatus } from '@/features/platform/shared/resource-stream-status'
+import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
+import {
+  platformResourceTarget,
+  usePlatformMutation,
+} from '@/features/platform/shared/use-platform-mutation'
+import '@/features/platform/styles/base.css'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
-import { formatAgeSeconds } from '@/utils/time'
+import { readableQueryData } from '@/utils/query-feedback'
 import { tableColumnPresets } from '@/utils/table-columns'
+import { formatAgeSeconds } from '@/utils/time'
+import {
+  ClearOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  EyeOutlined,
+  PlayCircleOutlined,
+  StopOutlined,
+} from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TableColumnsType } from 'antd'
+import { Alert, Button, Checkbox, Form, Input, Modal, Popconfirm, Space, Spin } from 'antd'
+import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { nodeMutations } from './mutations'
 import { nodeQueries } from './queries'
 import { toClusterScope } from './scope'
 import type { ClusterNode } from './types'
-import '@/features/platform/styles/base.css'
 
 export function ClusterNodesPage() {
   const { t, localeCode } = useI18n()
-  const { message } = App.useApp()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { clusterId } = usePlatformScopeStore()
@@ -62,15 +67,34 @@ export function ClusterNodesPage() {
     onResyncRequired: () => queryClient.invalidateQueries({ queryKey: nodeListQuery.queryKey }),
   })
   const nodesQuery = useQuery(nodeListQuery)
-  const nodes = nodesQuery.data ?? []
+  const visibleNodesQueryData = readableQueryData(nodesQuery)
+  const nodes = visibleNodesQueryData ?? []
   const canShowNodeActions = nodes.some((node) =>
     ['update', 'delete'].some((action) => hasAllowedAction(node.allowedActions, action)),
   )
   const nodeDetailQuery = useQuery(nodeQueries.detail(scope, editingNodeName ?? ''))
-  const updateNodeMutation = useMutation(nodeMutations.update(queryClient))
-  const deleteNodeMutation = useMutation(nodeMutations.remove(queryClient))
-  const schedulabilityMutation = useMutation(nodeMutations.schedulability(queryClient))
-  const drainNodeMutation = useMutation(nodeMutations.drain(queryClient))
+  const visibleNodeDetailQueryData = readableQueryData(nodeDetailQuery)
+  const updateNodeMutation = usePlatformMutation(nodeMutations.update(queryClient), {
+    label: ['更新节点', 'Update node'],
+    target: platformResourceTarget,
+  })
+  const deleteNodeMutation = usePlatformMutation(nodeMutations.remove(queryClient), {
+    label: ['删除节点', 'Delete node'],
+    target: platformResourceTarget,
+  })
+  const schedulabilityMutation = usePlatformMutation(nodeMutations.schedulability(queryClient), {
+    label: ['调整节点调度', 'Change schedulability'],
+    target: platformResourceTarget,
+  })
+  const drainNodeMutation = usePlatformMutation(nodeMutations.drain(queryClient), {
+    label: ['排空节点', 'Drain node'],
+    target: platformResourceTarget,
+  })
+  const platformWriteBlocked =
+    updateNodeMutation.blocked ||
+    deleteNodeMutation.blocked ||
+    schedulabilityMutation.blocked ||
+    drainNodeMutation.blocked
 
   useAIPageContext({
     sourceWorkbench: 'platform',
@@ -80,12 +104,12 @@ export function ClusterNodesPage() {
     clusterId: clusterId ?? undefined,
     node: editingNodeName ?? undefined,
     pinnedData: {
-      nodeCount: nodesQuery.data?.length ?? 0,
+      nodeCount: visibleNodesQueryData?.length ?? 0,
       editingNodeName,
     },
   })
 
-  const nodeDetail = nodeDetailQuery.data
+  const nodeDetail = visibleNodeDetailQueryData
   const nodeModalInitValues = useMemo(() => {
     if (!nodeDetail) return undefined
     return {
@@ -200,6 +224,7 @@ export function ClusterNodesPage() {
             />
             {canUpdate ? (
               <Popconfirm
+                okButtonProps={{ disabled: platformWriteBlocked }}
                 title={
                   localeCode === 'zh_CN'
                     ? `确认${schedulabilityLabel}节点 ${name}？`
@@ -219,13 +244,7 @@ export function ClusterNodesPage() {
                 onConfirm={() =>
                   schedulabilityMutation.mutate(
                     { scope, name, unschedulable: !record.unschedulable },
-                    {
-                      onSuccess: () =>
-                        void message.success(
-                          localeCode === 'zh_CN' ? `已${schedulabilityLabel}` : schedulabilityLabel,
-                        ),
-                      onError: (error) => void message.error(error.message),
-                    },
+                    {},
                   )
                 }
               >
@@ -240,6 +259,7 @@ export function ClusterNodesPage() {
             ) : null}
             {canDrain ? (
               <ManagementIconButton
+                disabled={platformWriteBlocked}
                 aria-label={`${copy.drain} ${name}`}
                 danger
                 icon={<ClearOutlined />}
@@ -254,6 +274,7 @@ export function ClusterNodesPage() {
             ) : null}
             {canUpdate ? (
               <ManagementIconButton
+                disabled={platformWriteBlocked}
                 aria-label={`${copy.edit} ${name}`}
                 icon={<EditOutlined />}
                 size="small"
@@ -271,19 +292,12 @@ export function ClusterNodesPage() {
                 description={copy.deleteDescription}
                 okText={t('common.delete', '删除')}
                 cancelText={t('common.cancel', '取消')}
-                okButtonProps={{ danger: true, loading: deleting }}
+                okButtonProps={{ disabled: platformWriteBlocked, danger: true, loading: deleting }}
                 placement="topRight"
-                onConfirm={() =>
-                  deleteNodeMutation.mutate(
-                    { scope, name },
-                    {
-                      onSuccess: () => void message.success(copy.deleted),
-                      onError: (error) => void message.error(error.message),
-                    },
-                  )
-                }
+                onConfirm={() => deleteNodeMutation.mutate({ scope, name }, {})}
               >
                 <ManagementIconButton
+                  disabled={platformWriteBlocked}
                   aria-label={localeCode === 'zh_CN' ? `删除节点 ${name}` : `Delete node ${name}`}
                   danger
                   icon={<DeleteOutlined />}
@@ -301,6 +315,13 @@ export function ClusterNodesPage() {
 
   return (
     <div className="soha-page">
+      <ReadFeedback canRead={nodeDetailQuery.isEnabled} query={nodeDetailQuery} label="节点详情" />
+
+      {updateNodeMutation.feedback}
+      {deleteNodeMutation.feedback}
+      {schedulabilityMutation.feedback}
+      {drainNodeMutation.feedback}
+
       {!clusterId ? (
         <ManagementState
           compact
@@ -309,6 +330,9 @@ export function ClusterNodesPage() {
         />
       ) : (
         <AdminTable
+          error={nodesQuery.isEnabled === false ? null : nodesQuery.error}
+          hasReadData={nodesQuery.data !== undefined}
+          onRetry={nodesQuery.isEnabled === false ? undefined : () => nodesQuery.refetch()}
           columnSettingIconOnly
           columnSettingPlacement="header"
           shellClassName="soha-management-table-shell"
@@ -355,12 +379,20 @@ export function ClusterNodesPage() {
       )}
 
       <Modal
+        okButtonProps={{ disabled: platformWriteBlocked }}
         title={editingNodeName ? `${copy.edit} ${editingNodeName}` : copy.edit}
         open={!!editingNodeName}
         footer={null}
         width={720}
-        onCancel={() => setEditingNodeName(null)}
+        onCancel={() => {
+          if (!platformWriteBlocked) (() => setEditingNodeName(null))?.()
+        }}
       >
+        {updateNodeMutation.feedback}
+        {deleteNodeMutation.feedback}
+        {schedulabilityMutation.feedback}
+        {drainNodeMutation.feedback}
+
         {nodeDetailQuery.isLoading && !nodeDetail ? (
           <div className="flex items-center justify-center h-48">
             <Spin size="large" />
@@ -383,10 +415,8 @@ export function ClusterNodesPage() {
                 },
                 {
                   onSuccess: () => {
-                    void message.success(copy.updated)
                     setEditingNodeName(null)
                   },
-                  onError: (error) => void message.error(error.message),
                 },
               )
             }}
@@ -412,12 +442,20 @@ export function ClusterNodesPage() {
         open={!!drainingNodeName}
         okText={localeCode === 'zh_CN' ? '确认排空' : 'Confirm Drain'}
         cancelText={t('common.cancel', '取消')}
-        okButtonProps={{ danger: true }}
+        okButtonProps={{ disabled: platformWriteBlocked, danger: true }}
         confirmLoading={drainNodeMutation.isPending}
         mask={{ closable: !drainNodeMutation.isPending }}
-        onCancel={() => !drainNodeMutation.isPending && setDrainingNodeName(null)}
+        onCancel={() => {
+          if (!platformWriteBlocked)
+            (() => !drainNodeMutation.isPending && setDrainingNodeName(null))?.()
+        }}
         onOk={() => drainForm.submit()}
       >
+        {updateNodeMutation.feedback}
+        {deleteNodeMutation.feedback}
+        {schedulabilityMutation.feedback}
+        {drainNodeMutation.feedback}
+
         <Alert type="warning" showIcon title={copy.drainWarning} />
         <Form
           form={drainForm}
@@ -435,10 +473,8 @@ export function ClusterNodesPage() {
               },
               {
                 onSuccess: () => {
-                  void message.success(copy.drained)
                   setDrainingNodeName(null)
                 },
-                onError: (error) => void message.error(error.message),
               },
             )
           }}

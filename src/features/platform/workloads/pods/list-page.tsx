@@ -1,5 +1,47 @@
-import { useEffect, useMemo, useState } from 'react'
-import type { CSSProperties } from 'react'
+import { AdminTable } from '@/components/admin-table'
+import {
+  ManagementBatchBar,
+  ManagementIconButton,
+  ManagementQueryField,
+  ManagementTableToolbar,
+} from '@/components/management-list'
+import { TABLE_ACTIONS_COLUMN_CLASS_NAME } from '@/components/resource-actions'
+import { StatusTag } from '@/components/status-tag'
+import { TableCellText } from '@/components/table-cell-content'
+import { hasAllowedAction, hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { encodeAIContextForElement, useAIPageContext } from '@/features/copilot'
+import {
+  capabilityActionTooltip,
+  useClusterCapability,
+} from '@/features/platform/cluster-capabilities'
+import { useRealtimeSessionDock } from '@/features/platform/session-dock'
+import { useKubernetesResourceStream } from '@/features/platform/shared/resource-stream'
+import { ResourceStreamStatus } from '@/features/platform/shared/resource-stream-status'
+import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
+import {
+  platformBatchReceipt,
+  platformBatchUnknown,
+  platformResourceTarget,
+  usePlatformMutation,
+} from '@/features/platform/shared/use-platform-mutation'
+import {
+  buildWorkloadDetailPath,
+  compareStrings,
+  includesSearch,
+  normalizeSearchKeyword,
+  parseCpuValue,
+  parseMemoryValue,
+  parseReadyContainers,
+} from '@/features/platform/workloads-model'
+import '@/features/platform/workloads/styles.css'
+import { useI18n } from '@/i18n'
+import { usePlatformScopeStore } from '@/stores/platform-scope-store'
+import { toScopeKey } from '@/types'
+import { readableQueryData } from '@/utils/query-feedback'
+import { formatAgeSeconds } from '@/utils/time'
+import { CodeOutlined, DeleteOutlined, FileTextOutlined } from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TableColumnsType } from 'antd'
 import {
   App,
   Button,
@@ -12,43 +54,10 @@ import {
   Tooltip,
   Typography,
 } from 'antd'
-import { CodeOutlined, DeleteOutlined, FileTextOutlined } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import type { CSSProperties } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AdminTable } from '@/components/admin-table'
-import { TableCellText } from '@/components/table-cell-content'
-import {
-  ManagementBatchBar,
-  ManagementIconButton,
-  ManagementQueryField,
-  ManagementTableToolbar,
-} from '@/components/management-list'
-import { TABLE_ACTIONS_COLUMN_CLASS_NAME } from '@/components/resource-actions'
-import { hasAllowedAction, hasPermission, usePermissionSnapshot } from '@/features/auth'
-import { encodeAIContextForElement, useAIPageContext } from '@/features/copilot'
-import { useI18n } from '@/i18n'
-import { StatusTag } from '@/components/status-tag'
-import {
-  capabilityActionTooltip,
-  useClusterCapability,
-} from '@/features/platform/cluster-capabilities'
-import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
-import { ResourceStreamStatus } from '@/features/platform/shared/resource-stream-status'
-import { useKubernetesResourceStream } from '@/features/platform/shared/resource-stream'
-import { useRealtimeSessionDock } from '@/features/platform/session-dock'
-import { usePlatformScopeStore } from '@/stores/platform-scope-store'
-import { formatAgeSeconds } from '@/utils/time'
-import {
-  buildWorkloadDetailPath,
-  compareStrings,
-  includesSearch,
-  normalizeSearchKeyword,
-  parseCpuValue,
-  parseMemoryValue,
-  parseReadyContainers,
-} from '@/features/platform/workloads-model'
-import { toScopeKey } from '@/types'
-import type { TableColumnsType } from 'antd'
+import { workloadKeys } from '../shared/keys'
 import {
   WorkloadQueryPanel,
   WorkloadRefreshButton,
@@ -59,8 +68,6 @@ import {
 import { podMutations } from './mutations'
 import { podQueries } from './queries'
 import { podTargetFromRecord, type Pod } from './types'
-import { workloadKeys } from '../shared/keys'
-import '@/features/platform/workloads/styles.css'
 
 const { Link, Text } = Typography
 
@@ -299,15 +306,16 @@ export function WorkloadsPodsPage() {
   })
   const podsQuery = useQuery({
     ...podsQueryOptions,
-    refetchInterval:
-      !podStream.live && autoRefreshEnabled && clusterId
+    refetchInterval: (query) =>
+      query.state.status !== 'error' && !podStream.live && autoRefreshEnabled && clusterId
         ? autoRefreshIntervalSeconds * 1000
         : false,
   })
+  const visiblePodsQueryData = readableQueryData(podsQuery)
 
   const isLoading = podsQuery.isLoading
 
-  const pods = podsQuery.data ?? []
+  const pods = visiblePodsQueryData ?? []
   const normalizedKeyword = normalizeSearchKeyword(searchKeyword)
   useAIPageContext({
     sourceWorkbench: 'platform',
@@ -400,8 +408,18 @@ export function WorkloadsPodsPage() {
             : 'Some selected pods do not allow delete'
           : ''
 
-  const deletePodMutation = useMutation(podMutations.remove(queryClient))
-  const batchDeletePodsMutation = useMutation(podMutations.removeBatch(queryClient))
+  const deletePodMutation = usePlatformMutation(podMutations.remove(queryClient), {
+    label: ['删除 Pod', 'Delete Pod'],
+    target: platformResourceTarget,
+  })
+  const batchDeletePodsMutation = usePlatformMutation(podMutations.removeBatch(queryClient), {
+    label: ['批量删除 Pod', 'Delete Pods'],
+    target: (v) => v.targets.map(platformResourceTarget).join(' · '),
+    resultError: platformBatchUnknown,
+    receipt: (results, variables) =>
+      platformBatchReceipt(results, variables.targets.map(platformResourceTarget), localeCode),
+  })
+  const platformWriteBlocked = deletePodMutation.blocked || batchDeletePodsMutation.blocked
 
   const handleRefresh = async () => {
     if (!clusterId || manualRefreshPending) {
@@ -593,7 +611,7 @@ export function WorkloadsPodsPage() {
               <ManagementIconButton
                 danger
                 aria-label={deleteLabel}
-                disabled={podDeleteDisabled}
+                disabled={platformWriteBlocked || podDeleteDisabled}
                 icon={<DeleteOutlined />}
                 loading={deletePodMutation.isPending}
                 tooltip={capabilityActionTooltip(deleteLabel, podDeleteCapability)}
@@ -751,7 +769,11 @@ export function WorkloadsPodsPage() {
               }
               okText={localeCode === 'zh_CN' ? '删除' : 'Delete'}
               cancelText={localeCode === 'zh_CN' ? '取消' : 'Cancel'}
-              okButtonProps={{ danger: true, loading: batchDeletePodsMutation.isPending }}
+              okButtonProps={{
+                disabled: platformWriteBlocked,
+                danger: true,
+                loading: batchDeletePodsMutation.isPending,
+              }}
               placement="topRight"
               disabled={!canDeleteSelectedPods}
               onConfirm={() =>
@@ -760,24 +782,13 @@ export function WorkloadsPodsPage() {
                     targets: selectedPods.map((item) => podTargetFromRecord(clusterId, item)),
                   },
                   {
-                    onSuccess: (results) => {
-                      const successCount = results.filter(
-                        (item) => item.status === 'fulfilled',
-                      ).length
-                      const failureCount = results.length - successCount
-                      void message.success(
-                        failureCount > 0
-                          ? localeCode === 'zh_CN'
-                            ? `批量删除完成，成功 ${successCount}，失败 ${failureCount}`
-                            : `Batch delete finished: ${successCount} succeeded, ${failureCount} failed`
-                          : localeCode === 'zh_CN'
-                            ? `已删除 ${successCount} 个 Pod`
-                            : `Deleted ${successCount} pods`,
+                    onSuccess: (results, variables) => {
+                      setSelectedPodKeys(
+                        variables.targets
+                          .filter((_target, index) => results[index].status === 'rejected')
+                          .map((target) => `${target.scope.namespace}/${target.name}`),
                       )
-                      setSelectedPodKeys([])
-                      void podsQuery.refetch()
                     },
-                    onError: (error) => void message.error(error.message),
                   },
                 )
               }
@@ -841,8 +852,14 @@ export function WorkloadsPodsPage() {
 
   return (
     <div className="soha-page">
+      {deletePodMutation.feedback}
+      {batchDeletePodsMutation.feedback}
+
       {podQueryPanel}
       <AdminTable
+        error={podsQuery.isEnabled === false ? null : podsQuery.error}
+        hasReadData={podsQuery.data !== undefined}
+        onRetry={podsQuery.isEnabled === false ? undefined : () => podsQuery.refetch()}
         className="soha-pods-table soha-platform-table"
         columnSettingIconOnly
         columnSettingPlacement="header"

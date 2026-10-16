@@ -1,20 +1,17 @@
-import { useMemo, useState } from 'react'
-import { App, InputNumber, Modal, Popconfirm, Space, Typography } from 'antd'
-import { DeleteOutlined, EditOutlined, FormOutlined, ReloadOutlined } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
-import type { TableColumnsType } from 'antd'
 import { AdminTable } from '@/components/admin-table'
-import { TableCellText } from '@/components/table-cell-content'
 import { ManagementIconButton, ManagementTableToolbar } from '@/components/management-list'
-import { WorkloadCreateEntry } from '../shared/create-entry'
 import { TABLE_ACTIONS_COLUMN_CLASS_NAME } from '@/components/resource-actions'
+import { TableCellText } from '@/components/table-cell-content'
 import { hasAllowedAction } from '@/features/auth'
 import {
   capabilityActionTooltip,
   useClusterCapability,
 } from '@/features/platform/cluster-capabilities'
 import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
+import {
+  platformResourceTarget,
+  usePlatformMutation,
+} from '@/features/platform/shared/use-platform-mutation'
 import {
   buildWorkloadDetailPath,
   includesSearch,
@@ -24,22 +21,30 @@ import {
   renderWorkloadNameLink,
   useWorkloadListAIContext,
   useWorkloadTableDensity,
-  workloadRowAIContext,
   WorkloadQueryPanel,
   WorkloadRefreshButton,
+  workloadRowAIContext,
   WorkloadSearchInput,
   WorkloadTableEmpty,
 } from '@/features/platform/workloads/shared/list-controls'
 import { WorkloadQuickEditModal } from '@/features/platform/workloads/shared/workload-quick-edit-modal'
+import '@/features/platform/workloads/styles.css'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
-import { formatAgeSeconds } from '@/utils/time'
+import { readableQueryData } from '@/utils/query-feedback'
 import { tableColumnPresets } from '@/utils/table-columns'
+import { formatAgeSeconds } from '@/utils/time'
+import { DeleteOutlined, EditOutlined, FormOutlined, ReloadOutlined } from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TableColumnsType } from 'antd'
+import { InputNumber, Modal, Popconfirm, Space, Typography } from 'antd'
+import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { WorkloadCreateEntry } from '../shared/create-entry'
 import { statefulSetMutations } from './mutations'
 import { statefulSetQueries } from './queries'
 import type { ScaleStatefulSetVariables, StatefulSet, StatefulSetTarget } from './types'
-import '@/features/platform/workloads/styles.css'
 
 const { Text } = Typography
 const WORKLOAD_ACTIONS_COLUMN_CLASS_NAME = `${TABLE_ACTIONS_COLUMN_CLASS_NAME} soha-workload-actions-column`
@@ -58,15 +63,26 @@ function isTargetMutationPending<T extends StatefulSetTarget>(
 
 export function WorkloadsStatefulSetsPage() {
   const { t, localeCode } = useI18n()
-  const { message } = App.useApp()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { clusterId, namespace } = usePlatformScopeStore()
   const listScope = toScopeKey(clusterId, namespace)
   const statefulSetsQuery = useQuery(statefulSetQueries.list(listScope))
-  const restartMutation = useMutation(statefulSetMutations.restart(queryClient))
-  const scaleMutation = useMutation(statefulSetMutations.scale(queryClient))
-  const deleteMutation = useMutation(statefulSetMutations.remove(queryClient))
+  const visibleStatefulSetsQueryData = readableQueryData(statefulSetsQuery)
+  const restartMutation = usePlatformMutation(statefulSetMutations.restart(queryClient), {
+    label: ['重启工作负载', 'Restart workload'],
+    target: platformResourceTarget,
+  })
+  const scaleMutation = usePlatformMutation(statefulSetMutations.scale(queryClient), {
+    label: ['调整副本数', 'Scale workload'],
+    target: platformResourceTarget,
+  })
+  const deleteMutation = usePlatformMutation(statefulSetMutations.remove(queryClient), {
+    label: ['删除资源', 'Delete resource'],
+    target: platformResourceTarget,
+  })
+  const platformWriteBlocked =
+    restartMutation.blocked || scaleMutation.blocked || deleteMutation.blocked
   const [scaleTarget, setScaleTarget] = useState<ScaleStatefulSetVariables | null>(null)
   const [editTarget, setEditTarget] = useState<StatefulSet | null>(null)
   const [searchKeyword, setSearchKeyword] = useState('')
@@ -74,7 +90,7 @@ export function WorkloadsStatefulSetsPage() {
   const workloadMutationCapability = useClusterCapability('workload.mutations', localeCode)
   const yamlApplyCapability = useClusterCapability('resource.yaml.apply', localeCode)
 
-  const statefulSets = statefulSetsQuery.data ?? []
+  const statefulSets = visibleStatefulSetsQueryData ?? []
   const canShowActions = statefulSets.some(
     (item) =>
       (!yamlApplyCapability.disabled && hasAllowedAction(item.allowedActions, 'update')) ||
@@ -174,7 +190,7 @@ export function WorkloadsStatefulSetsPage() {
               <ManagementIconButton
                 icon={<FormOutlined />}
                 aria-label={`${localeCode === 'zh_CN' ? '编辑' : 'Edit'} ${name}`}
-                disabled={yamlApplyCapability.disabled}
+                disabled={platformWriteBlocked || yamlApplyCapability.disabled}
                 tooltip={capabilityActionTooltip(
                   localeCode === 'zh_CN' ? '编辑' : 'Edit',
                   yamlApplyCapability,
@@ -186,25 +202,17 @@ export function WorkloadsStatefulSetsPage() {
               <ManagementIconButton
                 icon={<ReloadOutlined />}
                 aria-label={restartLabel}
-                disabled={workloadMutationCapability.disabled}
+                disabled={platformWriteBlocked || workloadMutationCapability.disabled}
                 loading={isTargetMutationPending(restartMutation, name, record.namespace)}
                 tooltip={capabilityActionTooltip(restartLabel, workloadMutationCapability)}
-                onClick={() =>
-                  restartMutation.mutate(target, {
-                    onSuccess: () =>
-                      void message.success(
-                        localeCode === 'zh_CN' ? '已触发重启' : 'Restart triggered',
-                      ),
-                    onError: (error) => void message.error(error.message),
-                  })
-                }
+                onClick={() => restartMutation.mutate(target, {})}
               />
             ) : null}
             {canScale ? (
               <ManagementIconButton
                 icon={<EditOutlined />}
                 aria-label={scaleLabel}
-                disabled={workloadMutationCapability.disabled}
+                disabled={platformWriteBlocked || workloadMutationCapability.disabled}
                 tooltip={capabilityActionTooltip(scaleLabel, workloadMutationCapability)}
                 onClick={() =>
                   setScaleTarget({
@@ -233,17 +241,16 @@ export function WorkloadsStatefulSetsPage() {
                 }
                 okText={deleteLabel}
                 cancelText={localeCode === 'zh_CN' ? '取消' : 'Cancel'}
-                okButtonProps={{ danger: true, loading: deletePending }}
+                okButtonProps={{
+                  disabled: platformWriteBlocked,
+                  danger: true,
+                  loading: deletePending,
+                }}
                 placement="topRight"
-                onConfirm={() =>
-                  deleteMutation.mutate(target, {
-                    onSuccess: () =>
-                      void message.success(localeCode === 'zh_CN' ? '已删除' : 'Deleted'),
-                    onError: (error) => void message.error(error.message),
-                  })
-                }
+                onConfirm={() => deleteMutation.mutate(target, {})}
               >
                 <ManagementIconButton
+                  disabled={platformWriteBlocked}
                   danger
                   icon={<DeleteOutlined />}
                   aria-label={deleteLabel}
@@ -260,6 +267,10 @@ export function WorkloadsStatefulSetsPage() {
 
   return (
     <div className="soha-page">
+      {restartMutation.feedback}
+      {scaleMutation.feedback}
+      {deleteMutation.feedback}
+
       <WorkloadQueryPanel
         hasActiveFilters={Boolean(searchKeyword.trim())}
         localeCode={localeCode}
@@ -277,6 +288,11 @@ export function WorkloadsStatefulSetsPage() {
         />
       </WorkloadQueryPanel>
       <AdminTable
+        error={statefulSetsQuery.isEnabled === false ? null : statefulSetsQuery.error}
+        hasReadData={statefulSetsQuery.data !== undefined}
+        onRetry={
+          statefulSetsQuery.isEnabled === false ? undefined : () => statefulSetsQuery.refetch()
+        }
         className="soha-statefulsets-table soha-platform-table"
         columnSettingIconOnly
         columnSettingPlacement="header"
@@ -314,21 +330,26 @@ export function WorkloadsStatefulSetsPage() {
         viewportScroll
       />
       <Modal
+        okButtonProps={{ disabled: platformWriteBlocked }}
         title={localeCode === 'zh_CN' ? 'StatefulSet 扩缩容' : 'Scale StatefulSet'}
         open={Boolean(scaleTarget)}
         onOk={() => {
           if (!scaleTarget) return
           scaleMutation.mutate(scaleTarget, {
             onSuccess: () => {
-              void message.success(localeCode === 'zh_CN' ? '已触发扩缩容' : 'Scale triggered')
               setScaleTarget(null)
             },
-            onError: (error) => void message.error(error.message),
           })
         }}
-        onCancel={() => setScaleTarget(null)}
+        onCancel={() => {
+          if (!platformWriteBlocked) (() => setScaleTarget(null))?.()
+        }}
         confirmLoading={scaleMutation.isPending}
       >
+        {restartMutation.feedback}
+        {scaleMutation.feedback}
+        {deleteMutation.feedback}
+
         <div className="flex items-center gap-2">
           <Text>{localeCode === 'zh_CN' ? '副本数:' : 'Replicas:'}</Text>
           <InputNumber

@@ -2,7 +2,8 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { GlobalResourceCreateModal } from './global-create-modal'
 
-vi.mock('@/i18n', () => ({
+vi.mock('@/i18n', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/i18n')>()),
   useI18n: () => ({ localeCode: 'zh_CN' as const }),
 }))
 vi.mock('@/stores/platform-scope-store', () => ({

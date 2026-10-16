@@ -1,15 +1,18 @@
-import { useNavigate, useParams } from 'react-router-dom'
-import { Button, Card, Descriptions, Spin, Tag, Typography } from 'antd'
-import { useQuery } from '@tanstack/react-query'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
+import { StatusTag } from '@/components/status-tag'
 import { useAIPageContext } from '@/features/copilot'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
-import { StatusTag } from '@/components/status-tag'
-import { formatDateTime } from '@/utils/time'
 import { toScopeKey } from '@/types'
+import { readableQueryData } from '@/utils/query-feedback'
+import { formatDateTime } from '@/utils/time'
+import { useQuery } from '@tanstack/react-query'
 import type { TableColumnsType } from 'antd'
+import { Button, Card, Descriptions, Spin, Tag, Typography } from 'antd'
+import { useNavigate, useParams } from 'react-router-dom'
+import { LogCollectionCard } from './log-collection-card'
 import {
   clusterTypeOf,
   formatClusterRuntimeValue,
@@ -17,9 +20,8 @@ import {
   formatConnectionMode,
 } from './presentation'
 import { clusterQueries } from './queries'
-import { LogCollectionCard } from './log-collection-card'
-import type { Node } from './types'
 import './styles.css'
+import type { Node } from './types'
 
 const { Text } = Typography
 
@@ -31,9 +33,11 @@ export function ClusterDetailPage() {
 
   const detailScope = toScopeKey(clusterId, null)
   const clusterDetailQuery = useQuery(clusterQueries.detail(detailScope))
+  const visibleClusterDetailQueryData = readableQueryData(clusterDetailQuery)
   const nodesQuery = useQuery(clusterQueries.nodes(detailScope))
+  const visibleNodesQueryData = readableQueryData(nodesQuery)
 
-  const detail = clusterDetailQuery.data
+  const detail = visibleClusterDetailQueryData
   const summary = detail?.summary
   useAIPageContext({
     sourceWorkbench: 'platform',
@@ -104,6 +108,13 @@ export function ClusterDetailPage() {
 
   return (
     <div className="soha-page soha-cluster-detail-page">
+      <ReadFeedback
+        canRead={clusterDetailQuery.isEnabled}
+        query={clusterDetailQuery}
+        label="集群详情"
+      />
+      <ReadFeedback canRead={nodesQuery.isEnabled} query={nodesQuery} label="节点" />
+
       <div className="soha-cluster-detail-grid">
         <Card className="soha-detail-card" title={localeCode === 'zh_CN' ? '基础信息' : 'Summary'}>
           <Descriptions
@@ -309,7 +320,7 @@ export function ClusterDetailPage() {
           <AdminTable
             shellClassName="soha-management-table-shell"
             columns={nodeColumns}
-            dataSource={nodesQuery.data ?? []}
+            dataSource={visibleNodesQueryData ?? []}
             rowKey="name"
             loading={nodesQuery.isLoading}
             pageSize={10}

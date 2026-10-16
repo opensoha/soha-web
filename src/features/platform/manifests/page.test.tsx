@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { ApiError } from '@/services/api-error'
 import { PlatformManifestsPage } from './page'
 
 const testState = vi.hoisted(() => ({
@@ -210,4 +211,18 @@ it('shows the application source, desired and observed manifest state', async ()
   expect(container.textContent).toContain('期望 v3')
   expect(container.textContent).toContain('实际 v2')
   expect(container.textContent).toContain('1 个资源')
+
+  testState.apiGet.mockImplementation(async (path = '') => {
+    if (path.startsWith('/delivery/manifest-deployments'))
+      throw new ApiError(403, 'Deployment evidence denied', { method: 'GET' })
+    throw new Error('Unexpected unrelated refetch')
+  })
+  await act(async () => {
+    await queryClient.invalidateQueries({
+      predicate: (query) => query.queryKey.includes('deployments'),
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  })
+  expect(container.textContent).not.toContain('实际 v2')
+  expect(container.textContent).toContain('Deployment evidence denied')
 })

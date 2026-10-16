@@ -1,9 +1,9 @@
 /** @vitest-environment jsdom */
 
-import { act } from 'react'
-import type { ReactNode } from 'react'
-import { App as AntdApp } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { App as AntdApp } from 'antd'
+import type { ReactNode } from 'react'
+import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -24,7 +24,8 @@ vi.mock('@/stores/platform-scope-store', () => ({
   usePlatformScopeStore: () => testState.scope,
 }))
 
-vi.mock('@/i18n', () => ({
+vi.mock('@/i18n', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/i18n')>()),
   localeText: (localeCode: string, chinese: string, english: string) =>
     localeCode === 'zh_CN' ? chinese : english,
   useI18n: () => ({

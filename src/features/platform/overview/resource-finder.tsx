@@ -1,9 +1,11 @@
+import { ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
+import { StatusTag } from '@/components/status-tag'
+import { readableQueryData } from '@/utils/query-feedback'
+import { useQuery } from '@tanstack/react-query'
+import { Card, Input, Select, Spin, Typography } from 'antd'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Card, Input, Select, Spin, Typography } from 'antd'
-import { useQuery } from '@tanstack/react-query'
-import { ManagementState } from '@/components/management-list'
-import { StatusTag } from '@/components/status-tag'
 import { platformOverviewQueries } from './queries'
 import type { OverviewResourceKind } from './types'
 
@@ -41,11 +43,12 @@ export function ResourceFinder({
       options.length > 0,
     ),
   )
+  const visibleQueryData = readableQueryData(query)
   const kindLabel = useMemo(
     () => options.find((item) => item.value === effectiveKind)?.label ?? '',
     [effectiveKind, options],
   )
-  const results = query.data?.items ?? []
+  const results = visibleQueryData?.items ?? []
 
   return (
     <Card
@@ -57,6 +60,8 @@ export function ResourceFinder({
         </Text>
       }
     >
+      <ReadFeedback canRead={query.isEnabled} query={query} label="资源记录" />
+
       {!clusterId ? (
         <ManagementState
           bordered={false}
@@ -139,7 +144,7 @@ export function ResourceFinder({
                   </button>
                 ))}
               </div>
-              {query.data?.truncated ? (
+              {visibleQueryData?.truncated ? (
                 <Text className="soha-platform-resource-search-meta" type="secondary">
                   {localeCode === 'zh_CN'
                     ? `仅展示前 ${results.length} 条匹配结果`

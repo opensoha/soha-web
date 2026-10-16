@@ -1,19 +1,12 @@
-import { MinusCircleOutlined, PlusOutlined } from '@ant-design/icons'
-import { Button, Col, Form, Input, InputNumber, Row, Select, Space } from 'antd'
-import { useQuery } from '@tanstack/react-query'
+import { ReadFeedback } from '@/components/request-feedback'
 import type { StepFormStep } from '@/components/step-form'
 import { podQueries } from '@/features/platform/workloads/pods/queries'
 import { toScopeKey } from '@/types'
+import { readableQueryData } from '@/utils/query-feedback'
+import { MinusCircleOutlined, PlusOutlined } from '@ant-design/icons'
+import { useQuery } from '@tanstack/react-query'
+import { Button, Col, Form, Input, InputNumber, Row, Select, Space } from 'antd'
 import { generateWorkloadSnapshot } from '../api'
-import {
-  BooleanField,
-  JobPolicyFields,
-  KeyValueFields,
-  MetadataFields,
-  PodTemplateFields,
-  WorkloadPolicyFields,
-} from './field-sections'
-import { ResourceStepForm } from './resource-step-form'
 import { buildNamespaceManifest, buildServiceAccountManifest } from './builders/access-control'
 import { buildConfigMapManifest, buildSecretManifest } from './builders/configuration'
 import { buildIngressManifest, buildServiceManifest } from './builders/network'
@@ -23,7 +16,15 @@ import {
   buildJobManifest,
   buildWorkloadSnapshotRequest,
 } from './builders/workloads'
-import { WorkloadSnapshotFields } from './workload-snapshot-fields'
+import {
+  BooleanField,
+  JobPolicyFields,
+  KeyValueFields,
+  MetadataFields,
+  PodTemplateFields,
+  WorkloadPolicyFields,
+} from './field-sections'
+import { ResourceStepForm } from './resource-step-form'
 import {
   DEFAULT_WORKLOAD_SNAPSHOT_INHERITANCE,
   defineResourceForm,
@@ -41,6 +42,7 @@ import {
   type ServiceFormValues,
   type WorkloadFormValues,
 } from './types'
+import { WorkloadSnapshotFields } from './workload-snapshot-fields'
 
 function metadataDefaults(context: ResourceFormContext) {
   return {
@@ -268,7 +270,11 @@ function ServiceFields({ clusterId = '' }: { clusterId?: string }) {
     ...podListOptions,
     enabled: !externalName && Boolean(clusterId.trim() && namespace?.trim()),
   })
-  const podsWithLabels = (podsQuery.data ?? []).filter(
+  const visiblePodsQueryData =
+    !externalName && Boolean(clusterId.trim() && namespace?.trim())
+      ? readableQueryData(podsQuery)
+      : undefined
+  const podsWithLabels = (visiblePodsQueryData ?? []).filter(
     (pod) => Object.keys(pod.labels ?? {}).length > 0,
   )
 
@@ -286,6 +292,8 @@ function ServiceFields({ clusterId = '' }: { clusterId?: string }) {
 
   return (
     <>
+      <ReadFeedback canRead={podsQuery.isEnabled} query={podsQuery} label="Pods" />
+
       <Form.Item label="类型" name="type" rules={[{ required: true }]}>
         <Select
           options={['ClusterIP', 'NodePort', 'LoadBalancer', 'ExternalName'].map((value) => ({

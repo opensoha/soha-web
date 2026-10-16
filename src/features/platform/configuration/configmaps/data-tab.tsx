@@ -2,6 +2,7 @@ import { ConfigurationDataWorkspace } from '../shared/data-workspace'
 import type { ConfigMapDetail } from './types'
 
 export function ConfigMapDataTab(props: {
+  blocked?: boolean
   applying?: boolean
   canEdit: boolean
   detail: ConfigMapDetail

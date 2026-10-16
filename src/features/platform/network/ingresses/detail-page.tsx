@@ -1,14 +1,16 @@
-import { useState } from 'react'
-import { Button, Card, Typography } from 'antd'
-import { useQuery } from '@tanstack/react-query'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
 import { BooleanTag, StatusTag } from '@/components/status-tag'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
+import { readableQueryData } from '@/utils/query-feedback'
+import { useQuery } from '@tanstack/react-query'
 import type { TableColumnsType } from 'antd'
+import { Button, Card, Typography } from 'antd'
+import { useState } from 'react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { NetworkDetailShell } from '../shared/detail-shell'
 import { resolveNetworkNamespace } from '../shared/scope'
 import { ingressQueries } from './queries'
@@ -48,7 +50,8 @@ export function IngressDetailPage() {
   const scope = toScopeKey(clusterId, detailNamespace)
   const [activeTabKey, setActiveTabKey] = useState('overview')
   const detailQuery = useQuery(ingressQueries.detail(scope, name))
-  const ingress = detailQuery.data
+  const visibleDetailQueryData = readableQueryData(detailQuery)
+  const ingress = visibleDetailQueryData
 
   if (!clusterId || !detailNamespace) {
     return (
@@ -206,65 +209,68 @@ export function IngressDetailPage() {
   ]
 
   return (
-    <NetworkDetailShell
-      activeTabKey={activeTabKey}
-      aiContext={{
-        timeRangeMinutes: 60,
-        pinnedData: {
-          className: ingress.className,
-          hosts: ingress.routes?.map((route) => route.host).filter(Boolean),
-          address: ingress.address,
-          backendServices: ingress.backendServices,
-          activeTab: activeTabKey,
-        },
-        promptHint:
-          localeCode === 'zh_CN'
-            ? `排查 Ingress ${ingress.name} 的域名、地址、IngressClass 和后端 Service。`
-            : `Troubleshoot Ingress ${ingress.name} hosts, addresses, IngressClass, and backend services.`,
-      }}
-      detail={ingress}
-      kind="ingresses"
-      label="Ingress"
-      onTabChange={setActiveTabKey}
-      overviewExtra={[
-        { key: 'IngressClass', value: ingress.className || '-' },
-        { key: 'Address', value: ingress.address || '-' },
-      ]}
-      overviewContent={
-        <>
-          <Card
-            className="soha-detail-card"
-            title={localeCode === 'zh_CN' ? '域名与路由' : 'Hosts and routes'}
-          >
-            <AdminTable
-              columns={routeColumns}
-              dataSource={ingress.routes ?? []}
-              rowKey={(record) =>
-                `${record.host}/${record.path}/${record.serviceName}/${record.servicePort}`
-              }
-              pageSize={10}
-              tableSize="small"
-              scroll={{ x: 'max-content' }}
-              enableColumnSelection={false}
-            />
-          </Card>
-          <Card
-            className="soha-detail-card"
-            title={localeCode === 'zh_CN' ? '关联 Pods 与工作负载' : 'Related pods and workloads'}
-          >
-            <AdminTable
-              columns={podColumns}
-              dataSource={relatedPods}
-              rowKey={(record) => `${record.serviceName}/${record.namespace}/${record.name}`}
-              pageSize={10}
-              tableSize="small"
-              scroll={{ x: 'max-content' }}
-              enableColumnSelection={false}
-            />
-          </Card>
-        </>
-      }
-      target={{ scope, name }}
-    />
+    <>
+      <ReadFeedback canRead={detailQuery.isEnabled} query={detailQuery} label="资源详情" />
+      <NetworkDetailShell
+        activeTabKey={activeTabKey}
+        aiContext={{
+          timeRangeMinutes: 60,
+          pinnedData: {
+            className: ingress.className,
+            hosts: ingress.routes?.map((route) => route.host).filter(Boolean),
+            address: ingress.address,
+            backendServices: ingress.backendServices,
+            activeTab: activeTabKey,
+          },
+          promptHint:
+            localeCode === 'zh_CN'
+              ? `排查 Ingress ${ingress.name} 的域名、地址、IngressClass 和后端 Service。`
+              : `Troubleshoot Ingress ${ingress.name} hosts, addresses, IngressClass, and backend services.`,
+        }}
+        detail={ingress}
+        kind="ingresses"
+        label="Ingress"
+        onTabChange={setActiveTabKey}
+        overviewExtra={[
+          { key: 'IngressClass', value: ingress.className || '-' },
+          { key: 'Address', value: ingress.address || '-' },
+        ]}
+        overviewContent={
+          <>
+            <Card
+              className="soha-detail-card"
+              title={localeCode === 'zh_CN' ? '域名与路由' : 'Hosts and routes'}
+            >
+              <AdminTable
+                columns={routeColumns}
+                dataSource={ingress.routes ?? []}
+                rowKey={(record) =>
+                  `${record.host}/${record.path}/${record.serviceName}/${record.servicePort}`
+                }
+                pageSize={10}
+                tableSize="small"
+                scroll={{ x: 'max-content' }}
+                enableColumnSelection={false}
+              />
+            </Card>
+            <Card
+              className="soha-detail-card"
+              title={localeCode === 'zh_CN' ? '关联 Pods 与工作负载' : 'Related pods and workloads'}
+            >
+              <AdminTable
+                columns={podColumns}
+                dataSource={relatedPods}
+                rowKey={(record) => `${record.serviceName}/${record.namespace}/${record.name}`}
+                pageSize={10}
+                tableSize="small"
+                scroll={{ x: 'max-content' }}
+                enableColumnSelection={false}
+              />
+            </Card>
+          </>
+        }
+        target={{ scope, name }}
+      />
+    </>
   )
 }

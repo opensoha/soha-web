@@ -1,11 +1,18 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
-import { App, Button, Card, Spin } from 'antd'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate, useParams } from 'react-router-dom'
 import { ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
 import { StatusTag } from '@/components/status-tag'
+import { useYamlDraft } from '@/components/use-yaml-draft'
+import {
+  platformResourceTarget,
+  usePlatformMutation,
+} from '@/features/platform/shared/use-platform-mutation'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
+import { readableQueryData } from '@/utils/query-feedback'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Button, Card, Spin } from 'antd'
+import { lazy, Suspense, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import {
   StorageDetailShell,
   StorageDetailTabs,
@@ -19,24 +26,32 @@ const StorageYAMLPanel = lazy(() => import('../shared/yaml-panel'))
 
 export function StoragePvDetailPage() {
   const { localeCode } = useI18n()
-  const { message } = App.useApp()
   const navigate = useNavigate()
   const { name = '' } = useParams()
   const { clusterId } = usePlatformScopeStore()
   const scope = toClusterStorageScope(clusterId)
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState('overview')
-  const [yamlDraft, setYAMLDraft] = useState('')
   const detailQuery = useQuery(persistentVolumeQueries.detail(scope, name))
+  const visibleDetailQueryData = readableQueryData(detailQuery)
   const yamlOptions = persistentVolumeQueries.yaml(scope, name)
   const yamlQuery = useQuery({
     ...yamlOptions,
     enabled: Boolean(yamlOptions.enabled) && activeTab === 'yaml',
   })
-  const updateYAMLMutation = useMutation(persistentVolumeMutations.updateYAML(queryClient))
-  const serverValue = yamlQuery.data?.content ?? ''
+  const visibleYamlQueryData =
+    Boolean(yamlOptions.enabled) && activeTab === 'yaml' ? readableQueryData(yamlQuery) : undefined
+  const updateYAMLMutation = usePlatformMutation(
+    persistentVolumeMutations.updateYAML(queryClient),
+    { label: ['应用 YAML', 'Apply YAML'], target: platformResourceTarget },
+  )
+  const platformWriteBlocked = updateYAMLMutation.blocked
 
-  useEffect(() => setYAMLDraft(serverValue), [serverValue])
+  const yamlState = useYamlDraft(
+    JSON.stringify([scope.clusterId, scope.namespace, name]),
+    visibleYamlQueryData?.content,
+  )
+  const { value: yamlDraft, setValue: setYAMLDraft } = yamlState
 
   if (!clusterId) {
     return (
@@ -49,7 +64,9 @@ export function StoragePvDetailPage() {
     )
   }
   if (detailQuery.isLoading) return <Card loading className="soha-detail-card" />
-  const detail = detailQuery.data
+  const detail = visibleDetailQueryData
+  if (detailQuery.isError && !detail)
+    return <ReadFeedback canRead={detailQuery.isEnabled} query={detailQuery} label="资源详情" />
   if (!detail) {
     return (
       <div className="soha-page">
@@ -63,6 +80,11 @@ export function StoragePvDetailPage() {
 
   return (
     <StorageDetailShell kind="PV" name={detail.name}>
+      <ReadFeedback canRead={detailQuery.isEnabled} query={detailQuery} label="资源详情" />
+      <ReadFeedback canRead={yamlQuery.isEnabled} query={yamlQuery} label="YAML" />
+
+      {updateYAMLMutation.feedback}
+
       <StorageDetailTabs
         activeKey={activeTab}
         onChange={setActiveTab}
@@ -135,24 +157,29 @@ export function StoragePvDetailPage() {
             children:
               activeTab === 'yaml' ? (
                 <Suspense fallback={<Spin size="large" />}>
-                  <StorageYAMLPanel
-                    applying={updateYAMLMutation.isPending}
-                    draft={yamlDraft}
-                    onChange={setYAMLDraft}
-                    onReset={() => setYAMLDraft(serverValue)}
-                    onApply={() =>
-                      updateYAMLMutation.mutate(
-                        { scope, name, content: yamlDraft },
-                        {
-                          onSuccess: (resourceYAML) => {
-                            setYAMLDraft(resourceYAML.content ?? yamlDraft)
-                            void message.success('YAML applied')
+                  {yamlQuery.isError && visibleYamlQueryData === undefined ? null : (
+                    <StorageYAMLPanel
+                      blocked={platformWriteBlocked}
+                      error={yamlQuery.error}
+                      original={yamlState.original}
+                      serverChanged={yamlState.serverChanged}
+                      onCompareLatest={yamlState.compareLatest}
+                      applying={updateYAMLMutation.isPending}
+                      draft={yamlDraft}
+                      onChange={setYAMLDraft}
+                      onReset={yamlState.reset}
+                      onApply={() =>
+                        updateYAMLMutation.mutate(
+                          { scope, name, content: yamlDraft },
+                          {
+                            onSuccess: (resourceYAML) => {
+                              yamlState.applied(resourceYAML.content ?? yamlDraft)
+                            },
                           },
-                          onError: (error) => void message.error(error.message),
-                        },
-                      )
-                    }
-                  />
+                        )
+                      }
+                    />
+                  )}
                 </Suspense>
               ) : null,
           },

@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentUpgradeModal } from './agent-upgrade-modal'
 import { clusterKeys } from './keys'
@@ -9,10 +9,14 @@ import type { Cluster } from './types'
 
 const api = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }))
 vi.mock('@/services/api-client', () => ({ api }))
-vi.mock('@/i18n', () => ({ useI18n: () => ({ localeCode: 'zh_CN' }) }))
-vi.mock('antd', () => {
+vi.mock('@/i18n', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/i18n')>()),
+  useI18n: () => ({ localeCode: 'zh_CN' }),
+}))
+vi.mock('antd', async (importOriginal) => {
   const Container = ({ children }: { children?: ReactNode }) => <div>{children}</div>
   return {
+    ...(await importOriginal<typeof import('antd')>()),
     Alert: ({ title }: { title?: ReactNode }) => <div>{title}</div>,
     Button: ({ children, onClick }: { children?: ReactNode; onClick?: () => void }) => (
       <button onClick={onClick}>{children}</button>

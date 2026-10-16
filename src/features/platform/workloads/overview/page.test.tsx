@@ -1,9 +1,9 @@
 /** @vitest-environment jsdom */
 
-import { act } from 'react'
-import type { ReactNode } from 'react'
-import { createRoot } from 'react-dom/client'
 import { useQuery } from '@tanstack/react-query'
+import type { ReactNode } from 'react'
+import { act } from 'react'
+import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WorkloadsOverviewPage } from './page'
@@ -51,7 +51,8 @@ vi.mock('@/features/auth', async (importOriginal) => ({
 vi.mock('@/stores/platform-scope-store', () => ({
   usePlatformScopeStore: () => ({ clusterId: 'cluster-a', namespace: 'team-a' }),
 }))
-vi.mock('@/i18n', () => ({
+vi.mock('@/i18n', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/i18n')>()),
   useI18n: () => ({ localeCode: 'zh_CN', t: (_key: string, fallback: string) => fallback }),
 }))
 vi.mock('@/components/admin-table', () => ({

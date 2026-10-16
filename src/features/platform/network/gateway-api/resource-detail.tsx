@@ -1,12 +1,14 @@
-import { useState } from 'react'
-import type { ReactNode } from 'react'
-import { Card } from 'antd'
-import { useQuery } from '@tanstack/react-query'
-import { useParams, useSearchParams } from 'react-router-dom'
 import { ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
+import { readableQueryData } from '@/utils/query-feedback'
+import { useQuery } from '@tanstack/react-query'
+import { Card } from 'antd'
+import type { ReactNode } from 'react'
+import { useState } from 'react'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { NetworkDetailShell } from '../shared/detail-shell'
 import { resolveNetworkNamespace } from '../shared/scope'
 import type { NetworkResourceRecord } from '../shared/types'
@@ -32,7 +34,8 @@ export function GatewayAPIResourceDetail<T extends NetworkResourceRecord>({
   const scope = toScopeKey(clusterId, detailNamespace)
   const [activeTabKey, setActiveTabKey] = useState('overview')
   const query = useQuery(gatewayAPIQueries.detail<T>(kind, scope, name))
-  const detail = query.data
+  const visibleQueryData = readableQueryData(query)
+  const detail = visibleQueryData
 
   if (!clusterId || !detailNamespace)
     return (
@@ -57,15 +60,18 @@ export function GatewayAPIResourceDetail<T extends NetworkResourceRecord>({
     )
 
   return (
-    <NetworkDetailShell
-      activeTabKey={activeTabKey}
-      detail={detail}
-      kind={kind}
-      label={label}
-      onTabChange={setActiveTabKey}
-      overviewContent={content?.(detail)}
-      overviewExtra={facts?.(detail)}
-      target={{ scope, name }}
-    />
+    <>
+      <ReadFeedback canRead={query.isEnabled} query={query} label="资源记录" />
+      <NetworkDetailShell
+        activeTabKey={activeTabKey}
+        detail={detail}
+        kind={kind}
+        label={label}
+        onTabChange={setActiveTabKey}
+        overviewContent={content?.(detail)}
+        overviewExtra={facts?.(detail)}
+        target={{ scope, name }}
+      />
+    </>
   )
 }

@@ -1,14 +1,16 @@
-import { useState } from 'react'
-import { Button, Card } from 'antd'
-import { useQuery } from '@tanstack/react-query'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
 import { StatusTag } from '@/components/status-tag'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
+import { readableQueryData } from '@/utils/query-feedback'
+import { useQuery } from '@tanstack/react-query'
 import type { TableColumnsType } from 'antd'
+import { Button, Card } from 'antd'
+import { useState } from 'react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { NetworkDetailShell } from '../shared/detail-shell'
 import { renderNetworkTextList } from '../shared/renderers'
 import { resolveNetworkNamespace } from '../shared/scope'
@@ -58,7 +60,8 @@ export function NetworkPolicyDetailPage() {
   const query = useQuery(
     networkCoreQueries.detail<NetworkPolicyDetail>('networkpolicies', scope, name),
   )
-  const detail = query.data
+  const visibleQueryData = readableQueryData(query)
+  const detail = visibleQueryData
   if (!clusterId || !detailNamespace)
     return (
       <div className="soha-page">
@@ -115,50 +118,53 @@ export function NetworkPolicyDetailPage() {
     { title: localeCode === 'zh_CN' ? '重启次数' : 'Restarts', dataIndex: 'restarts' },
   ]
   return (
-    <NetworkDetailShell
-      activeTabKey={activeTabKey}
-      detail={detail}
-      kind="networkpolicies"
-      label="NetworkPolicy"
-      onTabChange={setActiveTabKey}
-      overviewExtra={[
-        { key: 'Policy Types', value: renderNetworkTextList(detail.policyTypes) },
-        { key: 'Pod Selector', value: detail.podSelector || '{}' },
-        { key: 'Rules', value: detail.rules?.length ?? 0 },
-        { key: 'Matching Pods', value: detail.matchingPods?.length ?? 0 },
-      ]}
-      overviewContent={
-        <>
-          <Card className="soha-detail-card" title={localeCode === 'zh_CN' ? '规则' : 'Rules'}>
-            <AdminTable
-              columns={ruleColumns}
-              dataSource={detail.rules ?? []}
-              rowKey={(record) =>
-                `${record.direction}/${renderPeers(record.peers)}/${renderPorts(record.ports)}`
-              }
-              pageSize={10}
-              tableSize="small"
-              scroll={{ x: 'max-content' }}
-              enableColumnSelection={false}
-            />
-          </Card>
-          <Card
-            className="soha-detail-card"
-            title={localeCode === 'zh_CN' ? '匹配 Pods' : 'Matching pods'}
-          >
-            <AdminTable
-              columns={podColumns}
-              dataSource={detail.matchingPods ?? []}
-              rowKey={(record) => `${record.namespace}/${record.name}`}
-              pageSize={10}
-              tableSize="small"
-              scroll={{ x: 'max-content' }}
-              enableColumnSelection={false}
-            />
-          </Card>
-        </>
-      }
-      target={{ scope, name }}
-    />
+    <>
+      <ReadFeedback canRead={query.isEnabled} query={query} label="资源记录" />
+      <NetworkDetailShell
+        activeTabKey={activeTabKey}
+        detail={detail}
+        kind="networkpolicies"
+        label="NetworkPolicy"
+        onTabChange={setActiveTabKey}
+        overviewExtra={[
+          { key: 'Policy Types', value: renderNetworkTextList(detail.policyTypes) },
+          { key: 'Pod Selector', value: detail.podSelector || '{}' },
+          { key: 'Rules', value: detail.rules?.length ?? 0 },
+          { key: 'Matching Pods', value: detail.matchingPods?.length ?? 0 },
+        ]}
+        overviewContent={
+          <>
+            <Card className="soha-detail-card" title={localeCode === 'zh_CN' ? '规则' : 'Rules'}>
+              <AdminTable
+                columns={ruleColumns}
+                dataSource={detail.rules ?? []}
+                rowKey={(record) =>
+                  `${record.direction}/${renderPeers(record.peers)}/${renderPorts(record.ports)}`
+                }
+                pageSize={10}
+                tableSize="small"
+                scroll={{ x: 'max-content' }}
+                enableColumnSelection={false}
+              />
+            </Card>
+            <Card
+              className="soha-detail-card"
+              title={localeCode === 'zh_CN' ? '匹配 Pods' : 'Matching pods'}
+            >
+              <AdminTable
+                columns={podColumns}
+                dataSource={detail.matchingPods ?? []}
+                rowKey={(record) => `${record.namespace}/${record.name}`}
+                pageSize={10}
+                tableSize="small"
+                scroll={{ x: 'max-content' }}
+                enableColumnSelection={false}
+              />
+            </Card>
+          </>
+        }
+        target={{ scope, name }}
+      />
+    </>
   )
 }

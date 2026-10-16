@@ -1,10 +1,11 @@
-import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
+import { ReadFeedback } from '@/components/request-feedback'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
 import { formatAgeSeconds } from '@/utils/time'
+import { useQuery } from '@tanstack/react-query'
 import type { TableColumnsType } from 'antd'
+import { Link } from 'react-router-dom'
 import { NetworkResourceListPage } from '../shared/list-page'
 import { buildGatewayAPIRoutePath } from '../shared/paths'
 import { renderNetworkTextList } from '../shared/renderers'
@@ -47,37 +48,40 @@ export function NetworkReferenceGrantsPage() {
     },
   ]
   return (
-    <NetworkResourceListPage
-      buildAIPageContext={(items, searchKeyword) => ({
-        sourceWorkbench: 'platform',
-        sourceRoute: '/network/gateway-api/referencegrants',
-        sourceTitle: 'ReferenceGrants',
-        entityKind: 'kubernetes.referencegrant.list',
-        entityName: 'ReferenceGrants',
-        clusterId: clusterId ?? undefined,
-        namespace: namespace ?? undefined,
-        visibleFilters: { searchKeyword },
-        pinnedData: { total: items.length },
-      })}
-      columns={columns}
-      deletable={false}
-      emptyDescription={{
-        zh_CN: '当前范围没有 ReferenceGrant，或未安装 Gateway API CRD',
-        en_US: 'No ReferenceGrants in the current scope, or Gateway API CRDs are not installed',
-      }}
-      kind="referencegrants"
-      noMatchDescription={{ zh_CN: '没有匹配的资源', en_US: 'No matching resources' }}
-      query={query}
-      searchPlaceholder={{
-        zh_CN: '搜索 ReferenceGrant / namespace / from / to',
-        en_US: 'Search ReferenceGrant / namespace / from / to',
-      }}
-      searchValues={(record) => [
-        record.name,
-        record.namespace,
-        ...(record.from ?? []),
-        ...(record.to ?? []),
-      ]}
-    />
+    <>
+      <ReadFeedback canRead={query.isEnabled} query={query} label="资源记录" />
+      <NetworkResourceListPage
+        buildAIPageContext={(items, searchKeyword) => ({
+          sourceWorkbench: 'platform',
+          sourceRoute: '/network/gateway-api/referencegrants',
+          sourceTitle: 'ReferenceGrants',
+          entityKind: 'kubernetes.referencegrant.list',
+          entityName: 'ReferenceGrants',
+          clusterId: clusterId ?? undefined,
+          namespace: namespace ?? undefined,
+          visibleFilters: { searchKeyword },
+          pinnedData: { total: items.length },
+        })}
+        columns={columns}
+        deletable={false}
+        emptyDescription={{
+          zh_CN: '当前范围没有 ReferenceGrant，或未安装 Gateway API CRD',
+          en_US: 'No ReferenceGrants in the current scope, or Gateway API CRDs are not installed',
+        }}
+        kind="referencegrants"
+        noMatchDescription={{ zh_CN: '没有匹配的资源', en_US: 'No matching resources' }}
+        query={query}
+        searchPlaceholder={{
+          zh_CN: '搜索 ReferenceGrant / namespace / from / to',
+          en_US: 'Search ReferenceGrant / namespace / from / to',
+        }}
+        searchValues={(record) => [
+          record.name,
+          record.namespace,
+          ...(record.from ?? []),
+          ...(record.to ?? []),
+        ]}
+      />
+    </>
   )
 }

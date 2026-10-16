@@ -15,7 +15,11 @@ export const crdQueries = {
       queryFn: () => listCRDs(clusterId!),
       enabled: Boolean(clusterId),
       refetchInterval: (query) =>
-        query.state.data?.some((item) => item.deletingAt) ? 3000 : false,
+        query.state.status === 'error'
+          ? false
+          : query.state.data?.some((item) => item.deletingAt)
+            ? 3000
+            : false,
     }),
   resources: (
     clusterId: string | null | undefined,
@@ -28,7 +32,11 @@ export const crdQueries = {
       queryFn: () => listCustomResources(clusterId!, crd, namespace),
       enabled: Boolean(clusterId) && capabilityEnabled,
       refetchInterval: (query) =>
-        query.state.data?.some((item) => item.deletingAt) ? 3000 : false,
+        query.state.status === 'error'
+          ? false
+          : query.state.data?.some((item) => item.deletingAt)
+            ? 3000
+            : false,
     }),
   access: (
     clusterId: string | null | undefined,

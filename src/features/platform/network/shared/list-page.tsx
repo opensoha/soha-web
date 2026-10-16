@@ -1,8 +1,3 @@
-import { useDeferredValue, useMemo, useState } from 'react'
-import { DeleteOutlined, EditOutlined } from '@ant-design/icons'
-import { App, Popconfirm, Space } from 'antd'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import type { UseQueryResult } from '@tanstack/react-query'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
   ManagementDensityButton,
@@ -15,18 +10,28 @@ import {
 } from '@/components/management-list'
 import { TABLE_ACTIONS_COLUMN_CLASS_NAME } from '@/components/resource-actions'
 import { hasAllowedAction } from '@/features/auth'
+import type { AIPageContext } from '@/features/copilot'
+import { encodeAIContextForElement, useAIPageContext } from '@/features/copilot'
 import { CreateEntry } from '@/features/platform/resource-creation/components/create-entry'
 import { getResourceCreateTemplate } from '@/features/platform/resource-creation/templates'
 import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
-import { encodeAIContextForElement, useAIPageContext } from '@/features/copilot'
-import type { AIPageContext } from '@/features/copilot'
+import {
+  platformResourceTarget,
+  usePlatformMutation,
+} from '@/features/platform/shared/use-platform-mutation'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
+import { readableQueryData } from '@/utils/query-feedback'
+import { DeleteOutlined, EditOutlined } from '@ant-design/icons'
+import type { UseQueryResult } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import type { TableColumnsType } from 'antd'
+import { Popconfirm, Space } from 'antd'
+import { useDeferredValue, useMemo, useState } from 'react'
+import '../styles.css'
 import { networkMutations } from './mutations'
 import { networkTargetFromRecord } from './scope'
 import type { NetworkKind, NetworkResourceRecord } from './types'
-import '../styles.css'
 
 const NETWORK_ENTITY_KINDS: Record<NetworkKind, string> = {
   services: 'Service',
@@ -44,15 +49,6 @@ const NETWORK_ENTITY_KINDS: Record<NetworkKind, string> = {
 
 function normalizeKeyword(value: string) {
   return value.trim().toLowerCase()
-}
-
-function buildErrorDescription(localeCode: 'zh_CN' | 'en_US', error: unknown) {
-  if (error instanceof Error && error.message.trim()) {
-    return localeCode === 'zh_CN'
-      ? `网络资源请求失败：${error.message}`
-      : `Failed to load network resources: ${error.message}`
-  }
-  return localeCode === 'zh_CN' ? '网络资源请求失败。' : 'Failed to load network resources.'
 }
 
 export function NetworkResourceListPage<T extends NetworkResourceRecord>({
@@ -82,7 +78,6 @@ export function NetworkResourceListPage<T extends NetworkResourceRecord>({
   searchPlaceholder: { en_US: string; zh_CN: string }
   searchValues: (record: T) => Array<string | undefined | null>
 }) {
-  const { message } = App.useApp()
   const { localeCode } = useI18n()
   const { clusterId, namespace } = usePlatformScopeStore()
   const queryClient = useQueryClient()
@@ -90,7 +85,7 @@ export function NetworkResourceListPage<T extends NetworkResourceRecord>({
   const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
   const deferredSearchKeyword = useDeferredValue(searchKeyword)
   const normalizedKeyword = normalizeKeyword(deferredSearchKeyword)
-  const rawItems = query.data ?? []
+  const rawItems = readableQueryData(query) ?? []
   const filteredItems = useMemo(
     () =>
       rawItems.filter((record) =>
@@ -106,7 +101,11 @@ export function NetworkResourceListPage<T extends NetworkResourceRecord>({
     deletable && rawItems.some((item) => hasAllowedAction(item.allowedActions, 'delete'))
   const canShowActions = canShowEdit || canShowDelete
   useAIPageContext(buildAIPageContext(rawItems, searchKeyword))
-  const removeMutation = useMutation(networkMutations.remove(kind, queryClient))
+  const removeMutation = usePlatformMutation(networkMutations.remove(kind, queryClient), {
+    label: ['删除资源', 'Delete resource'],
+    target: platformResourceTarget,
+  })
+  const platformWriteBlocked = removeMutation.blocked
   const densityLabel = localeCode === 'zh_CN' ? '切换表格密度' : 'Toggle table density'
   const createKind = kind === 'services' ? 'Service' : kind === 'ingresses' ? 'Ingress' : null
   const effectiveEmpty = !clusterId
@@ -177,17 +176,12 @@ export function NetworkResourceListPage<T extends NetworkResourceRecord>({
               }
               okText={deleteLabel}
               cancelText={localeCode === 'zh_CN' ? '取消' : 'Cancel'}
-              okButtonProps={{ danger: true, loading: deleting }}
+              okButtonProps={{ disabled: platformWriteBlocked, danger: true, loading: deleting }}
               placement="topRight"
-              onConfirm={() =>
-                removeMutation.mutate(target, {
-                  onSuccess: () =>
-                    void message.success(localeCode === 'zh_CN' ? '已删除' : 'Deleted'),
-                  onError: (error) => void message.error(error.message),
-                })
-              }
+              onConfirm={() => removeMutation.mutate(target, {})}
             >
               <ManagementIconButton
+                disabled={platformWriteBlocked}
                 danger
                 icon={<DeleteOutlined />}
                 aria-label={deleteLabel}
@@ -202,97 +196,95 @@ export function NetworkResourceListPage<T extends NetworkResourceRecord>({
   }
 
   return (
-    <ManagementDataPage
-      beforeQuery={
-        query.isError ? (
-          <ManagementState
-            className="mb-3"
-            description={buildErrorDescription(localeCode, query.error)}
-            kind="error"
-            title={localeCode === 'zh_CN' ? '网络资源暂时不可用' : 'Network resources unavailable'}
-          />
-        ) : null
-      }
-      query={{
-        onFinish: () => undefined,
-        actions: (
-          <ManagementQueryActions
-            disabledReset={!searchKeyword.trim()}
-            onReset={() => setSearchKeyword('')}
-            resetLabel={localeCode === 'zh_CN' ? '重置' : 'Reset'}
-            submitLabel={localeCode === 'zh_CN' ? '查询' : 'Search'}
-          />
-        ),
-        children: (
-          <ManagementKeywordField
-            label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}
-            value={searchKeyword}
-            onChange={setSearchKeyword}
-            placeholder={searchPlaceholder[localeCode]}
-            inputProps={{
-              className: 'soha-platform-compact-field soha-workload-search-input',
-              size: 'small',
-            }}
-          />
-        ),
-      }}
-      table={{
-        className: 'soha-platform-table',
-        columnSettingIconOnly: true,
-        columnSettingPlacement: 'header',
-        columns: canShowActions ? [...columns, actionColumn] : columns,
-        dataSource: clusterId ? filteredItems : [],
-        rowKey: rowKey ?? ((record) => `${record.namespace}/${record.name}`),
-        onRow: rowProps,
-        loading: query.isLoading,
-        localSorting: true,
-        pageSize: K8S_TABLE_PAGE_SIZE,
-        tableSize,
-        scroll: { x: 'max-content' },
-        viewportScroll: true,
-        headerExtra: (
-          <ManagementTableToolbar>
-            {createKind ? (
-              <CreateEntry
-                context={{
-                  clusterId: clusterId || '',
-                  defaultNamespace: namespace || undefined,
-                  expectedApiVersion: createKind === 'Service' ? 'v1' : 'networking.k8s.io/v1',
-                  expectedKind: createKind,
-                  resourceGroup: 'network',
-                  scopeMode: 'namespace',
-                  source: 'list',
-                }}
-                defaultTemplate={getResourceCreateTemplate(createKind)}
-                label={createKind}
-              />
-            ) : null}
-            <ManagementDensityButton
-              aria-label={densityLabel}
-              title={densityLabel}
-              tooltip={densityLabel}
-              onClick={() => setTableSize((current) => (current === 'middle' ? 'small' : 'middle'))}
+    <>
+      {removeMutation.feedback}
+      <ManagementDataPage
+        query={{
+          onFinish: () => undefined,
+          actions: (
+            <ManagementQueryActions
+              disabledReset={!searchKeyword.trim()}
+              onReset={() => setSearchKeyword('')}
+              resetLabel={localeCode === 'zh_CN' ? '重置' : 'Reset'}
+              submitLabel={localeCode === 'zh_CN' ? '查询' : 'Search'}
             />
-            <ManagementRefreshButton
-              aria-label={localeCode === 'zh_CN' ? '刷新' : 'Refresh'}
-              disabled={!clusterId}
-              loading={query.isFetching}
-              tooltip={localeCode === 'zh_CN' ? '刷新' : 'Refresh'}
-              onClick={() => {
-                if (clusterId) void query.refetch()
+          ),
+          children: (
+            <ManagementKeywordField
+              label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}
+              value={searchKeyword}
+              onChange={setSearchKeyword}
+              placeholder={searchPlaceholder[localeCode]}
+              inputProps={{
+                className: 'soha-platform-compact-field soha-workload-search-input',
+                size: 'small',
               }}
             />
-          </ManagementTableToolbar>
-        ),
-        empty: (
-          <ManagementState
-            bordered={false}
-            compact
-            description={effectiveEmpty}
-            kind={!clusterId ? 'select-scope' : 'empty'}
-          />
-        ),
-      }}
-    />
+          ),
+        }}
+        table={{
+          error: query.isEnabled === false ? null : query.error,
+          hasReadData: query.data !== undefined,
+          onRetry: query.isEnabled === false ? undefined : () => query.refetch(),
+          className: 'soha-platform-table',
+          columnSettingIconOnly: true,
+          columnSettingPlacement: 'header',
+          columns: canShowActions ? [...columns, actionColumn] : columns,
+          dataSource: clusterId ? filteredItems : [],
+          rowKey: rowKey ?? ((record) => `${record.namespace}/${record.name}`),
+          onRow: rowProps,
+          loading: query.isLoading,
+          localSorting: true,
+          pageSize: K8S_TABLE_PAGE_SIZE,
+          tableSize,
+          scroll: { x: 'max-content' },
+          viewportScroll: true,
+          headerExtra: (
+            <ManagementTableToolbar>
+              {createKind ? (
+                <CreateEntry
+                  context={{
+                    clusterId: clusterId || '',
+                    defaultNamespace: namespace || undefined,
+                    expectedApiVersion: createKind === 'Service' ? 'v1' : 'networking.k8s.io/v1',
+                    expectedKind: createKind,
+                    resourceGroup: 'network',
+                    scopeMode: 'namespace',
+                    source: 'list',
+                  }}
+                  defaultTemplate={getResourceCreateTemplate(createKind)}
+                  label={createKind}
+                />
+              ) : null}
+              <ManagementDensityButton
+                aria-label={densityLabel}
+                title={densityLabel}
+                tooltip={densityLabel}
+                onClick={() =>
+                  setTableSize((current) => (current === 'middle' ? 'small' : 'middle'))
+                }
+              />
+              <ManagementRefreshButton
+                aria-label={localeCode === 'zh_CN' ? '刷新' : 'Refresh'}
+                disabled={!clusterId}
+                loading={query.isFetching}
+                tooltip={localeCode === 'zh_CN' ? '刷新' : 'Refresh'}
+                onClick={() => {
+                  if (clusterId) void query.refetch()
+                }}
+              />
+            </ManagementTableToolbar>
+          ),
+          empty: (
+            <ManagementState
+              bordered={false}
+              compact
+              description={effectiveEmpty}
+              kind={!clusterId ? 'select-scope' : 'empty'}
+            />
+          ),
+        }}
+      />
+    </>
   )
 }

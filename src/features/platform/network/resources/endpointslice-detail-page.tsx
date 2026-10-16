@@ -1,14 +1,16 @@
-import { useState } from 'react'
-import { Button, Card } from 'antd'
-import { useQuery } from '@tanstack/react-query'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
 import { BooleanTag } from '@/components/status-tag'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
+import { readableQueryData } from '@/utils/query-feedback'
+import { useQuery } from '@tanstack/react-query'
 import type { TableColumnsType } from 'antd'
+import { Button, Card } from 'antd'
+import { useState } from 'react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { NetworkDetailShell } from '../shared/detail-shell'
 import { resolveNetworkNamespace } from '../shared/scope'
 import { networkCoreQueries } from './queries'
@@ -26,7 +28,8 @@ export function EndpointSliceDetailPage() {
   const query = useQuery(
     networkCoreQueries.detail<EndpointSliceDetail>('endpointslices', scope, name),
   )
-  const detail = query.data
+  const visibleQueryData = readableQueryData(query)
+  const detail = visibleQueryData
   if (!clusterId || !detailNamespace)
     return (
       <div className="soha-page">
@@ -99,48 +102,51 @@ export function EndpointSliceDetailPage() {
     },
   ]
   return (
-    <NetworkDetailShell
-      activeTabKey={activeTabKey}
-      detail={detail}
-      kind="endpointslices"
-      label="EndpointSlice"
-      onTabChange={setActiveTabKey}
-      overviewExtra={[
-        { key: 'Address Type', value: detail.addressType || '-' },
-        {
-          key: 'Service',
-          value: detail.serviceName ? (
-            <Button
-              type="text"
-              onClick={() =>
-                navigate(
-                  `/network/services/${encodeURIComponent(detail.serviceName!)}?${new URLSearchParams({ namespace: detail.namespace })}`,
-                )
-              }
-            >
-              {detail.serviceName}
-            </Button>
-          ) : (
-            '-'
-          ),
-        },
-        { key: 'Endpoints', value: detail.endpoints?.length ?? 0 },
-        { key: 'Ports', value: detail.ports?.join(', ') || '-' },
-      ]}
-      overviewContent={
-        <Card className="soha-detail-card" title="Endpoints">
-          <AdminTable
-            columns={endpointColumns}
-            dataSource={detail.endpoints ?? []}
-            rowKey={(record) => `${record.address}/${record.targetRef ?? ''}`}
-            pageSize={10}
-            tableSize="small"
-            scroll={{ x: 'max-content' }}
-            enableColumnSelection={false}
-          />
-        </Card>
-      }
-      target={{ scope, name }}
-    />
+    <>
+      <ReadFeedback canRead={query.isEnabled} query={query} label="资源记录" />
+      <NetworkDetailShell
+        activeTabKey={activeTabKey}
+        detail={detail}
+        kind="endpointslices"
+        label="EndpointSlice"
+        onTabChange={setActiveTabKey}
+        overviewExtra={[
+          { key: 'Address Type', value: detail.addressType || '-' },
+          {
+            key: 'Service',
+            value: detail.serviceName ? (
+              <Button
+                type="text"
+                onClick={() =>
+                  navigate(
+                    `/network/services/${encodeURIComponent(detail.serviceName!)}?${new URLSearchParams({ namespace: detail.namespace })}`,
+                  )
+                }
+              >
+                {detail.serviceName}
+              </Button>
+            ) : (
+              '-'
+            ),
+          },
+          { key: 'Endpoints', value: detail.endpoints?.length ?? 0 },
+          { key: 'Ports', value: detail.ports?.join(', ') || '-' },
+        ]}
+        overviewContent={
+          <Card className="soha-detail-card" title="Endpoints">
+            <AdminTable
+              columns={endpointColumns}
+              dataSource={detail.endpoints ?? []}
+              rowKey={(record) => `${record.address}/${record.targetRef ?? ''}`}
+              pageSize={10}
+              tableSize="small"
+              scroll={{ x: 'max-content' }}
+              enableColumnSelection={false}
+            />
+          </Card>
+        }
+        target={{ scope, name }}
+      />
+    </>
   )
 }

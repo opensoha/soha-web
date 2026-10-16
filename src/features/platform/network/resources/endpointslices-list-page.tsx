@@ -1,10 +1,11 @@
-import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { ReadFeedback } from '@/components/request-feedback'
 import { TableCellLink } from '@/components/table-cell-content'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
 import { formatAgeSeconds } from '@/utils/time'
+import { useQuery } from '@tanstack/react-query'
 import type { TableColumnsType } from 'antd'
+import { useNavigate } from 'react-router-dom'
 import { NetworkResourceListPage } from '../shared/list-page'
 import { buildNetworkRoutePath } from '../shared/paths'
 import { networkCoreQueries } from './queries'
@@ -25,9 +26,7 @@ export function NetworkEndpointSlicesPage() {
       render: (value: string, record) => (
         <TableCellLink
           label={value}
-          onClick={() =>
-            navigate(buildNetworkRoutePath('endpointslices', value, record.namespace))
-          }
+          onClick={() => navigate(buildNetworkRoutePath('endpointslices', value, record.namespace))}
         />
       ),
     },
@@ -43,36 +42,39 @@ export function NetworkEndpointSlicesPage() {
     },
   ]
   return (
-    <NetworkResourceListPage
-      buildAIPageContext={(items, searchKeyword) => ({
-        sourceWorkbench: 'platform',
-        sourceRoute: '/network/endpointslices',
-        sourceTitle: 'EndpointSlices',
-        entityKind: 'kubernetes.endpointslice.list',
-        entityName: 'EndpointSlices',
-        clusterId: clusterId ?? undefined,
-        namespace: namespace ?? undefined,
-        visibleFilters: { searchKeyword },
-        pinnedData: { total: items.length },
-      })}
-      columns={columns}
-      emptyDescription={{
-        zh_CN: '当前范围没有 EndpointSlice',
-        en_US: 'No EndpointSlices in the current scope',
-      }}
-      kind="endpointslices"
-      noMatchDescription={{ zh_CN: '没有匹配的资源', en_US: 'No matching resources' }}
-      query={query}
-      searchPlaceholder={{
-        zh_CN: '搜索 EndpointSlice / namespace / address type / port',
-        en_US: 'Search EndpointSlice / namespace / address type / port',
-      }}
-      searchValues={(record) => [
-        record.name,
-        record.namespace,
-        record.addressType,
-        ...(record.ports ?? []),
-      ]}
-    />
+    <>
+      <ReadFeedback canRead={query.isEnabled} query={query} label="资源记录" />
+      <NetworkResourceListPage
+        buildAIPageContext={(items, searchKeyword) => ({
+          sourceWorkbench: 'platform',
+          sourceRoute: '/network/endpointslices',
+          sourceTitle: 'EndpointSlices',
+          entityKind: 'kubernetes.endpointslice.list',
+          entityName: 'EndpointSlices',
+          clusterId: clusterId ?? undefined,
+          namespace: namespace ?? undefined,
+          visibleFilters: { searchKeyword },
+          pinnedData: { total: items.length },
+        })}
+        columns={columns}
+        emptyDescription={{
+          zh_CN: '当前范围没有 EndpointSlice',
+          en_US: 'No EndpointSlices in the current scope',
+        }}
+        kind="endpointslices"
+        noMatchDescription={{ zh_CN: '没有匹配的资源', en_US: 'No matching resources' }}
+        query={query}
+        searchPlaceholder={{
+          zh_CN: '搜索 EndpointSlice / namespace / address type / port',
+          en_US: 'Search EndpointSlice / namespace / address type / port',
+        }}
+        searchValues={(record) => [
+          record.name,
+          record.namespace,
+          record.addressType,
+          ...(record.ports ?? []),
+        ]}
+      />
+    </>
   )
 }

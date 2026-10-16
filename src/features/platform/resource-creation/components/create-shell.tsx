@@ -1,27 +1,30 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Alert, App, Button, Collapse, Spin, Tabs, Typography } from 'antd'
-import { CheckCircleOutlined, FileTextOutlined, FormOutlined } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
 import { StepFormModal } from '@/components/step-form-modal'
 import { clusterQueries } from '@/features/platform/clusters/queries'
+import { usePlatformMutation } from '@/features/platform/shared/use-platform-mutation'
 import { useI18n } from '@/i18n'
 import { isApiError } from '@/services/api-error'
+import { readableQueryData } from '@/utils/query-feedback'
 import { createUUID } from '@/utils/uuid'
-import { resourceCreationMutations } from '../mutations'
-import { resourceCreationQueries } from '../queries'
+import { CheckCircleOutlined, FileTextOutlined, FormOutlined } from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Alert, App, Button, Collapse, Spin, Tabs, Typography } from 'antd'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import type { PreparedResourceManifest, ResourceFormDefinition } from '../forms'
 import {
   buildResourceCreateRequest,
   isPreflightCurrent,
   resolveResourceCreateDefaultNamespace,
   resourceCreateRequestFingerprint,
 } from '../model'
+import { resourceCreationMutations } from '../mutations'
+import { resourceCreationQueries } from '../queries'
 import { hasResourceCreateForm, loadResourceCreateForm } from '../registry'
-import type { PreparedResourceManifest, ResourceFormDefinition } from '../forms'
-import type { ResourceCreateContext, ResourceCreateResult } from '../types'
-import { ResourceCreateResultTable } from './result-table'
-import { ResourcePreflightTable } from './preflight-table'
 import '../styles.css'
+import type { ResourceCreateContext, ResourceCreateResult } from '../types'
+import { ResourcePreflightTable } from './preflight-table'
+import { ResourceCreateResultTable } from './result-table'
 
 const { Text, Title } = Typography
 
@@ -53,6 +56,7 @@ export interface CreateShellProps {
   readonly form?: ResourceCreateFormAdapter
   readonly initialMode?: 'form' | 'yaml'
   readonly label?: string
+  readonly onBlockedChange?: (blocked: boolean) => void
   readonly onClose?: () => void
   readonly onCreated?: (result: ResourceCreateResult) => void
   readonly open?: boolean
@@ -68,6 +72,7 @@ function ShellBody({
   formSupported,
   initialMode = 'yaml',
   onClose,
+  onBlockedChange,
   onCreated,
   visible,
 }: CreateShellProps & { visible: boolean }) {
@@ -96,12 +101,32 @@ function ShellBody({
     ...clusterQueries.list(),
     enabled: visible,
   })
+  const visibleClustersQueryData = visible ? readableQueryData(clustersQuery) : undefined
   const namespacesQuery = useQuery({
     ...resourceCreationQueries.namespaces(initialContext.clusterId),
     enabled: visible && registryFormSupported && Boolean(initialContext.clusterId.trim()),
   })
-  const preflightMutation = useMutation(resourceCreationMutations.preflight())
-  const executeMutation = useMutation(resourceCreationMutations.execute(queryClient))
+  const visibleNamespacesQueryData =
+    visible && registryFormSupported && Boolean(initialContext.clusterId.trim())
+      ? readableQueryData(namespacesQuery)
+      : undefined
+  const preflightMutation = usePlatformMutation(resourceCreationMutations.preflight(), {
+    label: ['资源预检', 'Resource preflight'],
+    target: (v) =>
+      [v.clusterId, v.request.defaultNamespace, initialContext.expectedKind || 'Kubernetes']
+        .filter(Boolean)
+        .join(' / '),
+    readOnly: true,
+  })
+  const executeMutation = usePlatformMutation(resourceCreationMutations.execute(queryClient), {
+    label: ['创建资源', 'Create resources'],
+    target: (v) =>
+      [v.clusterId, v.request.defaultNamespace, initialContext.expectedKind || 'Kubernetes']
+        .filter(Boolean)
+        .join(' / '),
+  })
+  const platformWriteBlocked = executeMutation.blocked
+  useEffect(() => onBlockedChange?.(platformWriteBlocked), [onBlockedChange, platformWriteBlocked])
   const registryResource = useMemo(() => {
     if (!formDefinition || formValues == null) return undefined
     return formDefinition.buildManifest(formValues)
@@ -114,7 +139,7 @@ function ShellBody({
     mode === 'form' ? (form?.manifest ?? preparedManifest?.content ?? registryManifest) : draft
   const context = initialContext
   const clusterName =
-    clustersQuery.data?.find((cluster) => cluster.id === initialContext.clusterId)?.name || ''
+    visibleClustersQueryData?.find((cluster) => cluster.id === initialContext.clusterId)?.name || ''
   const defaultNamespace = resolveResourceCreateDefaultNamespace({
     contextNamespace: context.defaultNamespace,
     formNamespace: registryResource?.metadata.namespace,
@@ -193,6 +218,7 @@ function ShellBody({
   ])
 
   function invalidatePreflight() {
+    if (platformWriteBlocked) return
     formRevision.current += 1
     setPreparedManifest(null)
     setPreparationError(null)
@@ -204,6 +230,7 @@ function ShellBody({
   }
 
   async function runPreflight(submittedValues?: unknown) {
+    if (platformWriteBlocked || preflightMutation.isPending || preparingManifest) return
     const revision = formRevision.current
     setPreflightRequestFingerprint(null)
     setIdempotencyKey(null)
@@ -262,13 +289,12 @@ function ShellBody({
           setPreflightRequestFingerprint(nextFingerprint)
           setIdempotencyKey(createUUID())
         },
-        onError: (error) => void message.error(resourceCreationErrorMessage(error, isChinese)),
       },
     )
   }
 
   function execute() {
-    if (!canExecute || executeMutation.isPending) return
+    if (!canExecute || platformWriteBlocked) return
     executeMutation.mutate(
       {
         clusterId: context.clusterId,
@@ -278,18 +304,7 @@ function ShellBody({
       {
         onSuccess: (result) => {
           onCreated?.(result)
-          void message.success(
-            result.status === 'succeeded'
-              ? isChinese
-                ? '资源创建完成'
-                : 'Resources created'
-              : isChinese
-                ? '创建已完成，请检查逐项结果'
-                : 'Creation finished; review the item results',
-          )
-          if (result.status === 'succeeded') onClose?.()
         },
-        onError: (error) => void message.error(resourceCreationErrorMessage(error, isChinese)),
       },
     )
   }
@@ -306,6 +321,12 @@ function ShellBody({
 
   return (
     <div className="soha-resource-create-shell">
+      <ReadFeedback canRead={clustersQuery.isEnabled} query={clustersQuery} label="集群目录" />
+      <ReadFeedback canRead={namespacesQuery.isEnabled} query={namespacesQuery} label="命名空间" />
+
+      {preflightMutation.feedback}
+      {executeMutation.feedback}
+
       {form || registryFormSupported ? (
         <div className="soha-resource-create-toolbar">
           <Tabs
@@ -334,9 +355,10 @@ function ShellBody({
               formDefinition.renderForm({
                 clusterId: context.clusterId,
                 loading: formBusy,
+                disabled: platformWriteBlocked,
                 localeCode,
                 namespaceLoading: namespacesQuery.isLoading,
-                namespaceOptions: (namespacesQuery.data ?? []).map((item) => item.name),
+                namespaceOptions: (visibleNamespacesQueryData ?? []).map((item) => item.name),
                 onChange: (value) => {
                   setFormValues(value)
                   invalidatePreflight()
@@ -360,7 +382,7 @@ function ShellBody({
           }
         >
           <K8sYamlEditor
-            applyDisabled={!content.trim() || namespaceRequired || formBusy}
+            applyDisabled={platformWriteBlocked || !content.trim() || namespaceRequired || formBusy}
             applyDisabledReason={
               namespaceRequired
                 ? isChinese
@@ -445,7 +467,7 @@ function ShellBody({
           <ResourcePreflightTable items={preflightMutation.data.items} />
           <div className="soha-resource-create-submit">
             <Button
-              disabled={!canExecute || executeMutation.isPending}
+              disabled={!canExecute || platformWriteBlocked || executeMutation.isSuccess}
               icon={<CheckCircleOutlined />}
               loading={executeMutation.isPending}
               onClick={execute}
@@ -464,6 +486,11 @@ function ShellBody({
             <Text type="secondary">Operation {executeMutation.data.operationId}</Text>
           </div>
           <ResourceCreateResultTable items={executeMutation.data.items} />
+          {onClose ? (
+            <Button type="primary" onClick={onClose}>
+              {isChinese ? '完成' : 'Done'}
+            </Button>
+          ) : null}
         </section>
       ) : null}
     </div>
@@ -487,6 +514,7 @@ function StatusSummary({ ready }: { ready: boolean }) {
 
 export function CreateShell(props: CreateShellProps) {
   const { localeCode } = useI18n()
+  const [blocked, setBlocked] = useState(false)
   const title =
     props.title ??
     (localeCode === 'zh_CN'
@@ -498,12 +526,14 @@ export function CreateShell(props: CreateShellProps) {
   return (
     <StepFormModal
       bodyClassName="soha-resource-create-modal__body"
-      onClose={() => props.onClose?.()}
+      onClose={() => {
+        if (!blocked) props.onClose?.()
+      }}
       open={Boolean(props.open)}
       title={title}
       width="min(1120px, calc(100vw - 32px))"
     >
-      <ShellBody {...props} visible={Boolean(props.open)} />
+      <ShellBody {...props} onBlockedChange={setBlocked} visible={Boolean(props.open)} />
     </StepFormModal>
   )
 }

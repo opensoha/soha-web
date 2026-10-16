@@ -1,16 +1,40 @@
-import { useState, useMemo } from 'react'
+import { AdminTable } from '@/components/admin-table'
 import {
-  App,
-  Button,
-  Select,
-  Spin,
-  Space,
-  Modal,
-  Popconfirm,
-  InputNumber,
-  Tooltip,
-  Typography,
-} from 'antd'
+  ManagementIconButton,
+  ManagementQueryField,
+  ManagementTableToolbar,
+} from '@/components/management-list'
+import { TABLE_ACTIONS_COLUMN_CLASS_NAME } from '@/components/resource-actions'
+import { StatusTag } from '@/components/status-tag'
+import { hasAllowedAction } from '@/features/auth'
+import { encodeAIContextForElement, useAIPageContext } from '@/features/copilot'
+import {
+  capabilityActionTooltip,
+  useClusterCapability,
+  type ClusterCapabilityDecision,
+} from '@/features/platform/cluster-capabilities'
+import { useKubernetesResourceStream } from '@/features/platform/shared/resource-stream'
+import { ResourceStreamStatus } from '@/features/platform/shared/resource-stream-status'
+import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
+import {
+  platformBatchReceipt,
+  platformBatchUnknown,
+  platformResourceTarget,
+  usePlatformMutation,
+} from '@/features/platform/shared/use-platform-mutation'
+import type { BatchRollbackDraft, Deployment } from '@/features/platform/workloads-model'
+import {
+  buildWorkloadDetailPath,
+  getDeploymentHealth,
+  includesSearch,
+  normalizeSearchKeyword,
+} from '@/features/platform/workloads-model'
+import '@/features/platform/workloads/styles.css'
+import { useI18n } from '@/i18n'
+import { usePlatformScopeStore } from '@/stores/platform-scope-store'
+import { toScopeKey } from '@/types'
+import { readableQueryData } from '@/utils/query-feedback'
+import { formatAgeSeconds, formatDateTime } from '@/utils/time'
 import {
   DeleteOutlined,
   EditOutlined,
@@ -18,48 +42,23 @@ import {
   ReloadOutlined,
   UndoOutlined,
 } from '@ant-design/icons'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
-import { AdminTable } from '@/components/admin-table'
-import {
-  ManagementIconButton,
-  ManagementQueryField,
-  ManagementTableToolbar,
-} from '@/components/management-list'
-import { WorkloadCreateEntry } from '../shared/create-entry'
-import { TABLE_ACTIONS_COLUMN_CLASS_NAME } from '@/components/resource-actions'
-import { hasAllowedAction } from '@/features/auth'
-import { encodeAIContextForElement, useAIPageContext } from '@/features/copilot'
-import { useI18n } from '@/i18n'
-import { StatusTag } from '@/components/status-tag'
-import {
-  capabilityActionTooltip,
-  type ClusterCapabilityDecision,
-  useClusterCapability,
-} from '@/features/platform/cluster-capabilities'
-import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
-import { ResourceStreamStatus } from '@/features/platform/shared/resource-stream-status'
-import { useKubernetesResourceStream } from '@/features/platform/shared/resource-stream'
-import { usePlatformScopeStore } from '@/stores/platform-scope-store'
-import { formatAgeSeconds, formatDateTime } from '@/utils/time'
-import {
-  buildWorkloadDetailPath,
-  getDeploymentHealth,
-  includesSearch,
-  normalizeSearchKeyword,
-} from '@/features/platform/workloads-model'
-import type { BatchRollbackDraft, Deployment } from '@/features/platform/workloads-model'
-import { toScopeKey } from '@/types'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { TableColumnsType } from 'antd'
 import {
-  listDeploymentRollouts,
-  restartDeployment,
-  rollbackDeployment,
-  scaleDeployment,
-} from './api'
-import { deploymentMutations } from './mutations'
-import { deploymentQueries } from './queries'
-import type { DeploymentTarget } from './types'
+  App,
+  Button,
+  InputNumber,
+  Modal,
+  Popconfirm,
+  Select,
+  Space,
+  Spin,
+  Tooltip,
+  Typography,
+} from 'antd'
+import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { WorkloadCreateEntry } from '../shared/create-entry'
 import { workloadKeys } from '../shared/keys'
 import {
   WorkloadQueryPanel,
@@ -70,7 +69,15 @@ import {
   useWorkloadTableDensity,
 } from '../shared/list-controls'
 import { WorkloadQuickEditModal } from '../shared/workload-quick-edit-modal'
-import '@/features/platform/workloads/styles.css'
+import {
+  listDeploymentRollouts,
+  restartDeployment,
+  rollbackDeployment,
+  scaleDeployment,
+} from './api'
+import { deploymentMutations } from './mutations'
+import { deploymentQueries } from './queries'
+import type { DeploymentTarget } from './types'
 
 const { Text } = Typography
 const WORKLOAD_ACTIONS_COLUMN_CLASS_NAME = `${TABLE_ACTIONS_COLUMN_CLASS_NAME} soha-workload-actions-column`
@@ -262,6 +269,7 @@ export function WorkloadsDeploymentsPage() {
       queryClient.invalidateQueries({ queryKey: workloadKeys.lists('deployments') }),
   })
   const deploymentsQuery = useQuery(deploymentQueries.list(listScope))
+  const visibleDeploymentsQueryData = readableQueryData(deploymentsQuery)
   const [scaleTarget, setScaleTarget] = useState<{
     name: string
     namespace: string
@@ -281,7 +289,7 @@ export function WorkloadsDeploymentsPage() {
   const yamlApplyCapability = useClusterCapability('resource.yaml.apply', localeCode)
   const workloadMutationDisabled = workloadMutationCapability.disabled
 
-  const deployments = deploymentsQuery.data ?? []
+  const deployments = visibleDeploymentsQueryData ?? []
   const isLoading = deploymentsQuery.isLoading
   const canShowActions = deployments.some(
     (item) =>
@@ -312,88 +320,141 @@ export function WorkloadsDeploymentsPage() {
         : 'Analyze Deployment health, restarts, rollouts, and related events in this list.',
   })
 
-  const restartMutation = useMutation(deploymentMutations.restart(queryClient))
-  const scaleMutation = useMutation(deploymentMutations.scale(queryClient))
-  const rollbackMutation = useMutation(deploymentMutations.rollback(queryClient))
-  const deleteMutation = useMutation(deploymentMutations.remove(queryClient))
-
-  const batchRestartMutation = useMutation({
-    mutationFn: async (items: Deployment[]) =>
-      Promise.allSettled(
-        items.map((item) => restartDeployment(targetFor(item.name, item.namespace))),
-      ),
-    onSuccess: (results) => {
-      const successCount = results.filter((item) => item.status === 'fulfilled').length
-      const failureCount = results.length - successCount
-      void message.success(
-        failureCount > 0
-          ? `批量重启完成，成功 ${successCount}，失败 ${failureCount}`
-          : `已批量重启 ${successCount} 个 Deployment`,
-      )
-      setSelectedDeploymentKeys([])
-      void queryClient.invalidateQueries({ queryKey: workloadKeys.resource('deployments') })
-    },
-    onError: (err: Error) => void message.error(err.message),
+  const restartMutation = usePlatformMutation(deploymentMutations.restart(queryClient), {
+    label: ['重启工作负载', 'Restart workload'],
+    target: platformResourceTarget,
+  })
+  const scaleMutation = usePlatformMutation(deploymentMutations.scale(queryClient), {
+    label: ['调整副本数', 'Scale workload'],
+    target: platformResourceTarget,
+  })
+  const rollbackMutation = usePlatformMutation(deploymentMutations.rollback(queryClient), {
+    label: ['回滚资源', 'Roll back resource'],
+    target: platformResourceTarget,
+  })
+  const deleteMutation = usePlatformMutation(deploymentMutations.remove(queryClient), {
+    label: ['删除资源', 'Delete resource'],
+    target: platformResourceTarget,
   })
 
-  const batchScaleMutation = useMutation({
-    mutationFn: async ({ items, replicas }: { items: Deployment[]; replicas: number }) =>
-      Promise.allSettled(
-        items.map((item) =>
-          scaleDeployment({
-            ...targetFor(item.name, item.namespace),
-            replicas,
-          }),
+  const batchRestartMutation = usePlatformMutation(
+    {
+      mutationFn: async (items: Deployment[]) =>
+        Promise.allSettled(
+          items.map((item) => restartDeployment(targetFor(item.name, item.namespace))),
         ),
-      ),
-    onSuccess: (results) => {
-      const successCount = results.filter((item) => item.status === 'fulfilled').length
-      const failureCount = results.length - successCount
-      void message.success(
-        failureCount > 0
-          ? `批量扩缩完成，成功 ${successCount}，失败 ${failureCount}`
-          : `已批量扩缩 ${successCount} 个 Deployment`,
-      )
-      setBatchScaleVisible(false)
-      setSelectedDeploymentKeys([])
-      void queryClient.invalidateQueries({ queryKey: workloadKeys.resource('deployments') })
-    },
-    onError: (err: Error) => void message.error(err.message),
-  })
-
-  const batchRollbackMutation = useMutation({
-    mutationFn: async (items: BatchRollbackDraft[]) => {
-      const validItems = items.filter((item) => item.revision)
-      if (validItems.length === 0) {
-        throw new Error(
-          localeCode === 'zh_CN'
-            ? '请至少为一个 Deployment 选择回滚 Revision'
-            : 'Select at least one rollback revision',
+      onSuccess: (results, variables) => {
+        setSelectedDeploymentKeys(
+          variables
+            .filter((_item, index) => results[index].status === 'rejected')
+            .map((item) => `${item.namespace}/${item.name}`),
         )
-      }
-      return Promise.allSettled(
-        validItems.map((item) =>
-          rollbackDeployment({
-            ...targetFor(item.name, item.namespace),
-            revision: item.revision,
-          }),
+        void queryClient.invalidateQueries({ queryKey: workloadKeys.resource('deployments') })
+      },
+    },
+    {
+      label: ['批量重启 Deployment', 'Restart Deployments'],
+      target: (v) =>
+        v.map((item) => platformResourceTarget(targetFor(item.name, item.namespace))).join(' · '),
+      resultError: platformBatchUnknown,
+      receipt: (results, variables) =>
+        platformBatchReceipt(
+          results,
+          variables.map((item) => platformResourceTarget(targetFor(item.name, item.namespace))),
+          localeCode,
         ),
-      )
     },
-    onSuccess: (results) => {
-      const successCount = results.filter((item) => item.status === 'fulfilled').length
-      const failureCount = results.length - successCount
-      void message.success(
-        failureCount > 0
-          ? `批量回滚完成，成功 ${successCount}，失败 ${failureCount}`
-          : `已批量回滚 ${successCount} 个 Deployment`,
-      )
-      setBatchRollbackVisible(false)
-      setSelectedDeploymentKeys([])
-      void queryClient.invalidateQueries({ queryKey: workloadKeys.resource('deployments') })
+  )
+
+  const batchScaleMutation = usePlatformMutation(
+    {
+      mutationFn: async ({ items, replicas }: { items: Deployment[]; replicas: number }) =>
+        Promise.allSettled(
+          items.map((item) =>
+            scaleDeployment({
+              ...targetFor(item.name, item.namespace),
+              replicas,
+            }),
+          ),
+        ),
+      onSuccess: (results, variables) => {
+        if (results.every((item) => item.status === 'fulfilled')) setBatchScaleVisible(false)
+        setSelectedDeploymentKeys(
+          variables.items
+            .filter((_item, index) => results[index].status === 'rejected')
+            .map((item) => `${item.namespace}/${item.name}`),
+        )
+        void queryClient.invalidateQueries({ queryKey: workloadKeys.resource('deployments') })
+      },
     },
-    onError: (err: Error) => void message.error(err.message),
-  })
+    {
+      label: ['批量调整 Deployment 副本数', 'Scale Deployments'],
+      target: (v) =>
+        v.items
+          .map((item) => platformResourceTarget(targetFor(item.name, item.namespace)))
+          .join(' · '),
+      resultError: platformBatchUnknown,
+      receipt: (results, variables) =>
+        platformBatchReceipt(
+          results,
+          variables.items.map((item) =>
+            platformResourceTarget(targetFor(item.name, item.namespace)),
+          ),
+          localeCode,
+        ),
+    },
+  )
+
+  const batchRollbackMutation = usePlatformMutation(
+    {
+      mutationFn: async (items: BatchRollbackDraft[]) => {
+        if (items.length === 0 || items.some((item) => !item.revision)) {
+          throw new Error(
+            localeCode === 'zh_CN'
+              ? '请为每一个 Deployment 选择回滚 Revision'
+              : 'Select a rollback revision for every Deployment',
+          )
+        }
+        return Promise.allSettled(
+          items.map((item) =>
+            rollbackDeployment({
+              ...targetFor(item.name, item.namespace),
+              revision: item.revision,
+            }),
+          ),
+        )
+      },
+      onSuccess: (results, variables) => {
+        if (results.every((item) => item.status === 'fulfilled')) setBatchRollbackVisible(false)
+        setSelectedDeploymentKeys(
+          variables
+            .filter((_item, index) => results[index].status === 'rejected')
+            .map((item) => `${item.namespace}/${item.name}`),
+        )
+        void queryClient.invalidateQueries({ queryKey: workloadKeys.resource('deployments') })
+      },
+    },
+    {
+      label: ['批量回滚 Deployment', 'Roll back Deployments'],
+      target: (v) =>
+        v.map((item) => platformResourceTarget(targetFor(item.name, item.namespace))).join(' · '),
+      resultError: platformBatchUnknown,
+      receipt: (results, variables) =>
+        platformBatchReceipt(
+          results,
+          variables.map((item) => platformResourceTarget(targetFor(item.name, item.namespace))),
+          localeCode,
+        ),
+    },
+  )
+  const platformWriteBlocked =
+    restartMutation.blocked ||
+    scaleMutation.blocked ||
+    rollbackMutation.blocked ||
+    deleteMutation.blocked ||
+    batchRestartMutation.blocked ||
+    batchScaleMutation.blocked ||
+    batchRollbackMutation.blocked
 
   const filteredDeployments = useMemo(
     () =>
@@ -472,11 +533,7 @@ export function WorkloadsDeploymentsPage() {
   const deleteActionMutation = {
     isPending: deleteMutation.isPending,
     variables: deleteMutation.variables,
-    mutate: (target: DeploymentTarget) =>
-      deleteMutation.mutate(target, {
-        onSuccess: () => void message.success(localeCode === 'zh_CN' ? '已删除' : 'Deleted'),
-        onError: (error) => void message.error(error.message),
-      }),
+    mutate: (target: DeploymentTarget) => deleteMutation.mutate(target, {}),
   }
 
   const columns: TableColumnsType<Deployment> = [
@@ -523,18 +580,8 @@ export function WorkloadsDeploymentsPage() {
       editCapability: yamlApplyCapability,
       localeCode,
       onEdit: (record) => setEditTarget(record),
-      onRestart: (record, name) =>
-        restartMutation.mutate(targetFor(name, record.namespace), {
-          onSuccess: () =>
-            void message.success(localeCode === 'zh_CN' ? '已触发重启' : 'Restart triggered'),
-          onError: (error) => void message.error(error.message),
-        }),
-      onRollback: (record, name) =>
-        rollbackMutation.mutate(targetFor(name, record.namespace), {
-          onSuccess: () =>
-            void message.success(localeCode === 'zh_CN' ? '已触发回滚' : 'Rollback triggered'),
-          onError: (error) => void message.error(error.message),
-        }),
+      onRestart: (record, name) => restartMutation.mutate(targetFor(name, record.namespace), {}),
+      onRollback: (record, name) => rollbackMutation.mutate(targetFor(name, record.namespace), {}),
       onScale: (record, name) =>
         setScaleTarget({
           name,
@@ -655,8 +702,21 @@ export function WorkloadsDeploymentsPage() {
 
   return (
     <div className="soha-page">
+      {restartMutation.feedback}
+      {scaleMutation.feedback}
+      {rollbackMutation.feedback}
+      {deleteMutation.feedback}
+      {batchRestartMutation.feedback}
+      {batchScaleMutation.feedback}
+      {batchRollbackMutation.feedback}
+
       {deploymentQueryPanel}
       <AdminTable
+        error={deploymentsQuery.isEnabled === false ? null : deploymentsQuery.error}
+        hasReadData={deploymentsQuery.data !== undefined}
+        onRetry={
+          deploymentsQuery.isEnabled === false ? undefined : () => deploymentsQuery.refetch()
+        }
         className="soha-deployments-table soha-platform-table"
         columnSettingIconOnly
         columnSettingPlacement="header"
@@ -710,6 +770,7 @@ export function WorkloadsDeploymentsPage() {
         }
       />
       <Modal
+        okButtonProps={{ disabled: platformWriteBlocked }}
         title={localeCode === 'zh_CN' ? '扩缩容' : 'Scale deployment'}
         open={!!scaleTarget}
         onOk={() => {
@@ -721,17 +782,25 @@ export function WorkloadsDeploymentsPage() {
               },
               {
                 onSuccess: () => {
-                  void message.success(localeCode === 'zh_CN' ? '已触发扩缩容' : 'Scale triggered')
                   setScaleTarget(null)
                 },
-                onError: (error) => void message.error(error.message),
               },
             )
           }
         }}
-        onCancel={() => setScaleTarget(null)}
+        onCancel={() => {
+          if (!platformWriteBlocked) (() => setScaleTarget(null))?.()
+        }}
         confirmLoading={scaleMutation.isPending}
       >
+        {restartMutation.feedback}
+        {scaleMutation.feedback}
+        {rollbackMutation.feedback}
+        {deleteMutation.feedback}
+        {batchRestartMutation.feedback}
+        {batchScaleMutation.feedback}
+        {batchRollbackMutation.feedback}
+
         <div className="flex items-center gap-2">
           <Text>{localeCode === 'zh_CN' ? '副本数:' : 'Replicas:'}</Text>
           <InputNumber
@@ -752,13 +821,29 @@ export function WorkloadsDeploymentsPage() {
         />
       ) : null}
       <Modal
+        okButtonProps={{
+          disabled:
+            platformWriteBlocked ||
+            batchRollbackDrafts.length === 0 ||
+            batchRollbackDrafts.some((item) => !item.revision),
+        }}
         title={localeCode === 'zh_CN' ? '批量回滚' : 'Batch rollback deployments'}
         open={batchRollbackVisible}
         onOk={() => batchRollbackMutation.mutate(batchRollbackDrafts)}
-        onCancel={() => setBatchRollbackVisible(false)}
+        onCancel={() => {
+          if (!platformWriteBlocked) (() => setBatchRollbackVisible(false))?.()
+        }}
         confirmLoading={batchRollbackMutation.isPending}
         width={900}
       >
+        {restartMutation.feedback}
+        {scaleMutation.feedback}
+        {rollbackMutation.feedback}
+        {deleteMutation.feedback}
+        {batchRestartMutation.feedback}
+        {batchScaleMutation.feedback}
+        {batchRollbackMutation.feedback}
+
         {batchRollbackLoading ? (
           <div className="flex items-center justify-center h-48">
             <Spin size="large" />
@@ -799,14 +884,25 @@ export function WorkloadsDeploymentsPage() {
         )}
       </Modal>
       <Modal
+        okButtonProps={{ disabled: platformWriteBlocked }}
         title={localeCode === 'zh_CN' ? '批量扩缩容' : 'Batch scale deployments'}
         open={batchScaleVisible}
         onOk={() =>
           batchScaleMutation.mutate({ items: selectedDeployments, replicas: batchScaleReplicas })
         }
-        onCancel={() => setBatchScaleVisible(false)}
+        onCancel={() => {
+          if (!platformWriteBlocked) (() => setBatchScaleVisible(false))?.()
+        }}
         confirmLoading={batchScaleMutation.isPending}
       >
+        {restartMutation.feedback}
+        {scaleMutation.feedback}
+        {rollbackMutation.feedback}
+        {deleteMutation.feedback}
+        {batchRestartMutation.feedback}
+        {batchScaleMutation.feedback}
+        {batchRollbackMutation.feedback}
+
         <div className="flex flex-col gap-3">
           <Text type="secondary">
             {localeCode === 'zh_CN'

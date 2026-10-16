@@ -1,29 +1,35 @@
-import { lazy, Suspense, useDeferredValue, useEffect, useState } from 'react'
-import { Alert, App, Button, Card, Descriptions, Popconfirm, Space, Spin } from 'antd'
-import type { TableColumnsType, TableProps } from 'antd'
-import { ArrowLeftOutlined, DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AdminTable } from '@/components/admin-table'
-import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
 import {
   ManagementIconButton,
   ManagementSearchableListPane,
   ManagementState,
   ManagementTableToolbar,
 } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
 import { StatusTag } from '@/components/status-tag'
 import { hasAllowedAction, hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useClusterCapability } from '@/features/platform/cluster-capabilities'
+import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
+import {
+  platformResourceTarget,
+  usePlatformMutation,
+} from '@/features/platform/shared/use-platform-mutation'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
+import { readableQueryData } from '@/utils/query-feedback'
 import { formatAgeSeconds, formatRelativeTime } from '@/utils/time'
-import { includesSearch, normalizeSearchKeyword } from '../shared/search'
+import { ArrowLeftOutlined, DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TableColumnsType, TableProps } from 'antd'
+import { App, Button, Card, Descriptions, Popconfirm, Space, Spin } from 'antd'
+import { lazy, Suspense, useDeferredValue, useEffect, useState } from 'react'
 import { ResourceQueryPanel } from '../shared/resource-query-panel'
+import { includesSearch, normalizeSearchKeyword } from '../shared/search'
+import './instance-workspace.css'
 import { crdMutations } from './mutations'
 import { crdQueries } from './queries'
 import type { CRD, CRDResourceInstance } from './types'
 import { getServedVersions } from './utils'
-import './instance-workspace.css'
 
 const CRDResourceEditorModal = lazy(async () => ({
   default: (await import('./resource-editor-modal')).CRDResourceEditorModal,
@@ -132,7 +138,6 @@ function CRDInstancesWorkspace({
 }) {
   const { t, localeCode } = useI18n()
   const zh = localeCode === 'zh_CN'
-  const { message } = App.useApp()
   const { clusterId, namespace } = usePlatformScopeStore()
   const queryClient = useQueryClient()
   const capability = useClusterCapability('custom.resources', localeCode)
@@ -148,16 +153,22 @@ function CRDInstancesWorkspace({
   const accessQuery = useQuery(
     crdQueries.access(clusterId, crd, namespace, !capability.isLoading && !disabled),
   )
+  const visibleAccessQueryData = readableQueryData(accessQuery)
   const resourcesQuery = useQuery(
     crdQueries.resources(clusterId, crd, namespace, !capability.isLoading && !disabled),
   )
+  const visibleResourcesQueryData = readableQueryData(resourcesQuery)
   const permissions = usePermissionSnapshot()
   const canCreate =
     !disabled &&
-    accessQuery.data?.allowedActions?.includes('create') === true &&
+    visibleAccessQueryData?.allowedActions?.includes('create') === true &&
     hasPermission(permissions.data?.data, 'platform.extensions.custom-resources.create')
-  const deleteMutation = useMutation(crdMutations.remove(queryClient))
-  const resources = disabled ? [] : (resourcesQuery.data ?? [])
+  const deleteMutation = usePlatformMutation(crdMutations.remove(queryClient), {
+    label: ['删除资源', 'Delete resource'],
+    target: platformResourceTarget,
+  })
+  const platformWriteBlocked = deleteMutation.blocked
+  const resources = disabled ? [] : (visibleResourcesQueryData ?? [])
   const filtered = resources.filter((record) =>
     includesSearch(
       [
@@ -175,9 +186,12 @@ function CRDInstancesWorkspace({
     pagination.current,
     Math.max(1, Math.ceil(filtered.length / pagination.pageSize)),
   )
-  const selected =
-    resources.find((record) => selection && resourceKey(record) === resourceKey(selection)) ??
-    (editing || resourcesQuery.isFetching || resourcesQuery.isError ? selection : undefined)
+  const resourcesReadable =
+    resourcesQuery.isEnabled && (!resourcesQuery.isError || visibleResourcesQueryData !== undefined)
+  const selected = resourcesReadable
+    ? (resources.find((record) => selection && resourceKey(record) === resourceKey(selection)) ??
+      (editing || resourcesQuery.isFetching || resourcesQuery.isError ? selection : undefined))
+    : undefined
   const canView = ['view', 'update'].some((action) =>
     hasAllowedAction(selected?.allowedActions, action),
   )
@@ -196,8 +210,8 @@ function CRDInstancesWorkspace({
     })
   }
   const refresh = () => {
-    void resourcesQuery.refetch()
-    void accessQuery.refetch()
+    if (resourcesQuery.isEnabled) void resourcesQuery.refetch()
+    if (accessQuery.isEnabled) void accessQuery.refetch()
   }
   const openResource = (record: CRDResourceInstance, edit = false) =>
     switchResource(() => {
@@ -221,7 +235,11 @@ function CRDInstancesWorkspace({
         description={`${record.name} (${record.namespace || crd.scope})`}
         okText={t('common.delete', 'Delete')}
         cancelText={t('common.cancel', 'Cancel')}
-        okButtonProps={{ danger: true, loading: deleteMutation.isPending }}
+        okButtonProps={{
+          disabled: platformWriteBlocked,
+          danger: true,
+          loading: deleteMutation.isPending,
+        }}
         onConfirm={() => {
           if (!clusterId || disabled || busy || editing) return
           deleteMutation.mutate(
@@ -236,11 +254,7 @@ function CRDInstancesWorkspace({
               onSuccess: () => {
                 if (selection && resourceKey(selection) === resourceKey(record))
                   setSelection(undefined)
-                void message.success(
-                  zh ? '删除请求已接受，等待资源清理' : 'Deletion accepted; waiting for cleanup',
-                )
               },
-              onError: (error) => void message.error(error.message),
             },
           )
         }}
@@ -250,7 +264,7 @@ function CRDInstancesWorkspace({
           icon={<DeleteOutlined />}
           aria-label={t('common.delete', 'Delete')}
           tooltip={t('common.delete', 'Delete')}
-          disabled={disabled || busy || editing}
+          disabled={platformWriteBlocked || disabled || busy || editing}
           loading={deleteMutation.isPending}
         />
       </Popconfirm>
@@ -385,7 +399,7 @@ function CRDInstancesWorkspace({
             icon={<EditOutlined />}
             aria-label={t('common.edit', 'Edit')}
             tooltip={t('common.edit', 'Edit')}
-            disabled={!canUpdate || disabled || busy}
+            disabled={platformWriteBlocked || !canUpdate || disabled || busy}
             onClick={() => {
               setSelection(selected)
               setEditing(true)
@@ -424,6 +438,17 @@ function CRDInstancesWorkspace({
   ) : null
   return (
     <>
+      <ReadFeedback canRead={accessQuery.isEnabled} query={accessQuery} label="资源权限" />
+      {selection ? (
+        <ReadFeedback
+          canRead={resourcesQuery.isEnabled}
+          query={resourcesQuery}
+          label="自定义资源"
+        />
+      ) : null}
+
+      {deleteMutation.feedback}
+
       <div className="soha-crd-instance-list" hidden={Boolean(selection)}>
         <ResourceQueryPanel
           searchKeyword={searchKeyword}
@@ -445,8 +470,9 @@ function CRDInstancesWorkspace({
           onRefresh={refresh}
           refreshing={resourcesQuery.isFetching}
           loading={resourcesQuery.isLoading || capability.isLoading}
-          error={resourcesQuery.error}
-          hasReadData={resourcesQuery.data !== undefined}
+          error={resourcesQuery.isEnabled ? resourcesQuery.error : null}
+          onRetry={resourcesQuery.isEnabled ? refresh : undefined}
+          hasReadData={visibleResourcesQueryData !== undefined}
           shellClassName="soha-management-table-shell"
           title={
             <span>
@@ -488,9 +514,6 @@ function CRDInstancesWorkspace({
       </div>
       {selection ? (
         <>
-          {resourcesQuery.isError ? (
-            <Alert showIcon type="error" title={resourcesQuery.error.message} />
-          ) : null}
           {selected && canView ? (
             <Suspense fallback={<Card loading />}>
               <CRDResourceEditor

@@ -1,15 +1,17 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Card } from 'antd'
-import { useQuery } from '@tanstack/react-query'
-import { useParams } from 'react-router-dom'
 import { ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
 import { useAIPageContext } from '@/features/copilot'
+import '@/features/platform/extensions/styles.css'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
+import { readableQueryData } from '@/utils/query-feedback'
+import { useQuery } from '@tanstack/react-query'
+import { Card } from 'antd'
+import { useEffect, useMemo, useState } from 'react'
+import { useParams } from 'react-router-dom'
 import { CRDKindWorkspace } from './kind-workspace'
 import { crdQueries } from './queries'
 import { groupCRDsByApi, safeDecodeURIComponent } from './utils'
-import '@/features/platform/extensions/styles.css'
 
 export function CRDApiGroupDetailPage() {
   const { t, localeCode } = useI18n()
@@ -18,7 +20,11 @@ export function CRDApiGroupDetailPage() {
   const [selectedCRDName, setSelectedCRDName] = useState<string | null>(null)
   const decodedGroupName = safeDecodeURIComponent(groupName)
   const catalogQuery = useQuery(crdQueries.catalog(clusterId))
-  const apiGroups = useMemo(() => groupCRDsByApi(catalogQuery.data ?? []), [catalogQuery.data])
+  const visibleCatalogQueryData = readableQueryData(catalogQuery)
+  const apiGroups = useMemo(
+    () => groupCRDsByApi(visibleCatalogQueryData ?? []),
+    [visibleCatalogQueryData],
+  )
   const groupSummary = useMemo(
     () => apiGroups.find((item) => item.group === decodedGroupName) ?? null,
     [apiGroups, decodedGroupName],
@@ -46,6 +52,8 @@ export function CRDApiGroupDetailPage() {
 
   return (
     <div className="soha-page">
+      <ReadFeedback canRead={catalogQuery.isEnabled} query={catalogQuery} label="资源目录" />
+
       {!clusterId ? (
         <Card className="soha-detail-card" style={{ marginTop: 0 }}>
           <ManagementState compact kind="select-scope" />

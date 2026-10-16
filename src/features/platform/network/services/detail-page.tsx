@@ -1,22 +1,24 @@
-import { lazy, Suspense, useState } from 'react'
-import { Button, Card, Spin } from 'antd'
-import { useQuery } from '@tanstack/react-query'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
 import { ResourceEventsTimeline } from '@/components/resource-events-timeline'
 import { BooleanTag, StatusTag } from '@/components/status-tag'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
+import { readableQueryData } from '@/utils/query-feedback'
 import { formatAgeSeconds } from '@/utils/time'
+import { useQuery } from '@tanstack/react-query'
 import type { TableColumnsType, TabsProps } from 'antd'
+import { Button, Card, Spin } from 'antd'
+import { lazy, Suspense, useState } from 'react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { NetworkDetailShell } from '../shared/detail-shell'
 import { resolveNetworkNamespace } from '../shared/scope'
+import { ServiceDiagnosticsPanel } from './diagnostics-panel'
 import { ServicePortDisplay, ServiceTypeTag } from './port-display'
 import { serviceQueries } from './queries'
 import type { ServiceBackendPod, ServiceEndpoint } from './types'
-import { ServiceDiagnosticsPanel } from './diagnostics-panel'
 
 const ResourceMetricsPanel = lazy(async () => {
   const module = await import('@/components/resource-metrics-panel')
@@ -41,18 +43,27 @@ export function ServiceDetailPage() {
     searchParams.get('tab') === 'yaml' ? 'yaml' : 'overview',
   )
   const detailQuery = useQuery(serviceQueries.detail(scope, serviceName))
-  const service = detailQuery.data
+  const visibleDetailQueryData = readableQueryData(detailQuery)
+  const service = visibleDetailQueryData
 
   const metricsOptions = serviceQueries.metrics(scope, serviceName)
   const metricsQuery = useQuery({
     ...metricsOptions,
     enabled: Boolean(metricsOptions.enabled) && activeTabKey === 'metrics',
   })
+  const visibleMetricsQueryData =
+    Boolean(metricsOptions.enabled) && activeTabKey === 'metrics'
+      ? readableQueryData(metricsQuery)
+      : undefined
   const eventsOptions = serviceQueries.events(scope, serviceName)
   const eventsQuery = useQuery({
     ...eventsOptions,
     enabled: Boolean(eventsOptions.enabled) && activeTabKey === 'events',
   })
+  const visibleEventsQueryData =
+    Boolean(eventsOptions.enabled) && activeTabKey === 'events'
+      ? readableQueryData(eventsQuery)
+      : undefined
 
   const backendPodColumns: TableColumnsType<ServiceBackendPod> = [
     {
@@ -154,10 +165,7 @@ export function ServiceDetailPage() {
               </Card>
             }
           >
-            <ResourceMetricsPanel
-              data={metricsQuery.data}
-              loading={metricsQuery.isLoading}
-            />
+            <ResourceMetricsPanel data={visibleMetricsQueryData} loading={metricsQuery.isLoading} />
           </Suspense>
         ) : null,
     },
@@ -167,7 +175,7 @@ export function ServiceDetailPage() {
       children:
         activeTabKey === 'events' ? (
           <ResourceEventsTimeline
-            events={eventsQuery.data ?? []}
+            events={visibleEventsQueryData ?? []}
             loading={eventsQuery.isLoading}
             emptyDescription={
               localeCode === 'zh_CN' ? '当前 Service 暂无事件' : 'No service events'
@@ -178,71 +186,76 @@ export function ServiceDetailPage() {
   ]
 
   return (
-    <NetworkDetailShell
-      activeTabKey={activeTabKey}
-      ageLabel="Age"
-      aiContext={{
-        timeRangeMinutes: metricsQuery.data?.rangeMinutes ?? 60,
-        pinnedData: {
-          type: service.type,
-          clusterIp: service.clusterIp,
-          ports: service.ports,
-          portMappings: service.portMappings,
-          selector: service.selector,
-          activeTab: activeTabKey,
-        },
-        promptHint:
-          localeCode === 'zh_CN'
-            ? `排查 Service ${service.name} 的访问异常、Endpoint/后端 Pod、事件、日志和指标。`
-            : `Troubleshoot Service ${service.name} connectivity, endpoints, backend pods, events, logs, and metrics.`,
-      }}
-      detail={service}
-      extraTabs={extraTabs}
-      kind="services"
-      label="Service"
-      onTabChange={setActiveTabKey}
-      overviewExtra={[
-        { key: 'Type', value: <ServiceTypeTag type={service.type} /> },
-        { key: 'Cluster IP', value: service.clusterIp || '-' },
-        {
-          key: 'Ports',
-          value: <ServicePortDisplay portMappings={service.portMappings} ports={service.ports} />,
-        },
-      ]}
-      overviewContent={
-        <>
-          <Card
-            className="soha-detail-card"
-            title={localeCode === 'zh_CN' ? 'Endpoints' : 'Endpoints'}
-          >
-            <AdminTable
-              shellClassName="soha-management-table-shell"
-              columns={endpointColumns}
-              dataSource={service.endpoints ?? []}
-              rowKey={(record) => `${record.address}/${record.targetRef ?? ''}`}
-              pageSize={10}
-              tableSize="small"
-              enableColumnSelection={false}
-            />
-          </Card>
-          <Card
-            className="soha-detail-card"
-            title={localeCode === 'zh_CN' ? '关联 Pods' : 'Related Pods'}
-          >
-            <AdminTable
-              shellClassName="soha-management-table-shell"
-              columns={backendPodColumns}
-              dataSource={service.backendPods ?? []}
-              rowKey={(record) => `${record.namespace}/${record.name}`}
-              pageSize={10}
-              tableSize="small"
-              scroll={{ x: 'max-content' }}
-              enableColumnSelection={false}
-            />
-          </Card>
-        </>
-      }
-      target={{ scope, name: serviceName }}
-    />
+    <>
+      <ReadFeedback canRead={detailQuery.isEnabled} query={detailQuery} label="资源详情" />
+      <ReadFeedback canRead={metricsQuery.isEnabled} query={metricsQuery} label="资源指标" />
+      <ReadFeedback canRead={eventsQuery.isEnabled} query={eventsQuery} label="资源事件" />
+      <NetworkDetailShell
+        activeTabKey={activeTabKey}
+        ageLabel="Age"
+        aiContext={{
+          timeRangeMinutes: visibleMetricsQueryData?.rangeMinutes ?? 60,
+          pinnedData: {
+            type: service.type,
+            clusterIp: service.clusterIp,
+            ports: service.ports,
+            portMappings: service.portMappings,
+            selector: service.selector,
+            activeTab: activeTabKey,
+          },
+          promptHint:
+            localeCode === 'zh_CN'
+              ? `排查 Service ${service.name} 的访问异常、Endpoint/后端 Pod、事件、日志和指标。`
+              : `Troubleshoot Service ${service.name} connectivity, endpoints, backend pods, events, logs, and metrics.`,
+        }}
+        detail={service}
+        extraTabs={extraTabs}
+        kind="services"
+        label="Service"
+        onTabChange={setActiveTabKey}
+        overviewExtra={[
+          { key: 'Type', value: <ServiceTypeTag type={service.type} /> },
+          { key: 'Cluster IP', value: service.clusterIp || '-' },
+          {
+            key: 'Ports',
+            value: <ServicePortDisplay portMappings={service.portMappings} ports={service.ports} />,
+          },
+        ]}
+        overviewContent={
+          <>
+            <Card
+              className="soha-detail-card"
+              title={localeCode === 'zh_CN' ? 'Endpoints' : 'Endpoints'}
+            >
+              <AdminTable
+                shellClassName="soha-management-table-shell"
+                columns={endpointColumns}
+                dataSource={service.endpoints ?? []}
+                rowKey={(record) => `${record.address}/${record.targetRef ?? ''}`}
+                pageSize={10}
+                tableSize="small"
+                enableColumnSelection={false}
+              />
+            </Card>
+            <Card
+              className="soha-detail-card"
+              title={localeCode === 'zh_CN' ? '关联 Pods' : 'Related Pods'}
+            >
+              <AdminTable
+                shellClassName="soha-management-table-shell"
+                columns={backendPodColumns}
+                dataSource={service.backendPods ?? []}
+                rowKey={(record) => `${record.namespace}/${record.name}`}
+                pageSize={10}
+                tableSize="small"
+                scroll={{ x: 'max-content' }}
+                enableColumnSelection={false}
+              />
+            </Card>
+          </>
+        }
+        target={{ scope, name: serviceName }}
+      />
+    </>
   )
 }

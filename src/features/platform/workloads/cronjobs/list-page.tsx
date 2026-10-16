@@ -1,29 +1,16 @@
-import { useMemo, useState } from 'react'
-import {
-  DeleteOutlined,
-  FormOutlined,
-  PauseCircleOutlined,
-  PlayCircleOutlined,
-} from '@ant-design/icons'
-import { App, Popconfirm, Space } from 'antd'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
-import type { TableColumnsType } from 'antd'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementIconButton, ManagementTableToolbar } from '@/components/management-list'
-import { WorkloadCreateEntry } from '../shared/create-entry'
 import { BooleanTag } from '@/components/status-tag'
 import { hasAllowedAction } from '@/features/auth'
-import { useI18n } from '@/i18n'
 import {
   capabilityActionTooltip,
   useClusterCapability,
 } from '@/features/platform/cluster-capabilities'
 import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
-import { usePlatformScopeStore } from '@/stores/platform-scope-store'
-import { toScopeKey } from '@/types'
-import { formatAgeSeconds, formatRelativeTime } from '@/utils/time'
-import { tableColumnPresets } from '@/utils/table-columns'
+import {
+  platformResourceTarget,
+  usePlatformMutation,
+} from '@/features/platform/shared/use-platform-mutation'
 import {
   buildWorkloadDetailPath,
   includesSearch,
@@ -33,34 +20,59 @@ import {
   renderWorkloadNameLink,
   useWorkloadListAIContext,
   useWorkloadTableDensity,
-  workloadRowAIContext,
   WorkloadQueryPanel,
   WorkloadRefreshButton,
+  workloadRowAIContext,
   WorkloadSearchInput,
   WorkloadTableEmpty,
 } from '@/features/platform/workloads/shared/list-controls'
 import { WorkloadQuickEditModal } from '@/features/platform/workloads/shared/workload-quick-edit-modal'
+import '@/features/platform/workloads/styles.css'
+import { useI18n } from '@/i18n'
+import { usePlatformScopeStore } from '@/stores/platform-scope-store'
+import { toScopeKey } from '@/types'
+import { readableQueryData } from '@/utils/query-feedback'
+import { tableColumnPresets } from '@/utils/table-columns'
+import { formatAgeSeconds, formatRelativeTime } from '@/utils/time'
+import {
+  DeleteOutlined,
+  FormOutlined,
+  PauseCircleOutlined,
+  PlayCircleOutlined,
+} from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TableColumnsType } from 'antd'
+import { Popconfirm, Space } from 'antd'
+import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { WorkloadCreateEntry } from '../shared/create-entry'
 import { cronJobMutations } from './mutations'
 import { cronJobQueries } from './queries'
 import type { CronJob, CronJobTarget } from './types'
-import '@/features/platform/workloads/styles.css'
 
 export function WorkloadsCronJobsPage() {
   const { t, localeCode } = useI18n()
-  const { message } = App.useApp()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { clusterId, namespace } = usePlatformScopeStore()
   const cronJobsQuery = useQuery(cronJobQueries.list(toScopeKey(clusterId, namespace)))
-  const suspendMutation = useMutation(cronJobMutations.suspend(queryClient))
-  const removeMutation = useMutation(cronJobMutations.remove(queryClient))
+  const visibleCronJobsQueryData = readableQueryData(cronJobsQuery)
+  const suspendMutation = usePlatformMutation(cronJobMutations.suspend(queryClient), {
+    label: ['调整定时任务', 'Change CronJob'],
+    target: platformResourceTarget,
+  })
+  const removeMutation = usePlatformMutation(cronJobMutations.remove(queryClient), {
+    label: ['删除资源', 'Delete resource'],
+    target: platformResourceTarget,
+  })
+  const platformWriteBlocked = suspendMutation.blocked || removeMutation.blocked
   const [searchKeyword, setSearchKeyword] = useState('')
   const [editTarget, setEditTarget] = useState<CronJob | null>(null)
   const { densityButton, tableSize } = useWorkloadTableDensity(localeCode)
   const workloadMutationCapability = useClusterCapability('workload.mutations', localeCode)
   const yamlApplyCapability = useClusterCapability('resource.yaml.apply', localeCode)
 
-  const cronJobs = cronJobsQuery.data ?? []
+  const cronJobs = visibleCronJobsQueryData ?? []
   const canShowActions = cronJobs.some(
     (item) =>
       (!yamlApplyCapability.disabled && hasAllowedAction(item.allowedActions, 'update')) ||
@@ -183,7 +195,7 @@ export function WorkloadsCronJobsPage() {
               <ManagementIconButton
                 icon={<FormOutlined />}
                 aria-label={`${localeCode === 'zh_CN' ? '编辑' : 'Edit'} ${name}`}
-                disabled={yamlApplyCapability.disabled}
+                disabled={platformWriteBlocked || yamlApplyCapability.disabled}
                 tooltip={capabilityActionTooltip(
                   localeCode === 'zh_CN' ? '编辑' : 'Edit',
                   yamlApplyCapability,
@@ -193,6 +205,7 @@ export function WorkloadsCronJobsPage() {
             ) : null}
             {canSuspend ? (
               <Popconfirm
+                okButtonProps={{ disabled: platformWriteBlocked }}
                 title={
                   record.suspend
                     ? localeCode === 'zh_CN'
@@ -205,16 +218,7 @@ export function WorkloadsCronJobsPage() {
                 okText={localeCode === 'zh_CN' ? '确认' : 'OK'}
                 cancelText={localeCode === 'zh_CN' ? '取消' : 'Cancel'}
                 onConfirm={() =>
-                  suspendMutation.mutate(
-                    { ...target, suspend: !record.suspend },
-                    {
-                      onSuccess: () =>
-                        void message.success(
-                          localeCode === 'zh_CN' ? '已更新定时任务状态' : 'CronJob updated',
-                        ),
-                      onError: (error) => void message.error(error.message),
-                    },
-                  )
+                  suspendMutation.mutate({ ...target, suspend: !record.suspend }, {})
                 }
               >
                 <ManagementIconButton
@@ -244,17 +248,16 @@ export function WorkloadsCronJobsPage() {
                 }
                 okText={deleteLabel}
                 cancelText={localeCode === 'zh_CN' ? '取消' : 'Cancel'}
-                okButtonProps={{ danger: true, loading: removePending }}
+                okButtonProps={{
+                  disabled: platformWriteBlocked,
+                  danger: true,
+                  loading: removePending,
+                }}
                 placement="topRight"
-                onConfirm={() =>
-                  removeMutation.mutate(target, {
-                    onSuccess: () =>
-                      void message.success(localeCode === 'zh_CN' ? '已删除' : 'Deleted'),
-                    onError: (error) => void message.error(error.message),
-                  })
-                }
+                onConfirm={() => removeMutation.mutate(target, {})}
               >
                 <ManagementIconButton
+                  disabled={platformWriteBlocked}
                   danger
                   icon={<DeleteOutlined />}
                   aria-label={deleteLabel}
@@ -271,6 +274,9 @@ export function WorkloadsCronJobsPage() {
 
   return (
     <div className="soha-page">
+      {suspendMutation.feedback}
+      {removeMutation.feedback}
+
       <WorkloadQueryPanel
         hasActiveFilters={Boolean(searchKeyword.trim())}
         localeCode={localeCode}
@@ -288,6 +294,9 @@ export function WorkloadsCronJobsPage() {
         />
       </WorkloadQueryPanel>
       <AdminTable
+        error={cronJobsQuery.isEnabled === false ? null : cronJobsQuery.error}
+        hasReadData={cronJobsQuery.data !== undefined}
+        onRetry={cronJobsQuery.isEnabled === false ? undefined : () => cronJobsQuery.refetch()}
         className="soha-cronjobs-table soha-platform-table"
         columnSettingIconOnly
         columnSettingPlacement="header"

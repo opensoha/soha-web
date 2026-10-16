@@ -1,15 +1,15 @@
 /** @vitest-environment jsdom */
 
-import { act } from 'react'
-import type { ReactNode } from 'react'
-import { App as AntdApp } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { App as AntdApp } from 'antd'
+import type { ReactNode } from 'react'
+import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PlatformAccessControlClusterRolesPage } from './clusterroles/list-page'
-import { PlatformAccessControlRoleDetailPage } from './roles/detail-page'
 import { PlatformAccessControlRoleBindingsPage } from './rolebindings/list-page'
+import { PlatformAccessControlRoleDetailPage } from './roles/detail-page'
 import { PlatformAccessControlServiceAccountDetailPage } from './serviceaccounts/detail-page'
 import { PlatformAccessControlServiceAccountsPage } from './serviceaccounts/list-page'
 
@@ -53,7 +53,8 @@ vi.mock('@/features/platform/cluster-capabilities', () => ({
   }),
 }))
 
-vi.mock('@/i18n', () => ({
+vi.mock('@/i18n', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/i18n')>()),
   localeText: (localeCode: string, chinese: string, english: string) =>
     localeCode === 'zh_CN' ? chinese : english,
   useI18n: () => ({
@@ -167,9 +168,7 @@ async function renderPage(node: ReactNode, route: string, routePath?: string) {
     root.render(
       <QueryClientProvider client={queryClient}>
         <AntdApp>
-          <MemoryRouter
-            initialEntries={[route]}
-          >
+          <MemoryRouter initialEntries={[route]}>
             {routePath ? (
               <Routes>
                 <Route path={routePath} element={node} />

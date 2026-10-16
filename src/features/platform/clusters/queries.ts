@@ -1,8 +1,8 @@
-import { queryOptions } from '@tanstack/react-query'
 import type { ScopeKey } from '@/types'
+import { queryOptions } from '@tanstack/react-query'
 import {
-  getClusterDetail,
   getAgentUpgradeStatus,
+  getClusterDetail,
   getClusterLogCollection,
   listClusterCapabilities,
   listClusterLogDataSources,
@@ -54,7 +54,11 @@ export const clusterQueries = {
       queryFn: () => getClusterLogCollection(scope),
       enabled: hasCluster(scope),
       refetchInterval: (query) =>
-        ['installing', 'stopping'].includes(query.state.data?.status ?? '') ? 2_000 : false,
+        query.state.status === 'error'
+          ? false
+          : ['installing', 'stopping'].includes(query.state.data?.status ?? '')
+            ? 2_000
+            : false,
     }),
   logDataSources: (enabled = true) =>
     queryOptions({

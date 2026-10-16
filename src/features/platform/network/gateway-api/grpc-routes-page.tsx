@@ -1,10 +1,11 @@
-import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
+import { ReadFeedback } from '@/components/request-feedback'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
 import { formatAgeSeconds } from '@/utils/time'
+import { useQuery } from '@tanstack/react-query'
 import type { TableColumnsType } from 'antd'
+import { Link } from 'react-router-dom'
 import { NetworkResourceListPage } from '../shared/list-page'
 import { buildGatewayAPIRoutePath } from '../shared/paths'
 import { renderNetworkTextList } from '../shared/renderers'
@@ -55,38 +56,41 @@ export function NetworkGRPCRoutesPage() {
     },
   ]
   return (
-    <NetworkResourceListPage
-      buildAIPageContext={(items, searchKeyword) => ({
-        sourceWorkbench: 'platform',
-        sourceRoute: '/network/gateway-api/grpcroutes',
-        sourceTitle: 'GRPCRoutes',
-        entityKind: 'kubernetes.grpcroute.list',
-        entityName: 'GRPCRoutes',
-        clusterId: clusterId ?? undefined,
-        namespace: namespace ?? undefined,
-        visibleFilters: { searchKeyword },
-        pinnedData: { total: items.length },
-      })}
-      columns={columns}
-      deletable={false}
-      emptyDescription={{
-        zh_CN: '当前范围没有 GRPCRoute，或未安装 Gateway API CRD',
-        en_US: 'No GRPCRoutes in the current scope, or Gateway API CRDs are not installed',
-      }}
-      kind="grpcroutes"
-      noMatchDescription={{ zh_CN: '没有匹配的资源', en_US: 'No matching resources' }}
-      query={query}
-      searchPlaceholder={{
-        zh_CN: '搜索 GRPCRoute / namespace / host / gateway / backend',
-        en_US: 'Search GRPCRoute / namespace / host / gateway / backend',
-      }}
-      searchValues={(record) => [
-        record.name,
-        record.namespace,
-        ...(record.hostnames ?? []),
-        ...(record.parentRefs ?? []),
-        ...(record.backendServices ?? []),
-      ]}
-    />
+    <>
+      <ReadFeedback canRead={query.isEnabled} query={query} label="资源记录" />
+      <NetworkResourceListPage
+        buildAIPageContext={(items, searchKeyword) => ({
+          sourceWorkbench: 'platform',
+          sourceRoute: '/network/gateway-api/grpcroutes',
+          sourceTitle: 'GRPCRoutes',
+          entityKind: 'kubernetes.grpcroute.list',
+          entityName: 'GRPCRoutes',
+          clusterId: clusterId ?? undefined,
+          namespace: namespace ?? undefined,
+          visibleFilters: { searchKeyword },
+          pinnedData: { total: items.length },
+        })}
+        columns={columns}
+        deletable={false}
+        emptyDescription={{
+          zh_CN: '当前范围没有 GRPCRoute，或未安装 Gateway API CRD',
+          en_US: 'No GRPCRoutes in the current scope, or Gateway API CRDs are not installed',
+        }}
+        kind="grpcroutes"
+        noMatchDescription={{ zh_CN: '没有匹配的资源', en_US: 'No matching resources' }}
+        query={query}
+        searchPlaceholder={{
+          zh_CN: '搜索 GRPCRoute / namespace / host / gateway / backend',
+          en_US: 'Search GRPCRoute / namespace / host / gateway / backend',
+        }}
+        searchValues={(record) => [
+          record.name,
+          record.namespace,
+          ...(record.hostnames ?? []),
+          ...(record.parentRefs ?? []),
+          ...(record.backendServices ?? []),
+        ]}
+      />
+    </>
   )
 }

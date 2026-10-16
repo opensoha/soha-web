@@ -1,8 +1,8 @@
 /** @vitest-environment jsdom */
 
-import { act } from 'react'
-import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import type { ReactNode } from 'react'
+import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -26,7 +26,8 @@ vi.mock('@/stores/platform-scope-store', () => ({
   usePlatformScopeStore: () => testState.scope,
 }))
 
-vi.mock('@/i18n', () => ({
+vi.mock('@/i18n', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/i18n')>()),
   localeText: (localeCode: string, chinese: string, english: string) =>
     localeCode === 'zh_CN' ? chinese : english,
   useI18n: () => ({
@@ -81,9 +82,7 @@ async function renderWithProviders(node: ReactNode) {
   await act(async () => {
     root.render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter
-          initialEntries={['/platform-access-control/roles/demo?namespace=default']}
-        >
+        <MemoryRouter initialEntries={['/platform-access-control/roles/demo?namespace=default']}>
           <Routes>
             <Route path="/platform-access-control/roles/:name" element={node} />
           </Routes>

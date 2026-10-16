@@ -1,7 +1,9 @@
 /** @vitest-environment jsdom */
 
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   act,
+  Children,
   isValidElement,
   StrictMode,
   type ComponentProps,
@@ -9,7 +11,6 @@ import {
   type ReactNode,
   type TextareaHTMLAttributes,
 } from 'react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -75,7 +76,8 @@ vi.mock('@/features/auth', () => ({
 vi.mock('@/stores/platform-scope-store', () => ({
   usePlatformScopeStore: (selector: (state: typeof storeMocks) => unknown) => selector(storeMocks),
 }))
-vi.mock('@/i18n', () => ({
+vi.mock('@/i18n', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/i18n')>()),
   useI18n: () => ({
     localeCode: 'zh_CN' as const,
     t: (_key: string, fallback?: string) => fallback ?? _key,
@@ -210,9 +212,12 @@ vi.mock('antd', async (importOriginal) => {
       title?: ReactNode
     }) => {
       formLifecycleMocks.destroyOnHidden = destroyOnHidden
-      if (isValidElement<{ preserve?: boolean }>(children)) {
-        formLifecycleMocks.preserve = children.props.preserve
-      }
+      const formChild = Children.toArray(children).find(
+        (child) =>
+          isValidElement<{ preserve?: boolean }>(child) && child.props.preserve !== undefined,
+      )
+      if (isValidElement<{ preserve?: boolean }>(formChild))
+        formLifecycleMocks.preserve = formChild.props.preserve
       return open ? (
         <div>
           {title}

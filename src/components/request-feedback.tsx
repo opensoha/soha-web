@@ -1,5 +1,3 @@
-import { useEffect, type ReactNode } from 'react'
-import { Alert, Button, Space, Typography, theme } from 'antd'
 import { localeText, useI18n } from '@/i18n'
 import { ApiError, claimApiErrorPresentation } from '@/services/api-error'
 import {
@@ -8,6 +6,8 @@ import {
   writeOutcomeUnknown,
 } from '@/utils/query-feedback'
 import { useDocumentHidden } from '@/utils/use-document-hidden'
+import { Alert, Button, Space, Typography, theme } from 'antd'
+import { useEffect, type ReactNode } from 'react'
 import './request-feedback.css'
 
 interface ReadState<T> {
@@ -47,10 +47,18 @@ export function requestErrorMessage(
     .join(' · ')
 }
 
-export function ReadFeedback<T>({ query, label }: { query: ReadState<T>; label: string }) {
+export function ReadFeedback<T>({
+  query,
+  label,
+  canRead = true,
+}: {
+  query: ReadState<T>
+  label: string
+  canRead?: boolean
+}) {
   const { localeCode } = useI18n()
-  useInlineApiError(query.isError ? query.error : null)
-  if (!query.isError) return null
+  useInlineApiError(canRead && query.isError ? query.error : null)
+  if (!canRead || !query.isError) return null
   const authExpired = query.error instanceof ApiError && query.error.status === 401
   const denied = query.error instanceof ApiError && [401, 403].includes(query.error.status)
   const cached = readableQueryData(query) !== undefined

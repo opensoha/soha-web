@@ -4,10 +4,12 @@ import type { SecretDetail } from './types'
 
 export function SecretDataTab({
   applying,
+  blocked,
   canEdit,
   detail,
   onApply,
 }: {
+  blocked?: boolean
   applying?: boolean
   canEdit: boolean
   detail: SecretDetail
@@ -29,6 +31,7 @@ export function SecretDataTab({
   return (
     <ConfigurationDataWorkspace
       applying={applying}
+      blocked={blocked}
       canEdit={canEdit && !hasBinary}
       detail={{ data, binaryData, immutable: detail.immutable }}
       encodedData={detail.data ?? {}}

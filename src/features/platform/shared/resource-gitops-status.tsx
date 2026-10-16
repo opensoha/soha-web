@@ -1,12 +1,14 @@
-import { Alert, Button, Space, Typography } from 'antd'
-import { DeploymentUnitOutlined, RightOutlined } from '@ant-design/icons'
-import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { ReadFeedback } from '@/components/request-feedback'
 import { StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { useI18n } from '@/i18n'
 import { api } from '@/services/api-client'
 import type { ApiResponse } from '@/types'
-import { useI18n } from '@/i18n'
+import { readableQueryData } from '@/utils/query-feedback'
+import { DeploymentUnitOutlined, RightOutlined } from '@ant-design/icons'
+import { useQuery } from '@tanstack/react-query'
+import { Alert, Button, Space, Typography } from 'antd'
+import { useNavigate } from 'react-router-dom'
 import { platformSharedKeys } from './keys'
 
 interface ManagedResource {
@@ -138,45 +140,50 @@ export function ResourceGitOpsStatus({
     enabled: canView && Boolean(normalizedCluster && kind && name),
     retry: false,
   })
-  const status = query.data
+  const visibleQueryData =
+    canView && Boolean(normalizedCluster && kind && name) ? readableQueryData(query) : undefined
+  const status = visibleQueryData
   if (!status) return null
 
   return (
-    <Alert
-      showIcon
-      icon={<DeploymentUnitOutlined />}
-      type={status.drifted ? 'warning' : 'info'}
-      title={
-        <Space size={8} wrap>
-          <span>GitOps</span>
-          <StatusTag value={status.drifted ? 'drifted' : status.phase} />
-        </Space>
-      }
-      description={
-        <Space size={12} wrap>
-          <Typography.Text type="secondary">
-            {localeCode === 'zh_CN'
-              ? `期望 revision ${status.desiredRevision} · 已应用 ${status.appliedRevision ?? '-'} · ${status.reconcilePolicy}`
-              : `Desired revision ${status.desiredRevision} · Applied ${status.appliedRevision ?? '-'} · ${status.reconcilePolicy}`}
-          </Typography.Text>
-          {status.drifted ? (
-            <Typography.Text type="warning">
+    <>
+      <ReadFeedback canRead={query.isEnabled} query={query} label="资源记录" />
+      <Alert
+        showIcon
+        icon={<DeploymentUnitOutlined />}
+        type={status.drifted ? 'warning' : 'info'}
+        title={
+          <Space size={8} wrap>
+            <span>GitOps</span>
+            <StatusTag value={status.drifted ? 'drifted' : status.phase} />
+          </Space>
+        }
+        description={
+          <Space size={12} wrap>
+            <Typography.Text type="secondary">
               {localeCode === 'zh_CN'
-                ? `${status.fieldCount} 个字段发生漂移`
-                : `${status.fieldCount} drifted fields`}
+                ? `期望 revision ${status.desiredRevision} · 已应用 ${status.appliedRevision ?? '-'} · ${status.reconcilePolicy}`
+                : `Desired revision ${status.desiredRevision} · Applied ${status.appliedRevision ?? '-'} · ${status.reconcilePolicy}`}
             </Typography.Text>
-          ) : null}
-          <Button
-            icon={<RightOutlined />}
-            iconPlacement="end"
-            size="small"
-            type="link"
-            onClick={() => navigate('/delivery/manifests')}
-          >
-            {localeCode === 'zh_CN' ? '打开 Manifest 运维' : 'Open Manifest operations'}
-          </Button>
-        </Space>
-      }
-    />
+            {status.drifted ? (
+              <Typography.Text type="warning">
+                {localeCode === 'zh_CN'
+                  ? `${status.fieldCount} 个字段发生漂移`
+                  : `${status.fieldCount} drifted fields`}
+              </Typography.Text>
+            ) : null}
+            <Button
+              icon={<RightOutlined />}
+              iconPlacement="end"
+              size="small"
+              type="link"
+              onClick={() => navigate('/delivery/manifests')}
+            >
+              {localeCode === 'zh_CN' ? '打开 Manifest 运维' : 'Open Manifest operations'}
+            </Button>
+          </Space>
+        }
+      />
+    </>
   )
 }

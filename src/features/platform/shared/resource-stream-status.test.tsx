@@ -11,7 +11,8 @@ const captured = vi.hoisted(() => ({
   tooltipTitle: '',
 }))
 
-vi.mock('antd', () => ({
+vi.mock('antd', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('antd')>()),
   Badge: ({ status }: { status: string }) => {
     captured.badgeStatus = status
     return <span />

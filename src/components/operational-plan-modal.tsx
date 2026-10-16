@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react'
-import { Alert, Checkbox, Descriptions, Modal } from 'antd'
-import type { OperationalPlan } from '@opensoha/contracts/gen/ts/sohaapi'
 import { localeText, useI18n } from '@/i18n'
+import type { OperationalPlan } from '@opensoha/contracts/gen/ts/sohaapi'
+import { Alert, Checkbox, Descriptions, Modal } from 'antd'
+import { useEffect, useState, type ReactNode } from 'react'
 import { StatusTag } from './status-tag'
 
 interface OperationalPlanModalProps {
+  feedback?: ReactNode
+  disabled?: boolean
   confirmText?: string
   loading?: boolean
   onCancel: () => void
@@ -14,6 +16,8 @@ interface OperationalPlanModalProps {
 }
 
 export function OperationalPlanModal({
+  feedback,
+  disabled,
   confirmText,
   loading,
   onCancel,
@@ -31,16 +35,25 @@ export function OperationalPlanModal({
   useEffect(() => setApprovalConfirmed(false), [plan])
 
   const confirmPlan = () => {
-    if (!plan?.ready || (approvalRequired && !approvalConfirmed)) return
+    if (disabled || loading || !plan?.ready || (approvalRequired && !approvalConfirmed)) return
     onConfirm()
   }
 
   return (
     <Modal
+      style={{ top: 32, paddingBottom: 0 }}
+      styles={{
+        container: { display: 'flex', flexDirection: 'column', maxHeight: 'calc(100dvh - 64px)' },
+        body: { minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain' },
+        footer: { flexShrink: 0 },
+      }}
       destroyOnHidden
       confirmLoading={loading}
       mask={{ closable: false }}
-      okButtonProps={{ disabled: !plan?.ready || (approvalRequired && !approvalConfirmed) }}
+      okButtonProps={{
+        'aria-label': confirmText ?? localeText(localeCode, '确认执行', 'Confirm'),
+        disabled: disabled || !plan?.ready || (approvalRequired && !approvalConfirmed),
+      }}
       okText={confirmText ?? localeText(localeCode, '确认执行', 'Confirm')}
       onCancel={onCancel}
       onOk={confirmPlan}
@@ -48,6 +61,7 @@ export function OperationalPlanModal({
       title={title}
       width={720}
     >
+      {feedback}
       {plan ? (
         <div className="space-y-4">
           <Descriptions

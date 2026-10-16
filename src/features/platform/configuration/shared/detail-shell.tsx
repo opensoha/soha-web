@@ -1,19 +1,26 @@
-import { lazy, Suspense, useState } from 'react'
-import type { ReactNode } from 'react'
-import { App, Card, Spin, Tabs } from 'antd'
 import { AdminTable } from '@/components/admin-table'
-import { MetadataTag } from '@/components/status-tag'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useYamlDraft } from '@/components/use-yaml-draft'
 import { ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
+import { MetadataTag } from '@/components/status-tag'
 import { TableCellText } from '@/components/table-cell-content'
+import { useYamlDraft } from '@/components/use-yaml-draft'
 import { useAIPageContext } from '@/features/copilot'
-import { PlatformResourceOverview } from '@/features/platform/shared/resource-overview'
 import { ResourceGitOpsStatus } from '@/features/platform/shared/resource-gitops-status'
+import { PlatformResourceOverview } from '@/features/platform/shared/resource-overview'
+import {
+  platformResourceTarget,
+  usePlatformMutation,
+} from '@/features/platform/shared/use-platform-mutation'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
-import type { TabsProps, TableColumnsType } from 'antd'
+import { readableQueryData } from '@/utils/query-feedback'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TableColumnsType, TabsProps } from 'antd'
+import { App, Card, Spin, Tabs } from 'antd'
+import type { ReactNode } from 'react'
+import { lazy, Suspense, useState } from 'react'
+import '../styles.css'
 import { configurationMutations } from './mutations'
 import { configurationQueries } from './queries'
 import type {
@@ -23,7 +30,6 @@ import type {
   ConfigurationScopeMode,
   ConfigurationTarget,
 } from './types'
-import '../styles.css'
 
 const K8sYamlEditor = lazy(async () => {
   const module = await import('@/components/k8s-yaml-editor')
@@ -59,6 +65,7 @@ function ConfigurationReferencesTab({
 }) {
   const { localeCode } = useI18n()
   const referencesQuery = useQuery(configurationQueries.references(kind, target.scope, target.name))
+  const visibleReferencesQueryData = readableQueryData(referencesQuery)
   const columns: TableColumnsType<ConfigurationReference> = [
     {
       title: localeCode === 'zh_CN' ? '资源类型' : 'Kind',
@@ -86,12 +93,14 @@ function ConfigurationReferencesTab({
   ]
   return (
     <Card className="soha-detail-card">
+      <ReadFeedback canRead={referencesQuery.isEnabled} query={referencesQuery} label="资源引用" />
+
       <AdminTable
         enableColumnSelection={false}
         scroll={{ x: '100%' }}
         className="soha-platform-table soha-config-reference-table"
         columns={columns}
-        dataSource={referencesQuery.data ?? []}
+        dataSource={visibleReferencesQueryData ?? []}
         loading={referencesQuery.isLoading}
         empty={
           <ManagementState
@@ -118,14 +127,19 @@ function ConfigurationYAMLTab({
   scopeMode: ConfigurationScopeMode
   target: ConfigurationTarget
 }) {
-  const { t, localeCode } = useI18n()
+  const { localeCode } = useI18n()
   const { message } = App.useApp()
   const queryClient = useQueryClient()
   const yamlQuery = useQuery(configurationQueries.yaml(kind, target.scope, target.name, scopeMode))
-  const updateMutation = useMutation(configurationMutations.updateYAML(kind, queryClient))
+  const visibleYamlQueryData = readableQueryData(yamlQuery)
+  const updateMutation = usePlatformMutation(configurationMutations.updateYAML(kind, queryClient), {
+    label: ['更新资源', 'Update resource'],
+    target: platformResourceTarget,
+  })
+  const platformWriteBlocked = updateMutation.blocked
   const yamlState = useYamlDraft(
     JSON.stringify([kind, target.scope.clusterId, target.scope.namespace, target.name]),
-    yamlQuery.data?.content,
+    visibleYamlQueryData?.content,
   )
   const { value: draft, setValue: setDraft } = yamlState
 
@@ -137,37 +151,41 @@ function ConfigurationYAMLTab({
         </Card>
       }
     >
-      <K8sYamlEditor
-        key={yamlState.resourceKey}
-        value={draft}
-        original={yamlState.original}
-        serverChanged={yamlState.serverChanged}
-        onCompareLatest={yamlState.compareLatest}
-        loading={yamlQuery.isPending}
-        error={yamlQuery.error}
-        onChange={setDraft}
-        onReset={yamlState.reset}
-        onSave={() =>
-          void message.info(
-            localeCode === 'zh_CN' ? '暂不支持本地草稿' : 'Local draft save disabled here',
-          )
-        }
-        onApply={() =>
-          updateMutation.mutate(
-            { ...target, content: draft },
-            {
-              onSuccess: (yaml) => {
-                yamlState.applied(yaml.content)
-                void message.success(t('yamlEditor.applySuccess', 'YAML applied'))
+      <ReadFeedback canRead={yamlQuery.isEnabled} query={yamlQuery} label="YAML" />
+
+      {updateMutation.feedback}
+
+      {yamlQuery.isError && visibleYamlQueryData === undefined ? null : (
+        <K8sYamlEditor
+          key={yamlState.resourceKey}
+          value={draft}
+          original={yamlState.original}
+          serverChanged={yamlState.serverChanged}
+          onCompareLatest={yamlState.compareLatest}
+          loading={yamlQuery.isPending}
+          error={yamlQuery.error}
+          onChange={setDraft}
+          onReset={yamlState.reset}
+          onSave={() =>
+            void message.info(
+              localeCode === 'zh_CN' ? '暂不支持本地草稿' : 'Local draft save disabled here',
+            )
+          }
+          onApply={() =>
+            updateMutation.mutate(
+              { ...target, content: draft },
+              {
+                onSuccess: (yaml) => {
+                  yamlState.applied(yaml.content)
+                },
               },
-              onError: (error) => void message.error(error.message),
-            },
-          )
-        }
-        saveDisabled
-        applyDisabled={!draft.trim() || updateMutation.isPending}
-        applying={updateMutation.isPending}
-      />
+            )
+          }
+          saveDisabled
+          applyDisabled={platformWriteBlocked || !draft.trim() || updateMutation.isPending}
+          applying={updateMutation.isPending}
+        />
+      )}
     </Suspense>
   )
 }
@@ -287,7 +305,8 @@ export function ConfigurationQueryDetailPage<TDetail extends ConfigurationDetail
   const { clusterId } = usePlatformScopeStore()
   const scope = toScopeKey(clusterId, scopeMode === 'namespace' ? namespace : null)
   const detailQuery = useQuery(configurationQueries.detail<TDetail>(kind, scope, name, scopeMode))
-  const detail = detailQuery.data
+  const visibleDetailQueryData = readableQueryData(detailQuery)
+  const detail = visibleDetailQueryData
   const scopeMissing = !clusterId || (scopeMode === 'namespace' && !namespace)
 
   if (scopeMissing) {
@@ -319,22 +338,11 @@ export function ConfigurationQueryDetailPage<TDetail extends ConfigurationDetail
       />
     )
   }
-  if (detailQuery.isError) {
-    return (
-      <div className="soha-page">
-        <ManagementState
-          kind="error"
-          description={
-            detailQuery.error instanceof Error
-              ? detailQuery.error.message
-              : localeCode === 'zh_CN'
-                ? '加载失败'
-                : 'Load failed'
-          }
-        />
-      </div>
-    )
+  if (detailQuery.isError && visibleDetailQueryData === undefined) {
+    return <ReadFeedback canRead={detailQuery.isEnabled} query={detailQuery} label="资源记录" />
   }
+  if (detailQuery.isError && !detail)
+    return <ReadFeedback canRead={detailQuery.isEnabled} query={detailQuery} label="资源详情" />
   if (!detail) {
     return (
       <div className="soha-page">
@@ -351,15 +359,18 @@ export function ConfigurationQueryDetailPage<TDetail extends ConfigurationDetail
     name: detail.name,
   }
   return (
-    <ConfigurationDetailShell
-      detail={detail}
-      kind={kind}
-      label={label}
-      overviewExtra={overviewExtra?.(detail)}
-      overviewContent={renderOverview?.(detail)}
-      scopeMode={scopeMode}
-      showReferences={false}
-      target={target}
-    />
+    <>
+      <ReadFeedback canRead={detailQuery.isEnabled} query={detailQuery} label="资源详情" />
+      <ConfigurationDetailShell
+        detail={detail}
+        kind={kind}
+        label={label}
+        overviewExtra={overviewExtra?.(detail)}
+        overviewContent={renderOverview?.(detail)}
+        scopeMode={scopeMode}
+        showReferences={false}
+        target={target}
+      />
+    </>
   )
 }

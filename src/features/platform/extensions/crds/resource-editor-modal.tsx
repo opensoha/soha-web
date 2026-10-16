@@ -1,11 +1,17 @@
-import { lazy, Suspense, useEffect, type ReactNode } from 'react'
-import { Alert, App, Button, Card, Modal, Spin } from 'antd'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useYamlDraft } from '@/components/use-yaml-draft'
 import { ManagementState } from '@/components/management-list'
-import { useI18n } from '@/i18n'
+import { ReadFeedback } from '@/components/request-feedback'
+import { useYamlDraft } from '@/components/use-yaml-draft'
 import { hasAllowedAction } from '@/features/auth'
+import {
+  platformResourceTarget,
+  usePlatformMutation,
+} from '@/features/platform/shared/use-platform-mutation'
+import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
+import { readableQueryData } from '@/utils/query-feedback'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Alert, App, Button, Card, Modal, Spin } from 'antd'
+import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
 import { crdMutations } from './mutations'
 import { crdQueries } from './queries'
 import type { CRD, CRDResourceInstance, CustomResourceTarget } from './types'
@@ -65,29 +71,35 @@ export function CRDResourceEditor({
       ? `soha:crd-yaml:${target.clusterId}:${crd.name}:${effectiveNamespace}:${target.resourceName}`
       : null
   const yamlQuery = useQuery(crdQueries.yaml(target, mode === 'edit'))
-  const applyMutation = useMutation(crdMutations.apply(queryClient))
+  const visibleYamlQueryData = readableQueryData(yamlQuery)
+  const applyMutation = usePlatformMutation(crdMutations.apply(queryClient), {
+    label: ['应用自定义资源', 'Apply custom resource'],
+    target: platformResourceTarget,
+  })
+  const platformWriteBlocked = applyMutation.blocked
 
   const yamlState = useYamlDraft(
     JSON.stringify([mode, clusterId, crd.name, effectiveNamespace, resource?.name]),
     mode === 'create'
       ? buildDefaultCustomResourceTemplate(crd, namespace)
-      : yamlQuery.data?.content,
+      : visibleYamlQueryData?.content,
     draftStorageKey,
   )
   const { value: draft, setValue: setDraft } = yamlState
   useEffect(() => {
     onStateChange?.({
       dirty: !readOnly && yamlState.original !== undefined && draft !== yamlState.original,
-      busy: applyMutation.isPending,
+      busy: applyMutation.blocked,
     })
-  }, [onStateChange, readOnly, draft, yamlState.original, applyMutation.isPending])
+  }, [onStateChange, readOnly, draft, yamlState.original, applyMutation.blocked])
 
   const apply = () => {
     if (
       !clusterId ||
       readOnly ||
       customResourceMutationsDisabled ||
-      applyMutation.isPending ||
+      applyMutation.blocked ||
+      applyMutation.isSuccess ||
       (mode === 'edit' && yamlQuery.isError) ||
       yamlState.serverChanged ||
       !draft.trim()
@@ -107,19 +119,9 @@ export function CRDResourceEditor({
           if (draftStorageKey && typeof window !== 'undefined') {
             window.localStorage.removeItem(draftStorageKey)
           }
-          void message.success(
-            localeCode === 'zh_CN'
-              ? mode === 'create'
-                ? `${crd.kind} 已创建`
-                : `${crd.kind} YAML 已更新`
-              : mode === 'create'
-                ? `${crd.kind} created`
-                : `${crd.kind} YAML updated`,
-          )
+
           yamlState.applied(yaml.content)
-          onClose?.()
         },
-        onError: (error) => void message.error(error.message),
       },
     )
   }
@@ -138,6 +140,10 @@ export function CRDResourceEditor({
 
   return (
     <>
+      <ReadFeedback canRead={yamlQuery.isEnabled} query={yamlQuery} label="YAML" />
+
+      {applyMutation.feedback}
+
       {!clusterId ? (
         <ManagementState
           bordered={false}
@@ -152,21 +158,10 @@ export function CRDResourceEditor({
             <Spin size="large" />
           </div>
         </Card>
-      ) : mode === 'edit' && yamlQuery.isError && !yamlQuery.data ? (
-        <Card className="soha-detail-card">
-          {header}
-          <ManagementState
-            bordered={false}
-            kind="error"
-            title={localeCode === 'zh_CN' ? 'YAML 加载失败' : 'Failed to load YAML'}
-            description={yamlQuery.error.message}
-            actions={
-              <Button onClick={() => void yamlQuery.refetch()}>
-                {localeCode === 'zh_CN' ? '重试' : 'Retry'}
-              </Button>
-            }
-          />
-        </Card>
+      ) : mode === 'edit' && yamlQuery.isError && !visibleYamlQueryData ? (
+        header ? (
+          <Card className="soha-detail-card">{header}</Card>
+        ) : null
       ) : (
         <Suspense
           fallback={
@@ -186,39 +181,37 @@ export function CRDResourceEditor({
             <Alert banner showIcon type="info" description={bannerDescription} />
           ) : null}
           <div>
-            <K8sYamlEditor
-              header={
-                <>
-                  {header}
-                  {applyMutation.isError ? (
-                    <Alert showIcon type="error" title={applyMutation.error.message} />
-                  ) : null}
-                </>
-              }
-              key={yamlState.resourceKey}
-              value={readOnly ? (yamlQuery.data?.content ?? '') : draft}
-              original={mode === 'edit' && !readOnly ? yamlState.original : undefined}
-              readOnly={readOnly}
-              error={mode === 'edit' && yamlQuery.isError ? yamlQuery.error : undefined}
-              serverChanged={mode === 'edit' && yamlState.serverChanged}
-              onCompareLatest={yamlState.compareLatest}
-              onChange={setDraft}
-              onReset={() => {
-                yamlState.reset()
-                void message.success(t('yamlEditor.resetSuccess', 'YAML draft reset'))
-              }}
-              onSave={() => {
-                if (!draftStorageKey || typeof window === 'undefined') return
-                window.localStorage.setItem(draftStorageKey, draft)
-                void message.success(t('yamlEditor.saveSuccess', 'YAML draft saved locally'))
-              }}
-              onApply={apply}
-              saveDisabled={!draftStorageKey}
-              applyDisabled={
-                customResourceMutationsDisabled || !draft.trim() || applyMutation.isPending
-              }
-              applying={applyMutation.isPending}
-            />
+            {yamlQuery.isError && visibleYamlQueryData === undefined ? null : (
+              <K8sYamlEditor
+                header={header}
+                key={yamlState.resourceKey}
+                value={readOnly ? (visibleYamlQueryData?.content ?? '') : draft}
+                original={mode === 'edit' && !readOnly ? yamlState.original : undefined}
+                readOnly={readOnly || applyMutation.isSuccess}
+                error={mode === 'edit' && yamlQuery.isError ? yamlQuery.error : undefined}
+                serverChanged={mode === 'edit' && yamlState.serverChanged}
+                onCompareLatest={yamlState.compareLatest}
+                onChange={setDraft}
+                onReset={() => {
+                  yamlState.reset()
+                  void message.success(t('yamlEditor.resetSuccess', 'YAML draft reset'))
+                }}
+                onSave={() => {
+                  if (!draftStorageKey || typeof window === 'undefined') return
+                  window.localStorage.setItem(draftStorageKey, draft)
+                  void message.success(t('yamlEditor.saveSuccess', 'YAML draft saved locally'))
+                }}
+                onApply={apply}
+                saveDisabled={!draftStorageKey}
+                applyDisabled={
+                  platformWriteBlocked ||
+                  customResourceMutationsDisabled ||
+                  !draft.trim() ||
+                  applyMutation.isPending
+                }
+                applying={applyMutation.isPending}
+              />
+            )}
           </div>
           {customResourceCapabilityReason ? (
             <Alert
@@ -233,10 +226,14 @@ export function CRDResourceEditor({
               description={customResourceCapabilityReason}
             />
           ) : null}
-          {onClose && !header ? (
+          {onClose && (!header || applyMutation.isSuccess) ? (
             <div style={{ marginTop: 12, textAlign: 'right' }}>
-              <Button disabled={applyMutation.isPending} onClick={onClose}>
-                {t('common.cancel', 'Cancel')}
+              <Button disabled={applyMutation.blocked} onClick={onClose}>
+                {applyMutation.isSuccess
+                  ? localeCode === 'zh_CN'
+                    ? '完成'
+                    : 'Done'
+                  : t('common.cancel', 'Cancel')}
               </Button>
             </div>
           ) : null}
@@ -248,6 +245,7 @@ export function CRDResourceEditor({
 
 export function CRDResourceEditorModal(props: CRDResourceEditorModalProps) {
   const { localeCode } = useI18n()
+  const [editorState, setEditorState] = useState({ dirty: false, busy: false })
   const readOnly =
     props.mode === 'edit' &&
     (!hasAllowedAction(props.resource?.allowedActions, 'update') ||
@@ -256,13 +254,15 @@ export function CRDResourceEditorModal(props: CRDResourceEditorModalProps) {
     <Modal
       title={`${localeCode === 'zh_CN' ? (readOnly ? '查看' : props.mode === 'create' ? '新建' : '编辑') : readOnly ? 'View' : props.mode === 'create' ? 'Create' : 'Edit'} ${props.crd.kind}`}
       open
-      onCancel={props.onClose}
+      onCancel={() => {
+        if (!editorState.busy) props.onClose?.()
+      }}
       footer={null}
       width={1080}
       destroyOnHidden
       mask={{ closable: false }}
     >
-      <CRDResourceEditor {...props} />
+      <CRDResourceEditor {...props} onStateChange={setEditorState} />
     </Modal>
   )
 }

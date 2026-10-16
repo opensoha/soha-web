@@ -1,9 +1,9 @@
 /** @vitest-environment jsdom */
 
-import { act } from 'react'
-import type { ReactNode } from 'react'
-import { App as AntdApp } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { App as AntdApp } from 'antd'
+import type { ReactNode } from 'react'
+import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -49,7 +49,9 @@ vi.mock('@/services/api-client', () => ({
       }
       return Promise.resolve({ data: payload })
     }),
-    post: vi.fn(),
+    post: vi.fn(async (path: string) => ({
+      data: testState.responses[path] ?? { allowed: true, reason: '', scopeMode: 'namespace' },
+    })),
     put: vi.fn(),
     delete: vi.fn(),
   },
@@ -371,6 +373,11 @@ describe('platform RBAC list pages', () => {
   it('uses the capability matrix to disable RBAC YAML create and delete actions', async () => {
     const unsupportedReason = 'Agent mode cannot apply RBAC YAML'
     setResponses({
+      '/clusters/cluster-a/resource-creation/scope-decision': {
+        allowed: false,
+        reason: unsupportedReason,
+        scopeMode: 'namespace',
+      },
       '/clusters': [
         {
           id: 'cluster-a',

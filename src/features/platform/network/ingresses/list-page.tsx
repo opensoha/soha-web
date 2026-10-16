@@ -1,13 +1,14 @@
-import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { ReadFeedback } from '@/components/request-feedback'
 import { TableCellLink } from '@/components/table-cell-content'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
 import { formatAgeSeconds } from '@/utils/time'
+import { useQuery } from '@tanstack/react-query'
 import type { TableColumnsType } from 'antd'
-import { buildNetworkRoutePath } from '../shared/paths'
+import { useNavigate } from 'react-router-dom'
 import { NetworkResourceListPage } from '../shared/list-page'
+import { buildNetworkRoutePath } from '../shared/paths'
 import { renderNetworkTextList } from '../shared/renderers'
 import { ingressQueries } from './queries'
 import type { Ingress } from './types'
@@ -62,40 +63,43 @@ export function NetworkIngressesPage() {
   ]
 
   return (
-    <NetworkResourceListPage
-      buildAIPageContext={(items, searchKeyword) => ({
-        sourceWorkbench: 'platform',
-        sourceRoute: '/network/ingresses',
-        sourceTitle: localeCode === 'zh_CN' ? 'Ingresses 列表' : 'Ingresses',
-        entityKind: 'kubernetes.ingress.list',
-        entityName: 'Ingresses',
-        clusterId: clusterId ?? undefined,
-        namespace: namespace ?? undefined,
-        timeRangeMinutes: 60,
-        visibleFilters: { searchKeyword },
-        pinnedData: { total: items.length },
-        promptHint: '分析当前 Ingress 列表的域名、地址、IngressClass 和后端 Service 风险。',
-      })}
-      columns={columns}
-      emptyDescription={{
-        zh_CN: '当前范围没有 Ingress',
-        en_US: 'No ingresses in the current scope',
-      }}
-      kind="ingresses"
-      noMatchDescription={{ zh_CN: '没有匹配的资源', en_US: 'No matching resources' }}
-      query={query}
-      searchPlaceholder={{
-        zh_CN: '搜索 Ingress / namespace / host / service',
-        en_US: 'Search ingress / namespace / host / service',
-      }}
-      searchValues={(record) => [
-        record.name,
-        record.namespace,
-        record.className,
-        record.address,
-        ...record.hosts,
-        ...(record.backendServices ?? []),
-      ]}
-    />
+    <>
+      <ReadFeedback canRead={query.isEnabled} query={query} label="资源记录" />
+      <NetworkResourceListPage
+        buildAIPageContext={(items, searchKeyword) => ({
+          sourceWorkbench: 'platform',
+          sourceRoute: '/network/ingresses',
+          sourceTitle: localeCode === 'zh_CN' ? 'Ingresses 列表' : 'Ingresses',
+          entityKind: 'kubernetes.ingress.list',
+          entityName: 'Ingresses',
+          clusterId: clusterId ?? undefined,
+          namespace: namespace ?? undefined,
+          timeRangeMinutes: 60,
+          visibleFilters: { searchKeyword },
+          pinnedData: { total: items.length },
+          promptHint: '分析当前 Ingress 列表的域名、地址、IngressClass 和后端 Service 风险。',
+        })}
+        columns={columns}
+        emptyDescription={{
+          zh_CN: '当前范围没有 Ingress',
+          en_US: 'No ingresses in the current scope',
+        }}
+        kind="ingresses"
+        noMatchDescription={{ zh_CN: '没有匹配的资源', en_US: 'No matching resources' }}
+        query={query}
+        searchPlaceholder={{
+          zh_CN: '搜索 Ingress / namespace / host / service',
+          en_US: 'Search ingress / namespace / host / service',
+        }}
+        searchValues={(record) => [
+          record.name,
+          record.namespace,
+          record.className,
+          record.address,
+          ...record.hosts,
+          ...(record.backendServices ?? []),
+        ]}
+      />
+    </>
   )
 }

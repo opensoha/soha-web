@@ -1,9 +1,4 @@
-import { lazy, Suspense, useDeferredValue, useEffect, useMemo, useState } from 'react'
-import { Alert, Space, Spin, Tag, Typography } from 'antd'
-import { CloudDownloadOutlined, LinkOutlined, RocketOutlined } from '@ant-design/icons'
-import { useQuery } from '@tanstack/react-query'
 import { AdminTable } from '@/components/admin-table'
-import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
 import {
   ManagementDensityButton,
   ManagementIconButton,
@@ -16,15 +11,21 @@ import {
   capabilityActionTooltip,
   useClusterCapability,
 } from '@/features/platform/cluster-capabilities'
+import '@/features/platform/extensions/styles.css'
+import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
+import { readableQueryData } from '@/utils/query-feedback'
+import { CloudDownloadOutlined, LinkOutlined, RocketOutlined } from '@ant-design/icons'
+import { useQuery } from '@tanstack/react-query'
 import type { TableColumnsType } from 'antd'
+import { Alert, Space, Spin, Tag, Typography } from 'antd'
+import { lazy, Suspense, useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { ResourceQueryPanel } from '../../shared/resource-query-panel'
 import { normalizeSearchKeyword } from '../../shared/search'
 import { helmQueries } from '../queries'
 import type { HelmChart, HelmChartCatalogInput } from '../types'
 import { formatHelmChartCount, getHelmChartBadges, hasHelmChartSecuritySummary } from './utils'
-import '@/features/platform/extensions/styles.css'
 
 const { Text } = Typography
 const MAX_PAGE_SIZE = 60
@@ -51,7 +52,8 @@ export function HelmChartsPage() {
     ? { clusterId, keyword: normalizedKeyword, limit: pageSize, offset }
     : null
   const chartsQuery = useQuery(helmQueries.chartCatalog(catalogInput))
-  const catalog = chartsQuery.data
+  const visibleChartsQueryData = readableQueryData(chartsQuery)
+  const catalog = visibleChartsQueryData
   const rawItems = catalog?.charts ?? []
   const total = catalog?.totalCount ?? catalog?.chartCount ?? rawItems.length
   const loaded = catalog?.loadedCount ?? catalog?.chartCount ?? rawItems.length
@@ -248,6 +250,9 @@ export function HelmChartsPage() {
         />
       ) : null}
       <AdminTable
+        error={chartsQuery.isEnabled === false ? null : chartsQuery.error}
+        hasReadData={chartsQuery.data !== undefined}
+        onRetry={chartsQuery.isEnabled === false ? undefined : () => chartsQuery.refetch()}
         className="soha-platform-table"
         columnSettingIconOnly
         columnSettingPlacement="toolbar"

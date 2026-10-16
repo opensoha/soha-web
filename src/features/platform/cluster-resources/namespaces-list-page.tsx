@@ -1,15 +1,3 @@
-import { useMemo, useState } from 'react'
-import { App, Button, Form, Input, Modal, Popconfirm, Space } from 'antd'
-import {
-  ApartmentOutlined,
-  DeleteOutlined,
-  EditOutlined,
-  PlusOutlined,
-  SendOutlined,
-} from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
-import type { TableColumnsType } from 'antd'
 import { AdminTable } from '@/components/admin-table'
 import {
   ManagementDensityButton,
@@ -23,18 +11,34 @@ import { hasAllowedAction, hasPermission, usePermissionSnapshot } from '@/featur
 import { useAIPageContext } from '@/features/copilot'
 import { parseStringMap, stringifyMap } from '@/features/platform/node-resource-utils'
 import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
+import {
+  platformResourceTarget,
+  usePlatformMutation,
+} from '@/features/platform/shared/use-platform-mutation'
+import '@/features/platform/styles/base.css'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
+import { readableQueryData } from '@/utils/query-feedback'
 import { tableColumnPresets } from '@/utils/table-columns'
+import {
+  ApartmentOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  PlusOutlined,
+  SendOutlined,
+} from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TableColumnsType } from 'antd'
+import { Button, Form, Input, Modal, Popconfirm, Space } from 'antd'
+import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { namespaceMutations } from './mutations'
 import { namespaceQueries } from './queries'
 import { toClusterScope } from './scope'
 import type { ClusterNamespace } from './types'
-import '@/features/platform/styles/base.css'
 
 export function ClusterNamespacesPage() {
   const { t } = useI18n()
-  const { message } = App.useApp()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { clusterId, setNamespace } = usePlatformScopeStore()
@@ -43,11 +47,25 @@ export function ClusterNamespacesPage() {
   const [namespaceModalVisible, setNamespaceModalVisible] = useState(false)
   const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
   const namespacesQuery = useQuery(namespaceQueries.list(scope))
+  const visibleNamespacesQueryData = readableQueryData(namespacesQuery)
   const permissionSnapshot = usePermissionSnapshot().data?.data
   const canCreate = hasPermission(permissionSnapshot, 'platform.namespaces.create')
-  const createNamespaceMutation = useMutation(namespaceMutations.create(queryClient))
-  const updateNamespaceMutation = useMutation(namespaceMutations.update(queryClient))
-  const deleteNamespaceMutation = useMutation(namespaceMutations.remove(queryClient))
+  const createNamespaceMutation = usePlatformMutation(namespaceMutations.create(queryClient), {
+    label: ['创建命名空间', 'Create namespace'],
+    target: (v) => platformResourceTarget({ scope: v.scope, name: v.input.name }),
+  })
+  const updateNamespaceMutation = usePlatformMutation(namespaceMutations.update(queryClient), {
+    label: ['更新命名空间', 'Update namespace'],
+    target: platformResourceTarget,
+  })
+  const deleteNamespaceMutation = usePlatformMutation(namespaceMutations.remove(queryClient), {
+    label: ['删除命名空间', 'Delete namespace'],
+    target: platformResourceTarget,
+  })
+  const platformWriteBlocked =
+    createNamespaceMutation.blocked ||
+    updateNamespaceMutation.blocked ||
+    deleteNamespaceMutation.blocked
 
   useAIPageContext({
     sourceWorkbench: 'platform',
@@ -57,7 +75,7 @@ export function ClusterNamespacesPage() {
     clusterId: clusterId ?? undefined,
     namespace: editingNamespace?.name,
     pinnedData: {
-      namespaceCount: namespacesQuery.data?.length ?? 0,
+      namespaceCount: visibleNamespacesQueryData?.length ?? 0,
       editingNamespace: editingNamespace?.name,
     },
   })
@@ -128,6 +146,7 @@ export function ClusterNamespacesPage() {
             />
             {canUpdate ? (
               <ManagementIconButton
+                disabled={platformWriteBlocked}
                 aria-label={`编辑命名空间 ${name}`}
                 size="small"
                 tooltip="编辑"
@@ -144,19 +163,12 @@ export function ClusterNamespacesPage() {
                 description="删除后该命名空间下的资源会一并回收，请确认。"
                 okText="删除"
                 cancelText="取消"
-                okButtonProps={{ danger: true, loading: deleting }}
+                okButtonProps={{ disabled: platformWriteBlocked, danger: true, loading: deleting }}
                 placement="topRight"
-                onConfirm={() =>
-                  deleteNamespaceMutation.mutate(
-                    { scope, name },
-                    {
-                      onSuccess: () => void message.success('命名空间已删除'),
-                      onError: (error) => void message.error(error.message),
-                    },
-                  )
-                }
+                onConfirm={() => deleteNamespaceMutation.mutate({ scope, name }, {})}
               >
                 <ManagementIconButton
+                  disabled={platformWriteBlocked}
                   aria-label={`删除命名空间 ${name}`}
                   danger
                   icon={<DeleteOutlined />}
@@ -174,6 +186,10 @@ export function ClusterNamespacesPage() {
 
   return (
     <div className="soha-page">
+      {createNamespaceMutation.feedback}
+      {updateNamespaceMutation.feedback}
+      {deleteNamespaceMutation.feedback}
+
       {!clusterId ? (
         <ManagementState
           compact
@@ -182,11 +198,16 @@ export function ClusterNamespacesPage() {
         />
       ) : (
         <AdminTable
+          error={namespacesQuery.isEnabled === false ? null : namespacesQuery.error}
+          hasReadData={namespacesQuery.data !== undefined}
+          onRetry={
+            namespacesQuery.isEnabled === false ? undefined : () => namespacesQuery.refetch()
+          }
           columnSettingIconOnly
           columnSettingPlacement="header"
           shellClassName="soha-management-table-shell"
           columns={columns}
-          dataSource={namespacesQuery.data ?? []}
+          dataSource={visibleNamespacesQueryData ?? []}
           rowKey="name"
           loading={namespacesQuery.isLoading || namespacesQuery.isFetching}
           localSorting
@@ -231,13 +252,20 @@ export function ClusterNamespacesPage() {
       )}
 
       <Modal
+        okButtonProps={{ disabled: platformWriteBlocked }}
         destroyOnHidden
         title={editingNamespace ? `编辑命名空间 ${editingNamespace.name}` : '新建命名空间'}
         open={namespaceModalVisible}
         footer={null}
         width={720}
-        onCancel={closeModal}
+        onCancel={() => {
+          if (!platformWriteBlocked) closeModal?.()
+        }}
       >
+        {createNamespaceMutation.feedback}
+        {updateNamespaceMutation.feedback}
+        {deleteNamespaceMutation.feedback}
+
         <Form
           key={editingNamespace?.name ?? 'namespace-new'}
           layout="vertical"
@@ -251,10 +279,8 @@ export function ClusterNamespacesPage() {
             }
             const callbacks = {
               onSuccess: () => {
-                void message.success(editingNamespace ? '命名空间已更新' : '命名空间已创建')
                 closeModal()
               },
-              onError: (error: Error) => void message.error(error.message),
             }
             if (editingNamespace) {
               updateNamespaceMutation.mutate(

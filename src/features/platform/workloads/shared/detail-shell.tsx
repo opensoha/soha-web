@@ -1,21 +1,27 @@
-import { lazy, Suspense, useState, useMemo } from 'react'
-import type { ReactNode } from 'react'
-import { App, Tabs, Card, Spin } from 'antd'
-import { useQuery, useMutation } from '@tanstack/react-query'
-import { useParams } from 'react-router-dom'
-import { useYamlDraft } from '@/components/use-yaml-draft'
 import { ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
+import { useYamlDraft } from '@/components/use-yaml-draft'
 import { useAIPageContext } from '@/features/copilot'
-import { PlatformResourceOverview } from '@/features/platform/shared/resource-overview'
-import { ResourceGitOpsStatus } from '@/features/platform/shared/resource-gitops-status'
-import { useI18n } from '@/i18n'
 import { useClusterCapability } from '@/features/platform/cluster-capabilities'
-import type { TabsProps } from 'antd'
+import { ResourceGitOpsStatus } from '@/features/platform/shared/resource-gitops-status'
+import { PlatformResourceOverview } from '@/features/platform/shared/resource-overview'
+import {
+  platformResourceTarget,
+  usePlatformMutation,
+} from '@/features/platform/shared/use-platform-mutation'
 import { updateWorkloadYAML } from '@/features/platform/workloads/shared/api'
-import { workloadQueries } from '@/features/platform/workloads/shared/queries'
 import { useWorkloadDetailScope } from '@/features/platform/workloads/shared/detail-scope'
+import { workloadQueries } from '@/features/platform/workloads/shared/queries'
 import type { WorkloadKind } from '@/features/platform/workloads/shared/types'
 import '@/features/platform/workloads/styles.css'
+import { useI18n } from '@/i18n'
+import { readableQueryData } from '@/utils/query-feedback'
+import { useQuery } from '@tanstack/react-query'
+import type { TabsProps } from 'antd'
+import { App, Card, Spin, Tabs } from 'antd'
+import type { ReactNode } from 'react'
+import { lazy, Suspense, useMemo, useState } from 'react'
+import { useParams } from 'react-router-dom'
 
 const K8sYamlEditor = lazy(async () => {
   const mod = await import('@/components/k8s-yaml-editor')
@@ -59,7 +65,8 @@ export interface WorkloadMeta {
 export type WorkloadDetailExtraOverview = ReactNode | ((detail: WorkloadMeta) => ReactNode)
 
 export type WorkloadDetailExtraTabPanes =
-  NonNullable<TabsProps['items']> | ((detail: WorkloadMeta) => NonNullable<TabsProps['items']>)
+  | NonNullable<TabsProps['items']>
+  | ((detail: WorkloadMeta) => NonNullable<TabsProps['items']>)
 
 export function WorkloadDetailShell({
   title,
@@ -90,11 +97,16 @@ export function WorkloadDetailShell({
 
   const detailScope = { clusterId, namespace: detailNamespace }
   const detailQuery = useQuery(workloadQueries.detail<WorkloadMeta>(resource, detailScope, name))
+  const visibleDetailQueryData = readableQueryData(detailQuery)
   const yamlQueryOptions = workloadQueries.yaml(resource, detailScope, name)
   const yamlQuery = useQuery({
     ...yamlQueryOptions,
     enabled: Boolean(yamlQueryOptions.enabled) && resolvedActiveTabKey === 'yaml',
   })
+  const visibleYamlQueryData =
+    Boolean(yamlQueryOptions.enabled) && resolvedActiveTabKey === 'yaml'
+      ? readableQueryData(yamlQuery)
+      : undefined
   const yamlDraftStorageKey = useMemo(
     () =>
       clusterId
@@ -102,7 +114,11 @@ export function WorkloadDetailShell({
         : '',
     [clusterId, detailNamespace, name, resource],
   )
-  const yamlState = useYamlDraft(yamlDraftStorageKey, yamlQuery.data?.content, yamlDraftStorageKey)
+  const yamlState = useYamlDraft(
+    yamlDraftStorageKey,
+    visibleYamlQueryData?.content,
+    yamlDraftStorageKey,
+  )
   const { value: yamlDraft, setValue: setYamlDraft } = yamlState
   const yamlApplyCapability = useClusterCapability('resource.yaml.apply', localeCode)
   const yamlApplyDisabledReason = yamlApplyCapability.disabled
@@ -118,21 +134,27 @@ export function WorkloadDetailShell({
     workload: name,
   })
 
-  const applyYamlMutation = useMutation({
-    mutationFn: () =>
-      updateWorkloadYAML(resource, detailScope, name, {
-        content: yamlDraft,
-      }),
-    onSuccess: (resourceYAML) => {
-      yamlState.applied(resourceYAML.content)
-      void message.success(t('yamlEditor.applySuccess', 'YAML applied'))
-      yamlQuery.refetch()
-      detailQuery.refetch()
-    },
-    onError: (err: Error) => void message.error(err.message),
-  })
+  const applyYamlMutation = usePlatformMutation(
+    {
+      mutationFn: () =>
+        updateWorkloadYAML(resource, detailScope, name, {
+          content: yamlDraft,
+        }),
+      onSuccess: (resourceYAML) => {
+        yamlState.applied(resourceYAML.content)
 
-  const detail = detailQuery.data
+        yamlQuery.refetch()
+        detailQuery.refetch()
+      },
+    },
+    {
+      label: ['应用 YAML', 'Apply YAML'],
+      target: () => platformResourceTarget({ scope: detailScope, name }),
+    },
+  )
+  const platformWriteBlocked = applyYamlMutation.blocked
+
+  const detail = visibleDetailQueryData
 
   if (detailQuery.isLoading)
     return (
@@ -140,6 +162,8 @@ export function WorkloadDetailShell({
         <Spin size="large" />
       </div>
     )
+  if (detailQuery.isError && !detail)
+    return <ReadFeedback canRead={detailQuery.isEnabled} query={detailQuery} label="资源详情" />
   if (!detail)
     return (
       <ManagementState
@@ -157,6 +181,11 @@ export function WorkloadDetailShell({
 
   return (
     <div className="soha-page soha-workload-detail-page">
+      <ReadFeedback canRead={detailQuery.isEnabled} query={detailQuery} label="资源详情" />
+      <ReadFeedback canRead={yamlQuery.isEnabled} query={yamlQuery} label="YAML" />
+
+      {applyYamlMutation.feedback}
+
       <Tabs
         activeKey={resolvedActiveTabKey}
         className="soha-resource-tabs soha-workload-detail-tabs"
@@ -215,32 +244,37 @@ export function WorkloadDetailShell({
                   </Card>
                 }
               >
-                <K8sYamlEditor
-                  key={yamlState.resourceKey}
-                  value={yamlDraft}
-                  original={yamlState.original}
-                  serverChanged={yamlState.serverChanged}
-                  onCompareLatest={yamlState.compareLatest}
-                  loading={yamlQuery.isPending}
-                  error={yamlQuery.error}
-                  onChange={setYamlDraft}
-                  onReset={() => {
-                    yamlState.reset()
-                    void message.success(t('yamlEditor.resetSuccess', 'YAML draft reset'))
-                  }}
-                  onSave={() => {
-                    if (!yamlDraftStorageKey) return
-                    window.localStorage.setItem(yamlDraftStorageKey, yamlDraft)
-                    void message.success(t('yamlEditor.saveSuccess', 'YAML draft saved locally'))
-                  }}
-                  onApply={() => applyYamlMutation.mutate()}
-                  saveDisabled={!yamlDraftStorageKey}
-                  applyDisabled={
-                    !yamlQueryOptions.enabled || !yamlDraft.trim() || yamlApplyCapability.disabled
-                  }
-                  applyDisabledReason={yamlApplyDisabledReason}
-                  applying={applyYamlMutation.isPending}
-                />
+                {yamlQuery.isError && visibleYamlQueryData === undefined ? null : (
+                  <K8sYamlEditor
+                    key={yamlState.resourceKey}
+                    value={yamlDraft}
+                    original={yamlState.original}
+                    serverChanged={yamlState.serverChanged}
+                    onCompareLatest={yamlState.compareLatest}
+                    loading={yamlQuery.isPending}
+                    error={yamlQuery.error}
+                    onChange={setYamlDraft}
+                    onReset={() => {
+                      yamlState.reset()
+                      void message.success(t('yamlEditor.resetSuccess', 'YAML draft reset'))
+                    }}
+                    onSave={() => {
+                      if (!yamlDraftStorageKey) return
+                      window.localStorage.setItem(yamlDraftStorageKey, yamlDraft)
+                      void message.success(t('yamlEditor.saveSuccess', 'YAML draft saved locally'))
+                    }}
+                    onApply={() => applyYamlMutation.mutate()}
+                    saveDisabled={!yamlDraftStorageKey}
+                    applyDisabled={
+                      platformWriteBlocked ||
+                      !yamlQueryOptions.enabled ||
+                      !yamlDraft.trim() ||
+                      yamlApplyCapability.disabled
+                    }
+                    applyDisabledReason={yamlApplyDisabledReason}
+                    applying={applyYamlMutation.isPending}
+                  />
+                )}
               </Suspense>
             ),
           },

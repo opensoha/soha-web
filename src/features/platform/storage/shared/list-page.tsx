@@ -1,14 +1,3 @@
-import { useDeferredValue, useMemo, useState } from 'react'
-import { App, Popconfirm } from 'antd'
-import { DeleteOutlined } from '@ant-design/icons'
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-  type MutationOptions,
-  type UseQueryOptions,
-} from '@tanstack/react-query'
-import type { TableColumnsType } from 'antd'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
   ManagementDensityButton,
@@ -23,12 +12,27 @@ import { hasAllowedAction } from '@/features/auth'
 import { encodeAIContextForElement, useAIPageContext } from '@/features/copilot'
 import { CreateEntry } from '@/features/platform/resource-creation/components/create-entry'
 import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
+import {
+  platformResourceTarget,
+  usePlatformMutation,
+} from '@/features/platform/shared/use-platform-mutation'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import type { ScopeKey } from '@/types'
+import { readableQueryData } from '@/utils/query-feedback'
+import { DeleteOutlined } from '@ant-design/icons'
+import {
+  useQuery,
+  useQueryClient,
+  type MutationOptions,
+  type UseQueryOptions,
+} from '@tanstack/react-query'
+import type { TableColumnsType } from 'antd'
+import { Popconfirm } from 'antd'
+import { useDeferredValue, useMemo, useState } from 'react'
+import '../styles.css'
 import { toClusterStorageScope, toStorageScope } from './scope'
 import type { StorageTarget } from './types'
-import '../styles.css'
 
 function includesSearch(values: Array<string | undefined | null>, keyword: string) {
   if (!keyword) return true
@@ -64,7 +68,6 @@ export function StorageListPage<T extends { allowedActions?: string[]; name: str
   searchPlaceholder: { zh_CN: string; en_US: string }
   searchValues: (record: T) => Array<string | undefined | null>
 }) {
-  const { message } = App.useApp()
   const { localeCode } = useI18n()
   const queryClient = useQueryClient()
   const { clusterId, namespace } = usePlatformScopeStore()
@@ -72,11 +75,16 @@ export function StorageListPage<T extends { allowedActions?: string[]; name: str
     ? toClusterStorageScope(clusterId)
     : toStorageScope(clusterId, namespace)
   const query = useQuery(listQuery(listScope))
-  const removeMutation = useMutation(removeOptions(queryClient))
+  const visibleQueryData = readableQueryData(query)
+  const removeMutation = usePlatformMutation(removeOptions(queryClient), {
+    label: ['删除资源', 'Delete resource'],
+    target: platformResourceTarget,
+  })
+  const platformWriteBlocked = removeMutation.blocked
   const [searchKeyword, setSearchKeyword] = useState('')
   const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
   const normalizedKeyword = useDeferredValue(searchKeyword).trim().toLowerCase()
-  const rawItems = query.data ?? []
+  const rawItems = visibleQueryData ?? []
   const filteredItems = useMemo(
     () => rawItems.filter((item) => includesSearch(searchValues(item), normalizedKeyword)),
     [normalizedKeyword, rawItems, searchValues],
@@ -114,20 +122,12 @@ export function StorageListPage<T extends { allowedActions?: string[]; name: str
           title={localeCode === 'zh_CN' ? `确认删除 ${name}？` : `Delete ${name}?`}
           okText={deleteLabel}
           cancelText={localeCode === 'zh_CN' ? '取消' : 'Cancel'}
-          okButtonProps={{ danger: true, loading: pending }}
+          okButtonProps={{ disabled: platformWriteBlocked, danger: true, loading: pending }}
           placement="topRight"
-          onConfirm={() =>
-            removeMutation.mutate(
-              { scope: targetScope, name },
-              {
-                onSuccess: () =>
-                  void message.success(localeCode === 'zh_CN' ? '已删除' : 'Deleted'),
-                onError: (error) => void message.error(error.message),
-              },
-            )
-          }
+          onConfirm={() => removeMutation.mutate({ scope: targetScope, name }, {})}
         >
           <ManagementIconButton
+            disabled={platformWriteBlocked}
             danger
             icon={<DeleteOutlined />}
             aria-label={deleteLabel}
@@ -151,90 +151,98 @@ export function StorageListPage<T extends { allowedActions?: string[]; name: str
   const densityLabel = localeCode === 'zh_CN' ? '切换表格密度' : 'Toggle table density'
 
   return (
-    <ManagementDataPage
-      query={{
-        onFinish: () => undefined,
-        actions: (
-          <ManagementQueryActions
-            disabledReset={!searchKeyword.trim()}
-            onReset={() => setSearchKeyword('')}
-            resetLabel={localeCode === 'zh_CN' ? '重置' : 'Reset'}
-            submitLabel={localeCode === 'zh_CN' ? '查询' : 'Search'}
-          />
-        ),
-        children: (
-          <ManagementKeywordField
-            label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}
-            value={searchKeyword}
-            onChange={setSearchKeyword}
-            placeholder={searchPlaceholder[localeCode]}
-            inputProps={{
-              className: 'soha-platform-compact-field soha-workload-search-input',
-              size: 'small',
-            }}
-          />
-        ),
-      }}
-      table={{
-        className: 'soha-platform-table soha-storage-table',
-        columnSettingIconOnly: true,
-        columnSettingPlacement: 'header',
-        columns: effectiveColumns,
-        dataSource: clusterId ? filteredItems : [],
-        rowKey,
-        onRow: (record: T) => ({
-          'data-ai-context': encodeAIContextForElement({
-            sourceWorkbench: 'platform',
-            entityKind: kind,
-            entityName: record.name,
-            clusterId: clusterId || undefined,
-            namespace: clusterScoped ? undefined : getRecordNamespace?.(record) || undefined,
-          }),
-        }),
-        loading: query.isLoading,
-        localSorting: true,
-        pageSize: K8S_TABLE_PAGE_SIZE,
-        tableSize,
-        scroll: { x: 'max-content' },
-        viewportScroll: true,
-        headerExtra: (
-          <ManagementTableToolbar>
-            <CreateEntry
-              context={{
-                clusterId: clusterId || '',
-                defaultNamespace: clusterScoped ? undefined : namespace || undefined,
-                expectedKind: kind,
-                resourceGroup: 'storage',
-                scopeMode: clusterScoped ? 'cluster' : 'namespace',
-                source: 'list',
+    <>
+      {removeMutation.feedback}
+      <ManagementDataPage
+        query={{
+          onFinish: () => undefined,
+          actions: (
+            <ManagementQueryActions
+              disabledReset={!searchKeyword.trim()}
+              onReset={() => setSearchKeyword('')}
+              resetLabel={localeCode === 'zh_CN' ? '重置' : 'Reset'}
+              submitLabel={localeCode === 'zh_CN' ? '查询' : 'Search'}
+            />
+          ),
+          children: (
+            <ManagementKeywordField
+              label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}
+              value={searchKeyword}
+              onChange={setSearchKeyword}
+              placeholder={searchPlaceholder[localeCode]}
+              inputProps={{
+                className: 'soha-platform-compact-field soha-workload-search-input',
+                size: 'small',
               }}
-              defaultTemplate={createDefaultTemplate}
-              label={resourceLabel}
             />
-            <ManagementDensityButton
-              aria-label={densityLabel}
-              title={densityLabel}
-              tooltip={densityLabel}
-              onClick={() => setTableSize((current) => (current === 'middle' ? 'small' : 'middle'))}
+          ),
+        }}
+        table={{
+          error: query.isEnabled === false ? null : query.error,
+          hasReadData: query.data !== undefined,
+          onRetry: query.isEnabled === false ? undefined : () => query.refetch(),
+          className: 'soha-platform-table soha-storage-table',
+          columnSettingIconOnly: true,
+          columnSettingPlacement: 'header',
+          columns: effectiveColumns,
+          dataSource: clusterId ? filteredItems : [],
+          rowKey,
+          onRow: (record: T) => ({
+            'data-ai-context': encodeAIContextForElement({
+              sourceWorkbench: 'platform',
+              entityKind: kind,
+              entityName: record.name,
+              clusterId: clusterId || undefined,
+              namespace: clusterScoped ? undefined : getRecordNamespace?.(record) || undefined,
+            }),
+          }),
+          loading: query.isLoading,
+          localSorting: true,
+          pageSize: K8S_TABLE_PAGE_SIZE,
+          tableSize,
+          scroll: { x: 'max-content' },
+          viewportScroll: true,
+          headerExtra: (
+            <ManagementTableToolbar>
+              <CreateEntry
+                context={{
+                  clusterId: clusterId || '',
+                  defaultNamespace: clusterScoped ? undefined : namespace || undefined,
+                  expectedKind: kind,
+                  resourceGroup: 'storage',
+                  scopeMode: clusterScoped ? 'cluster' : 'namespace',
+                  source: 'list',
+                }}
+                defaultTemplate={createDefaultTemplate}
+                label={resourceLabel}
+              />
+              <ManagementDensityButton
+                aria-label={densityLabel}
+                title={densityLabel}
+                tooltip={densityLabel}
+                onClick={() =>
+                  setTableSize((current) => (current === 'middle' ? 'small' : 'middle'))
+                }
+              />
+              <ManagementRefreshButton
+                aria-label={localeCode === 'zh_CN' ? '刷新' : 'Refresh'}
+                disabled={!clusterId}
+                loading={query.isFetching}
+                tooltip={localeCode === 'zh_CN' ? '刷新' : 'Refresh'}
+                onClick={() => clusterId && void query.refetch()}
+              />
+            </ManagementTableToolbar>
+          ),
+          empty: (
+            <ManagementState
+              bordered={false}
+              compact
+              description={effectiveEmpty}
+              kind={clusterId ? 'empty' : 'select-scope'}
             />
-            <ManagementRefreshButton
-              aria-label={localeCode === 'zh_CN' ? '刷新' : 'Refresh'}
-              disabled={!clusterId}
-              loading={query.isFetching}
-              tooltip={localeCode === 'zh_CN' ? '刷新' : 'Refresh'}
-              onClick={() => clusterId && void query.refetch()}
-            />
-          </ManagementTableToolbar>
-        ),
-        empty: (
-          <ManagementState
-            bordered={false}
-            compact
-            description={effectiveEmpty}
-            kind={clusterId ? 'empty' : 'select-scope'}
-          />
-        ),
-      }}
-    />
+          ),
+        }}
+      />
+    </>
   )
 }

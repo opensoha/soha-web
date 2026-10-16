@@ -1,4 +1,24 @@
-import { useState } from 'react'
+import { ReadFeedback } from '@/components/request-feedback'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import {
+  platformResourceTarget,
+  usePlatformMutation,
+} from '@/features/platform/shared/use-platform-mutation'
+import type { ScopeKey } from '@/types'
+import { readableQueryData } from '@/utils/query-feedback'
+import { formatDateTime } from '@/utils/time'
+import {
+  CheckCircleOutlined,
+  DeleteOutlined,
+  PauseOutlined,
+  PlayCircleOutlined,
+} from '@ant-design/icons'
+import type {
+  LogCollectionPlan,
+  LogCollectionPreflightInput,
+  LogCollectionProfile,
+} from '@opensoha/contracts/gen/ts/sohaapi'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Alert,
   Button,
@@ -14,21 +34,7 @@ import {
   Spin,
   Tag,
 } from 'antd'
-import {
-  CheckCircleOutlined,
-  DeleteOutlined,
-  PauseOutlined,
-  PlayCircleOutlined,
-} from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type {
-  LogCollectionPlan,
-  LogCollectionPreflightInput,
-  LogCollectionProfile,
-} from '@opensoha/contracts/gen/ts/sohaapi'
-import type { ScopeKey } from '@/types'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
-import { formatDateTime } from '@/utils/time'
+import { useState } from 'react'
 import { clusterMutations } from './mutations'
 import { clusterQueries } from './queries'
 
@@ -65,22 +71,36 @@ export function LogCollectionCard({ scope, localeCode }: { scope: ScopeKey; loca
   const [plan, setPlan] = useState<LogCollectionPlan | null>(null)
   const profile = Form.useWatch('profile', form) as LogCollectionProfile | undefined
   const stateQuery = useQuery(clusterQueries.logCollection(scope))
+  const visibleStateQueryData = readableQueryData(stateQuery)
   const dataSourcesQuery = useQuery(clusterQueries.logDataSources(open && profile !== 'starter'))
+  const visibleDataSourcesQueryData = readableQueryData(dataSourcesQuery)
   const permissionQuery = usePermissionSnapshot()
   const permissionSnapshot = permissionQuery.data?.data
   const canEnable = hasPermission(permissionSnapshot, 'platform.observability.logging.enable')
   const canDisable = hasPermission(permissionSnapshot, 'platform.observability.logging.disable')
-  const preflight = useMutation(clusterMutations.preflightLogCollection())
-  const enable = useMutation(clusterMutations.enableLogCollection(queryClient))
-  const disable = useMutation(clusterMutations.disableLogCollection(queryClient))
-  const state = stateQuery.data
+  const preflight = usePlatformMutation(clusterMutations.preflightLogCollection(), {
+    label: ['日志采集预检', 'Log collection preflight'],
+    target: platformResourceTarget,
+    readOnly: true,
+  })
+  const enable = usePlatformMutation(clusterMutations.enableLogCollection(queryClient), {
+    label: ['启用日志采集', 'Enable log collection'],
+    target: platformResourceTarget,
+  })
+  const disable = usePlatformMutation(clusterMutations.disableLogCollection(queryClient), {
+    label: ['停用日志采集', 'Disable log collection'],
+    target: platformResourceTarget,
+  })
+  const platformWriteBlocked = enable.blocked || disable.blocked
+  const state = visibleStateQueryData
   const zh = localeCode === 'zh_CN'
   const busy =
-    enable.isPending ||
-    disable.isPending ||
+    platformWriteBlocked ||
+    stateQuery.isError ||
     ['installing', 'stopping'].includes(state?.status ?? '')
 
   const showPreflight = () => {
+    if (busy) return
     setPlan(null)
     preflight.reset()
     form.resetFields()
@@ -101,7 +121,7 @@ export function LogCollectionCard({ scope, localeCode }: { scope: ScopeKey; loca
   }
 
   const confirmEnable = async () => {
-    if (!plan?.planToken) return
+    if (!plan?.planToken || platformWriteBlocked || stateQuery.isError) return
     await enable.mutateAsync({ scope, input: { planToken: plan.planToken } })
     setOpen(false)
     setPlan(null)
@@ -111,14 +131,16 @@ export function LogCollectionCard({ scope, localeCode }: { scope: ScopeKey; loca
 
   return (
     <>
-      {stateQuery.isError ? (
-        <Alert
-          type="error"
-          showIcon
-          title={zh ? '日志采集状态加载失败' : 'Failed to load log collection status'}
-          description={(stateQuery.error as Error).message}
-        />
-      ) : (
+      {!open ? (
+        <>
+          <ReadFeedback canRead={stateQuery.isEnabled} query={stateQuery} label="日志采集状态" />
+          {preflight.feedback}
+          {enable.feedback}
+          {disable.feedback}
+        </>
+      ) : null}
+
+      {state ? (
         <>
           <Descriptions
             size="small"
@@ -165,7 +187,9 @@ export function LogCollectionCard({ scope, localeCode }: { scope: ScopeKey; loca
             ]}
           />
           {state?.lastError ? <Alert type="warning" showIcon title={state.lastError} /> : null}
-          {busy ? (
+          {enable.isPending ||
+          disable.isPending ||
+          ['installing', 'stopping'].includes(state.status) ? (
             <Alert
               type="info"
               showIcon
@@ -200,6 +224,7 @@ export function LogCollectionCard({ scope, localeCode }: { scope: ScopeKey; loca
               ) : null}
               {canDisable && state?.mode === 'soha_managed' && state.status !== 'disabled' ? (
                 <Popconfirm
+                  okButtonProps={{ disabled: platformWriteBlocked }}
                   title={zh ? '停止采集并保留历史日志？' : 'Stop collection and retain history?'}
                   onConfirm={() => disable.mutateAsync({ scope, input: { action: 'stop' } })}
                 >
@@ -210,6 +235,7 @@ export function LogCollectionCard({ scope, localeCode }: { scope: ScopeKey; loca
               ) : null}
               {canDisable && state?.mode === 'soha_managed' ? (
                 <Popconfirm
+                  okButtonProps={{ disabled: platformWriteBlocked }}
                   title={
                     zh
                       ? '卸载组件并保留历史存储？'
@@ -225,23 +251,28 @@ export function LogCollectionCard({ scope, localeCode }: { scope: ScopeKey; loca
             </Space>
           ) : null}
         </>
-      )}
+      ) : null}
 
       <Modal
+        okButtonProps={{ disabled: platformWriteBlocked }}
         open={open}
         width={720}
         title={zh ? '日志采集预检' : 'Log collection preflight'}
-        onCancel={() => !enable.isPending && setOpen(false)}
+        onCancel={() => {
+          if (!platformWriteBlocked) (() => !enable.isPending && setOpen(false))?.()
+        }}
         footer={
           plan ? (
             <Space>
-              <Button onClick={() => setPlan(null)} disabled={enable.isPending}>
+              <Button onClick={() => setPlan(null)} disabled={platformWriteBlocked}>
                 {zh ? '返回修改' : 'Back'}
               </Button>
               <Button
                 type="primary"
                 icon={<CheckCircleOutlined />}
-                disabled={!plan.canEnable || !plan.planToken}
+                disabled={
+                  platformWriteBlocked || stateQuery.isError || !plan.canEnable || !plan.planToken
+                }
                 loading={enable.isPending}
                 onClick={confirmEnable}
               >
@@ -258,6 +289,16 @@ export function LogCollectionCard({ scope, localeCode }: { scope: ScopeKey; loca
           )
         }
       >
+        <ReadFeedback canRead={stateQuery.isEnabled} query={stateQuery} label="日志采集状态" />
+        <ReadFeedback
+          canRead={dataSourcesQuery.isEnabled}
+          query={dataSourcesQuery}
+          label="日志数据源"
+        />
+        {preflight.feedback}
+        {enable.feedback}
+        {disable.feedback}
+
         {plan ? (
           <Space orientation="vertical" size="middle" className="w-full">
             <Descriptions
@@ -346,7 +387,7 @@ export function LogCollectionCard({ scope, localeCode }: { scope: ScopeKey; loca
                 >
                   <Select
                     loading={dataSourcesQuery.isLoading}
-                    options={(dataSourcesQuery.data ?? [])
+                    options={(visibleDataSourcesQueryData ?? [])
                       .filter((item) => item.backendType === 'loki' && item.enabled)
                       .map((item) => ({ label: item.name, value: item.id }))}
                   />
@@ -381,9 +422,6 @@ export function LogCollectionCard({ scope, localeCode }: { scope: ScopeKey; loca
                 <Input />
               </Form.Item>
             </Space>
-            {preflight.isError ? (
-              <Alert type="error" showIcon title={preflight.error.message} />
-            ) : null}
           </Form>
         )}
       </Modal>

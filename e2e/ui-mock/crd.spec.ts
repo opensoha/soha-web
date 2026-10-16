@@ -97,7 +97,7 @@ test('U09–U11: exact deletion confirmation, failure context, retry and duplica
   expect(catalog.deleteCalls).toEqual([])
   await input.fill(definitions[0].name)
   await submit.click()
-  await expect(dialog).toContainText('删除请求失败')
+  await expect(dialog).toContainText('删除 CRD 定义：操作请求失败')
   await expect(input).toHaveValue(definitions[0].name)
   expect(catalog.deleteCalls[0]).toContain('expectedUid=synthetic-uid-0')
   catalog.failDelete = false
@@ -105,6 +105,35 @@ test('U09–U11: exact deletion confirmation, failure context, retry and duplica
   await expect(dialog).toHaveCount(0)
   expect(catalog.deleteCalls).toHaveLength(2)
   expect(catalog.data.some((item) => item.uid === definitions[0].uid)).toBe(false)
+})
+
+test('U09: unknown deletion keeps the original confirmation and blocks another request', async ({
+  page,
+  catalog,
+}) => {
+  catalog.deleteFailureStatus = 503
+  await page.goto('/extensions')
+  await page.getByRole('button', { name: '删除 CRD 定义', exact: true }).first().click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByLabel('选择具体 CRD 定义').click()
+  await page.getByTitle(`${definitions[0].name} · Widget`, { exact: true }).click()
+  const input = dialog.getByLabel('输入完整 CRD 名称确认')
+  const submit = dialog.getByRole('button', { name: '删除定义及实例' })
+  await input.fill(definitions[0].name)
+  await submit.click()
+  await expect(dialog.locator('.soha-operation-feedback')).toContainText(
+    '删除 CRD 定义：请求结果不明',
+  )
+  await expect(dialog).toContainText('crd-delete-original-request')
+  await expect(dialog.locator('.soha-operation-feedback')).toHaveCount(1)
+  await expect(submit).toBeDisabled()
+  await expect(input).toBeDisabled()
+  await expect(input).toHaveValue(definitions[0].name)
+  await page.keyboard.press('Escape')
+  await expect(dialog).toBeVisible()
+  expect(catalog.deleteCalls).toHaveLength(1)
+  expect(catalog.deleteCalls[0]).toContain('expectedUid=synthetic-uid-0')
+  expect(catalog.data.some((item) => item.uid === definitions[0].uid)).toBe(true)
 })
 
 test('U12: no deletion permission removes dangerous UI entry', async ({ page, catalog }) => {

@@ -1,9 +1,9 @@
 /** @vitest-environment jsdom */
 
-import { act } from 'react'
-import type { ReactNode } from 'react'
-import { App as AntdApp } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { App as AntdApp } from 'antd'
+import type { ReactNode } from 'react'
+import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -63,7 +63,8 @@ vi.mock('@/stores/platform-scope-store', () => ({
   usePlatformScopeStore: () => testState.scope,
 }))
 
-vi.mock('@/i18n', () => ({
+vi.mock('@/i18n', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/i18n')>()),
   localeText: (localeCode: string, chinese: string, english: string) =>
     localeCode === 'zh_CN' ? chinese : english,
   useI18n: () => ({
@@ -252,7 +253,7 @@ describe('configuration leaf pages', () => {
       expect(container.textContent).toContain('Agent action or Kubernetes RBAC denied')
       expect(container.textContent).not.toContain('未找到')
       const retry = Array.from(container.querySelectorAll('button')).find(
-        (button) => button.textContent?.replace(/\s/g, '') === '重试',
+        (button) => button.getAttribute('aria-label') === '重试读取资源记录',
       )
       expect(retry).toBeDefined()
       const calls = apiGetMock.mock.calls.length

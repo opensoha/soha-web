@@ -1,12 +1,5 @@
-import { useMemo, useState } from 'react'
-import { App, Popconfirm, Space } from 'antd'
-import { DeleteOutlined, FormOutlined, ReloadOutlined } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
-import type { TableColumnsType } from 'antd'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementIconButton, ManagementTableToolbar } from '@/components/management-list'
-import { WorkloadCreateEntry } from '../shared/create-entry'
 import { TABLE_ACTIONS_COLUMN_CLASS_NAME } from '@/components/resource-actions'
 import { hasAllowedAction } from '@/features/auth'
 import {
@@ -14,6 +7,10 @@ import {
   useClusterCapability,
 } from '@/features/platform/cluster-capabilities'
 import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
+import {
+  platformResourceTarget,
+  usePlatformMutation,
+} from '@/features/platform/shared/use-platform-mutation'
 import {
   buildWorkloadDetailPath,
   includesSearch,
@@ -23,22 +20,30 @@ import {
   renderWorkloadNameLink,
   useWorkloadListAIContext,
   useWorkloadTableDensity,
-  workloadRowAIContext,
   WorkloadQueryPanel,
   WorkloadRefreshButton,
+  workloadRowAIContext,
   WorkloadSearchInput,
   WorkloadTableEmpty,
 } from '@/features/platform/workloads/shared/list-controls'
 import { WorkloadQuickEditModal } from '@/features/platform/workloads/shared/workload-quick-edit-modal'
+import '@/features/platform/workloads/styles.css'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
-import { formatAgeSeconds } from '@/utils/time'
+import { readableQueryData } from '@/utils/query-feedback'
 import { tableColumnPresets } from '@/utils/table-columns'
+import { formatAgeSeconds } from '@/utils/time'
+import { DeleteOutlined, FormOutlined, ReloadOutlined } from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TableColumnsType } from 'antd'
+import { Popconfirm, Space } from 'antd'
+import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { WorkloadCreateEntry } from '../shared/create-entry'
 import { daemonSetMutations } from './mutations'
 import { daemonSetQueries } from './queries'
 import type { DaemonSet, DaemonSetTarget } from './types'
-import '@/features/platform/workloads/styles.css'
 
 const WORKLOAD_ACTIONS_COLUMN_CLASS_NAME = `${TABLE_ACTIONS_COLUMN_CLASS_NAME} soha-workload-actions-column`
 
@@ -56,21 +61,28 @@ function isTargetMutationPending(
 
 export function WorkloadsDaemonSetsPage() {
   const { localeCode } = useI18n()
-  const { message } = App.useApp()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { clusterId, namespace } = usePlatformScopeStore()
   const listScope = toScopeKey(clusterId, namespace)
   const daemonSetsQuery = useQuery(daemonSetQueries.list(listScope))
-  const restartMutation = useMutation(daemonSetMutations.restart(queryClient))
-  const deleteMutation = useMutation(daemonSetMutations.remove(queryClient))
+  const visibleDaemonSetsQueryData = readableQueryData(daemonSetsQuery)
+  const restartMutation = usePlatformMutation(daemonSetMutations.restart(queryClient), {
+    label: ['重启工作负载', 'Restart workload'],
+    target: platformResourceTarget,
+  })
+  const deleteMutation = usePlatformMutation(daemonSetMutations.remove(queryClient), {
+    label: ['删除资源', 'Delete resource'],
+    target: platformResourceTarget,
+  })
+  const platformWriteBlocked = restartMutation.blocked || deleteMutation.blocked
   const [searchKeyword, setSearchKeyword] = useState('')
   const [editTarget, setEditTarget] = useState<DaemonSet | null>(null)
   const { densityButton, tableSize } = useWorkloadTableDensity(localeCode)
   const workloadMutationCapability = useClusterCapability('workload.mutations', localeCode)
   const yamlApplyCapability = useClusterCapability('resource.yaml.apply', localeCode)
 
-  const daemonSets = daemonSetsQuery.data ?? []
+  const daemonSets = visibleDaemonSetsQueryData ?? []
   const canShowActions = daemonSets.some(
     (item) =>
       (!yamlApplyCapability.disabled && hasAllowedAction(item.allowedActions, 'update')) ||
@@ -174,7 +186,7 @@ export function WorkloadsDaemonSetsPage() {
               <ManagementIconButton
                 icon={<FormOutlined />}
                 aria-label={`${localeCode === 'zh_CN' ? '编辑' : 'Edit'} ${name}`}
-                disabled={yamlApplyCapability.disabled}
+                disabled={platformWriteBlocked || yamlApplyCapability.disabled}
                 tooltip={capabilityActionTooltip(
                   localeCode === 'zh_CN' ? '编辑' : 'Edit',
                   yamlApplyCapability,
@@ -186,18 +198,10 @@ export function WorkloadsDaemonSetsPage() {
               <ManagementIconButton
                 icon={<ReloadOutlined />}
                 aria-label={restartLabel}
-                disabled={workloadMutationCapability.disabled}
+                disabled={platformWriteBlocked || workloadMutationCapability.disabled}
                 loading={isTargetMutationPending(restartMutation, name, record.namespace)}
                 tooltip={capabilityActionTooltip(restartLabel, workloadMutationCapability)}
-                onClick={() =>
-                  restartMutation.mutate(target, {
-                    onSuccess: () =>
-                      void message.success(
-                        localeCode === 'zh_CN' ? '已触发重启' : 'Restart triggered',
-                      ),
-                    onError: (error) => void message.error(error.message),
-                  })
-                }
+                onClick={() => restartMutation.mutate(target, {})}
               />
             ) : null}
             {canDelete && workloadMutationCapability.disabled ? (
@@ -219,17 +223,16 @@ export function WorkloadsDaemonSetsPage() {
                 }
                 okText={deleteLabel}
                 cancelText={localeCode === 'zh_CN' ? '取消' : 'Cancel'}
-                okButtonProps={{ danger: true, loading: deletePending }}
+                okButtonProps={{
+                  disabled: platformWriteBlocked,
+                  danger: true,
+                  loading: deletePending,
+                }}
                 placement="topRight"
-                onConfirm={() =>
-                  deleteMutation.mutate(target, {
-                    onSuccess: () =>
-                      void message.success(localeCode === 'zh_CN' ? '已删除' : 'Deleted'),
-                    onError: (error) => void message.error(error.message),
-                  })
-                }
+                onConfirm={() => deleteMutation.mutate(target, {})}
               >
                 <ManagementIconButton
+                  disabled={platformWriteBlocked}
                   danger
                   icon={<DeleteOutlined />}
                   aria-label={deleteLabel}
@@ -246,6 +249,9 @@ export function WorkloadsDaemonSetsPage() {
 
   return (
     <div className="soha-page">
+      {restartMutation.feedback}
+      {deleteMutation.feedback}
+
       <WorkloadQueryPanel
         hasActiveFilters={Boolean(searchKeyword.trim())}
         localeCode={localeCode}
@@ -261,6 +267,9 @@ export function WorkloadsDaemonSetsPage() {
         />
       </WorkloadQueryPanel>
       <AdminTable
+        error={daemonSetsQuery.isEnabled === false ? null : daemonSetsQuery.error}
+        hasReadData={daemonSetsQuery.data !== undefined}
+        onRetry={daemonSetsQuery.isEnabled === false ? undefined : () => daemonSetsQuery.refetch()}
         className="soha-daemonsets-table soha-platform-table"
         columnSettingIconOnly
         columnSettingPlacement="header"

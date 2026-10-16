@@ -1,4 +1,4 @@
-import { mutationOptions, type QueryClient } from '@tanstack/react-query'
+import type { ScopeKey } from '@/types'
 import type {
   AgentInstallation,
   LogCollectionDisableInput,
@@ -7,7 +7,7 @@ import type {
   LogCollectionPreflightInput,
   LogCollectionState,
 } from '@opensoha/contracts/gen/ts/sohaapi'
-import type { ScopeKey } from '@/types'
+import { mutationOptions, type QueryClient } from '@tanstack/react-query'
 import {
   createAgentInstallation,
   createCluster,
@@ -67,10 +67,10 @@ export const clusterMutations = {
       onSuccess: (_data, variables) => invalidateClusterTarget(queryClient, variables),
     }),
   removeMany: (queryClient: QueryClient) =>
-    mutationOptions<void, Error, DeleteClustersVariables>({
+    mutationOptions<PromiseSettledResult<void>[], Error, DeleteClustersVariables>({
       mutationKey: [...clusterKeys.all, 'delete-many'] as const,
       mutationFn: async ({ scopes }) => {
-        await Promise.all(scopes.map((scope) => deleteCluster({ scope })))
+        return Promise.allSettled(scopes.map((scope) => deleteCluster({ scope })))
       },
       onSuccess: async (_data, { scopes }) => {
         await Promise.all([

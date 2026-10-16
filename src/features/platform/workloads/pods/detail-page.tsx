@@ -1,20 +1,13 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
-import { CodeOutlined, FileTextOutlined } from '@ant-design/icons'
-import { Button, Card, Descriptions, Select, Space, Spin, Tag, Tooltip, Typography } from 'antd'
-import { useQuery } from '@tanstack/react-query'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
 import { ResourceEventsTimeline } from '@/components/resource-events-timeline'
 import { BooleanTag, StatusTag } from '@/components/status-tag'
 import { TableCellText } from '@/components/table-cell-content'
 import { hasAllowedAction, hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useAIPageContext } from '@/features/copilot'
-import { useI18n } from '@/i18n'
 import { useClusterCapability } from '@/features/platform/cluster-capabilities'
 import { useRealtimeSessionDock } from '@/features/platform/session-dock'
-import { formatDateTime } from '@/utils/time'
-import { tableColumnPresets } from '@/utils/table-columns'
 import {
   buildRelatedResourcePath,
   buildVolumeDetailPath,
@@ -24,6 +17,8 @@ import {
   localizeRelatedRelation,
   localizeRelatedResourceKind,
 } from '@/features/platform/workloads-model'
+import '@/features/platform/workloads/styles.css'
+import { useI18n } from '@/i18n'
 import type {
   PodRelatedResource,
   PodVolume,
@@ -31,11 +26,18 @@ import type {
   WorkloadCondition,
   WorkloadContainer,
 } from '@/types'
+import { readableQueryData } from '@/utils/query-feedback'
+import { tableColumnPresets } from '@/utils/table-columns'
+import { formatDateTime } from '@/utils/time'
+import { CodeOutlined, FileTextOutlined } from '@ant-design/icons'
+import { useQuery } from '@tanstack/react-query'
 import type { TableColumnsType, TabsProps } from 'antd'
-import { WorkloadDetailShell } from '../shared/detail-shell'
+import { Button, Card, Descriptions, Select, Space, Spin, Tag, Tooltip, Typography } from 'antd'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useWorkloadDetailScope } from '../shared/detail-scope'
+import { WorkloadDetailShell } from '../shared/detail-shell'
 import { podQueries } from './queries'
-import '@/features/platform/workloads/styles.css'
 
 const { Link, Text } = Typography
 
@@ -157,24 +159,33 @@ export function PodDetailPage() {
       : 'Reading terminal capability for the current cluster.'
   const detailScope = { clusterId, namespace: detailNamespace }
   const podDetailQuery = useQuery(podQueries.detail(detailScope, podName))
+  const visiblePodDetailQueryData = readableQueryData(podDetailQuery)
   const podMetricsQueryOptions = podQueries.metrics(detailScope, podName, metricsRangeMinutes)
   const podMetricsQuery = useQuery({
     ...podMetricsQueryOptions,
     enabled: Boolean(podMetricsQueryOptions.enabled) && activeTabKey === 'metrics',
   })
+  const visiblePodMetricsQueryData =
+    Boolean(podMetricsQueryOptions.enabled) && activeTabKey === 'metrics'
+      ? readableQueryData(podMetricsQuery)
+      : undefined
   const podEventsQueryOptions = podQueries.events(detailScope, podName)
   const podEventsQuery = useQuery({
     ...podEventsQueryOptions,
     enabled: Boolean(podEventsQueryOptions.enabled) && activeTabKey === 'events',
   })
+  const visiblePodEventsQueryData =
+    Boolean(podEventsQueryOptions.enabled) && activeTabKey === 'events'
+      ? readableQueryData(podEventsQuery)
+      : undefined
 
   const containerOptions = useMemo(
     () =>
-      (podDetailQuery.data?.containers ?? []).map((item) => ({
+      (visiblePodDetailQueryData?.containers ?? []).map((item) => ({
         value: item.name,
         label: item.name,
       })),
-    [podDetailQuery.data?.containers],
+    [visiblePodDetailQueryData?.containers],
   )
 
   useEffect(() => {
@@ -184,7 +195,7 @@ export function PodDetailPage() {
     }
   }, [container, containerOptions])
 
-  const podDetail = podDetailQuery.data
+  const podDetail = visiblePodDetailQueryData
   const logsAllowedByPolicy = hasAllowedAction(podDetail?.allowedActions, 'logs')
   const logsDisabled =
     podLogsCapability.isLoading || podLogsCapability.disabled || !logsAllowedByPolicy
@@ -262,10 +273,10 @@ export function PodDetailPage() {
   })
   const podTimelineEvents = useMemo(
     () =>
-      podEventsQuery.data?.length
-        ? podEventsQuery.data
+      visiblePodEventsQueryData?.length
+        ? visiblePodEventsQueryData
         : (podDetail?.conditions ?? []).map(conditionToTimelineEvent),
-    [podDetail, podEventsQuery.data],
+    [podDetail, visiblePodEventsQueryData],
   )
   const podVolumes = podDetail?.volumes ?? []
   const podRelatedResources = podDetail?.relatedResources ?? []
@@ -539,7 +550,7 @@ export function PodDetailPage() {
       activeTabKey === 'metrics' ? (
         <Suspense fallback={<Spin size="large" />}>
           <ResourceMetricsPanel
-            data={podMetricsQuery.data}
+            data={visiblePodMetricsQueryData}
             loading={podMetricsQuery.isLoading}
             rangeMinutes={metricsRangeMinutes}
             onRangeChange={setMetricsRangeMinutes}
@@ -759,22 +770,27 @@ export function PodDetailPage() {
   }
 
   return (
-    <WorkloadDetailShell
-      title="Pod"
-      resource="pods"
-      paramKey="podName"
-      extraOverview={runtimeOverview}
-      extraTabPanes={[
-        ...(canViewPodLogs ? [logsTab] : []),
-        ...(canExecPod ? [terminalTab] : []),
-        eventsTab,
-        volumesTab,
-        relatedResourcesTab,
-        metricsTab,
-      ]}
-      activeTabKey={activeTabKey}
-      onTabChange={setActiveTabKey}
-      yamlLast
-    />
+    <>
+      <ReadFeedback canRead={podDetailQuery.isEnabled} query={podDetailQuery} label="Pod 详情" />
+      <ReadFeedback canRead={podMetricsQuery.isEnabled} query={podMetricsQuery} label="Pod 指标" />
+      <ReadFeedback canRead={podEventsQuery.isEnabled} query={podEventsQuery} label="Pod 事件" />
+      <WorkloadDetailShell
+        title="Pod"
+        resource="pods"
+        paramKey="podName"
+        extraOverview={runtimeOverview}
+        extraTabPanes={[
+          ...(canViewPodLogs ? [logsTab] : []),
+          ...(canExecPod ? [terminalTab] : []),
+          eventsTab,
+          volumesTab,
+          relatedResourcesTab,
+          metricsTab,
+        ]}
+        activeTabKey={activeTabKey}
+        onTabChange={setActiveTabKey}
+        yamlLast
+      />
+    </>
   )
 }
