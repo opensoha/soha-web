@@ -184,6 +184,11 @@ for (const theme of ['light', 'dark'])
       )
       const evidence = await installMocks(context, page, (url, method, request) => {
         const path = url.pathname
+        if (method === 'GET' && /^\/api\/v1\/copilot\/sessions\/[^/]+\/native-request$/.test(path))
+          return {
+            status: 404,
+            body: { error: { code: 'not_found', message: 'No native request receipt' } },
+          }
         if (path === '/api/v1/copilot/assistant/access')
           return { body: { data: { userId: 'user-1', status: 'approved', version: 1 } } }
         if (path === '/api/v1/copilot/assistant/feed')

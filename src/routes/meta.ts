@@ -1,5 +1,4 @@
 import { getMenuSectionOrder, normalizeMenuSection } from '@/features/system/menu-schema'
-import { registeredRouteDefinitions, routeMeta } from './registry'
 import type {
   BusinessWorkspaceType,
   PermissionSnapshot,
@@ -8,6 +7,7 @@ import type {
   VisibleMenu,
   WorkspaceType,
 } from '@/types'
+import { registeredRouteDefinitions, routeMeta } from './registry'
 
 const WORKSPACE_PERMISSION_KEYS: Record<BusinessWorkspaceType, string> = {
   application: 'workspace.application.view',
@@ -207,6 +207,8 @@ export function getRouteWorkspace(route: RouteMeta): WorkspaceType | null {
 }
 
 function deriveWorkbenchIdFromPath(pathname: string): WorkbenchId | null {
+  // The legacy About URL is an account utility, independent of settings permissions.
+  if (pathname === '/settings/about') return null
   if (pathname.startsWith('/portal')) {
     return 'home'
   }

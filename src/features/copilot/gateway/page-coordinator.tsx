@@ -1,20 +1,30 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import {
+  ManagementIconButton,
+  ManagementState,
+  useManagementTextFilter,
+} from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { useAuthStore } from '@/stores/auth-store'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import { tableColumnPresets } from '@/utils/table-columns'
 import {
   CheckOutlined,
   CloseOutlined,
   CopyOutlined,
   DeleteOutlined,
   EditOutlined,
-  LinkOutlined,
   KeyOutlined,
+  LinkOutlined,
   ReloadOutlined,
   StopOutlined,
 } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { TableColumnsType } from 'antd'
 import {
   Alert,
-  App,
   Button,
   Descriptions,
   Form,
@@ -24,48 +34,24 @@ import {
   Space,
   Typography,
 } from 'antd'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { gatewayKeys } from './keys'
 import {
-  ManagementIconButton,
-  ManagementState,
-  useManagementTextFilter,
-} from '@/components/management-list'
-import { MetadataTag, StatusTag } from '@/components/status-tag'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
-import { useAuthStore } from '@/stores/auth-store'
-import { tableColumnPresets } from '@/utils/table-columns'
-import {
-  accessPolicyFormValuesFromRecord,
-  approvalTrace,
-  asRecord,
-  auditActionOptions,
-  defaultGatewayTabForSection,
-  firstNumber,
-  firstValue,
-  firstString,
-  gatewayTokenPurposeFromRecord,
-  gatewayTokenPurposeOptions,
-  gatewaySectionPaths,
-  gatewayTabBelongsToSection,
-  gatewayTabSectionMap,
-  jsonTextFromRecord,
-  governanceApprovalQueueRows,
-  governanceCoverageDrilldown,
-  governanceCoverageRows,
-  governanceFindingDrilldownActions,
-  governanceQueueDrilldown,
-  governanceRecommendationDrilldownAction,
-  governanceTokenFindingDrilldown,
-  normalizeGatewayTabKey,
-  normalizeRateLimitMode,
-  scopeFieldDefs,
-  scopeValuesFromRecord,
-  stringifyPayload,
-  workflowTracePath,
-} from './types'
+  decideGatewayApproval,
+  deleteGatewayResource,
+  disableGatewayClient,
+  disableGatewayUpstream,
+  rotateGatewayToken,
+  testGatewayUpstream,
+  testGatewayUpstreamDraft,
+  upsertGatewayResource,
+} from './mutations'
+import { compactList, formatDateTime } from './presentation'
+import { gatewayQueries } from './queries'
 import type {
-  AIClient,
   AccessPolicy,
+  AIClient,
   ApprovalFilterState,
   ApprovalRequest,
   AuditFilterState,
@@ -86,8 +72,8 @@ import type {
   LLMCallLog,
   LLMModelRoute,
   LLMRelayMetrics,
-  LLMUpstream,
   LLMTokenMetadata,
+  LLMUpstream,
   ModelCallFilterState,
   PersonalAccessToken,
   ServiceAccount,
@@ -95,19 +81,35 @@ import type {
   SkillBinding,
   ToolGrant,
 } from './types'
-import { gatewayKeys } from './keys'
 import {
-  decideGatewayApproval,
-  deleteGatewayResource,
-  disableGatewayClient,
-  disableGatewayUpstream,
-  rotateGatewayToken,
-  testGatewayUpstream,
-  testGatewayUpstreamDraft,
-  upsertGatewayResource,
-} from './mutations'
-import { gatewayQueries } from './queries'
-import { compactList, formatDateTime } from './presentation'
+  accessPolicyFormValuesFromRecord,
+  approvalTrace,
+  asRecord,
+  auditActionOptions,
+  defaultGatewayTabForSection,
+  firstNumber,
+  firstString,
+  firstValue,
+  gatewaySectionPaths,
+  gatewayTabBelongsToSection,
+  gatewayTabSectionMap,
+  gatewayTokenPurposeFromRecord,
+  gatewayTokenPurposeOptions,
+  governanceApprovalQueueRows,
+  governanceCoverageDrilldown,
+  governanceCoverageRows,
+  governanceFindingDrilldownActions,
+  governanceQueueDrilldown,
+  governanceRecommendationDrilldownAction,
+  governanceTokenFindingDrilldown,
+  jsonTextFromRecord,
+  normalizeGatewayTabKey,
+  normalizeRateLimitMode,
+  scopeFieldDefs,
+  scopeValuesFromRecord,
+  stringifyPayload,
+  workflowTracePath,
+} from './types'
 
 const GatewayRelaySection = lazy(() =>
   import('./sections/models').then((module) => ({
@@ -555,7 +557,6 @@ function isPendingApproval(record: ApprovalRequest) {
 }
 
 export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey }) {
-  const { message } = App.useApp()
   const [form] = Form.useForm<GatewayDrawerFormValues>()
   const [decisionForm] = Form.useForm<{ comment?: string }>()
   const queryClient = useQueryClient()
@@ -565,6 +566,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
     title: string
     value: string
     prefix?: string
+    source: 'personal' | 'service'
   } | null>(null)
   const [decisionTarget, setDecisionTarget] = useState<{
     action: 'approve' | 'reject' | 'cancel'
@@ -630,7 +632,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
   const [governanceWindowHours, setGovernanceWindowHours] = useState('24')
   const currentUser = useAuthStore((state) => state.user)
   const permissionSnapshot = usePermissionSnapshot()
-  const snapshot = permissionSnapshot.data?.data
+  const snapshot = readableQueryData(permissionSnapshot)?.data
   const canView = hasPermission(snapshot, 'ai.gateway.view')
   const canInvoke = hasPermission(snapshot, 'ai.gateway.invoke')
   const canViewApprovals = hasPermission(snapshot, 'ai.gateway.approvals.view')
@@ -751,21 +753,37 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
     ),
   )
 
-  const clients = clientsQuery.data?.data ?? []
-  const personalTokens = personalTokensQuery.data?.data ?? []
-  const relayMetrics = relayMetricsQuery.data?.data
-  const upstreams = upstreamsQuery.data?.data ?? []
-  const modelRoutes = modelRoutesQuery.data?.data ?? []
-  const modelCalls = modelCallsQuery.data?.data ?? []
-  const serviceAccounts = serviceAccountsQuery.data?.data ?? []
-  const serviceAccountTokens = serviceAccountTokensQuery.data?.data ?? []
-  const grants = grantsQuery.data?.data ?? []
-  const policies = policiesQuery.data?.data ?? []
-  const bindings = bindingsQuery.data?.data ?? []
-  const manifest = manifestQuery.data?.data
-  const auditLogs = auditQuery.data?.data ?? []
-  const approvalRequests = approvalsQuery.data?.data ?? []
-  const governanceStatus = governanceQuery.data?.data
+  const clients = (clientsQuery.isEnabled ? readableQueryData(clientsQuery)?.data : undefined) ?? []
+  const personalTokens =
+    (personalTokensQuery.isEnabled ? readableQueryData(personalTokensQuery)?.data : undefined) ?? []
+  const relayMetrics = relayMetricsQuery.isEnabled
+    ? readableQueryData(relayMetricsQuery)?.data
+    : undefined
+  const upstreams =
+    (upstreamsQuery.isEnabled ? readableQueryData(upstreamsQuery)?.data : undefined) ?? []
+  const modelRoutes =
+    (modelRoutesQuery.isEnabled ? readableQueryData(modelRoutesQuery)?.data : undefined) ?? []
+  const modelCalls =
+    (modelCallsQuery.isEnabled ? readableQueryData(modelCallsQuery)?.data : undefined) ?? []
+  const serviceAccounts =
+    (serviceAccountsQuery.isEnabled ? readableQueryData(serviceAccountsQuery)?.data : undefined) ??
+    []
+  const serviceAccountTokens =
+    (serviceAccountTokensQuery.isEnabled
+      ? readableQueryData(serviceAccountTokensQuery)?.data
+      : undefined) ?? []
+  const grants = (grantsQuery.isEnabled ? readableQueryData(grantsQuery)?.data : undefined) ?? []
+  const policies =
+    (policiesQuery.isEnabled ? readableQueryData(policiesQuery)?.data : undefined) ?? []
+  const bindings =
+    (bindingsQuery.isEnabled ? readableQueryData(bindingsQuery)?.data : undefined) ?? []
+  const manifest = manifestQuery.isEnabled ? readableQueryData(manifestQuery)?.data : undefined
+  const auditLogs = (auditQuery.isEnabled ? readableQueryData(auditQuery)?.data : undefined) ?? []
+  const approvalRequests =
+    (approvalsQuery.isEnabled ? readableQueryData(approvalsQuery)?.data : undefined) ?? []
+  const governanceStatus = governanceQuery.isEnabled
+    ? readableQueryData(governanceQuery)?.data
+    : undefined
   const filteredClients = useManagementTextFilter(clients, clientFilter, (item) => [
     item.id,
     item.name,
@@ -887,123 +905,166 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
       setGrantFilter(target.grantFilter)
     }
     if (target.serviceTokenRevokeId) {
-      setDrawer({
+      openDrawer({
         kind: 'service-token-revoke',
         initialValues: { tokenId: target.serviceTokenRevokeId },
       })
     }
     if (target.policyDraft) {
-      setDrawer({ kind: 'access-policy', initialValues: target.policyDraft })
+      openDrawer({ kind: 'access-policy', initialValues: target.policyDraft })
     }
   }
 
   const refreshAll = () => queryClient.invalidateQueries({ queryKey: gatewayKeys.all })
 
-  const upsertMutation = useMutation({
-    mutationFn: async (values: GatewayDrawerFormValues) => {
-      return drawer ? upsertGatewayResource(drawer, values) : null
+  const secretGeneration = useRef(0)
+  const secretRights = useRef({ personal: false, service: false })
+  secretRights.current = {
+    personal:
+      (canInvoke || canCreateTokens || canRotateTokens) && !queryAccessDenied(personalTokensQuery),
+    service: (canCreateTokens || canRotateTokens) && !queryAccessDenied(serviceAccountTokensQuery),
+  }
+  const upsertMutation = useOperationMutation(
+    {
+      gcTime: 0,
+      mutationFn: async (input: { drawer: DrawerState; values: GatewayDrawerFormValues }) => {
+        const generation = secretGeneration.current
+        const response = await upsertGatewayResource(input.drawer, input.values)
+        const result = asRecord(response?.data)
+        const token = asRecord(result.token)
+        const source = input.drawer.kind === 'service-token' ? 'service' : 'personal'
+        if (
+          generation === secretGeneration.current &&
+          secretRights.current[source] &&
+          typeof result.value === 'string'
+        ) {
+          setOneTimeToken({
+            title: source === 'service' ? '服务账号 token' : 'Personal access token',
+            value: result.value,
+            prefix: typeof token.tokenPrefix === 'string' ? token.tokenPrefix : undefined,
+            source,
+          })
+        }
+        return { id: String(result.id || token.id || input.values.id || '') }
+      },
+      onSuccess: () => {
+        setDrawer(null)
+        form.resetFields()
+        void refreshAll()
+      },
     },
-    onSuccess: (res: any) => {
-      const value = res?.data?.value
-      const token = res?.data?.token
-      if (value) {
-        setOneTimeToken({
-          title: drawer?.kind === 'service-token' ? '服务账号 token' : 'Personal access token',
-          value,
-          prefix: token?.tokenPrefix,
-        })
-      }
-      setDrawer(null)
-      void refreshAll()
-      message.success('已保存')
+    {
+      label: ['保存 Gateway 配置', 'Save Gateway configuration'],
+      target: (input) =>
+        String(
+          asRecord(input.drawer.record).id ||
+            input.values.name ||
+            input.values.id ||
+            input.drawer.kind,
+        ),
+      receipt: (result) => ({ message: 'Gateway 配置请求已返回', evidence: result.id }),
     },
-    onError: (error: Error) => message.error(error.message),
-  })
-
-  const deleteMutation = useMutation({
-    mutationFn: ({
-      kind,
-      id,
-    }: {
-      kind: 'grant' | 'policy' | 'binding' | 'personal-token' | 'model-route'
-      id: string
-    }) => {
-      return deleteGatewayResource(kind, id)
+  )
+  const deleteMutation = useOperationMutation(
+    {
+      mutationFn: ({
+        kind,
+        id,
+      }: {
+        kind: 'grant' | 'policy' | 'binding' | 'personal-token' | 'model-route'
+        id: string
+      }) => deleteGatewayResource(kind, id),
+      onSuccess: () => {
+        void refreshAll()
+      },
     },
-    onSuccess: () => {
-      void refreshAll()
-      message.success('已更新')
+    { label: ['更新 Gateway 记录', 'Update Gateway record'], target: (input) => input.id },
+  )
+  const rotateTokenMutation = useOperationMutation(
+    {
+      gcTime: 0,
+      mutationFn: async (input: { kind: 'personal-token' | 'service-token'; id: string }) => {
+        const generation = secretGeneration.current
+        const response = await rotateGatewayToken(input.kind, input.id)
+        const result = asRecord(response.data)
+        const token = asRecord(result.token)
+        const source = input.kind === 'service-token' ? 'service' : 'personal'
+        if (
+          generation === secretGeneration.current &&
+          secretRights.current[source] &&
+          typeof result.value === 'string'
+        ) {
+          setOneTimeToken({
+            title: source === 'service' ? '服务账号 token 已轮换' : 'Personal access token 已轮换',
+            value: result.value,
+            prefix: typeof token.tokenPrefix === 'string' ? token.tokenPrefix : undefined,
+            source,
+          })
+        }
+        return { id: String(token.id || input.id) }
+      },
+      onSuccess: () => {
+        void refreshAll()
+      },
     },
-    onError: (error: Error) => message.error(error.message),
-  })
-
-  const rotateTokenMutation = useMutation({
-    mutationFn: ({ kind, id }: { kind: 'personal-token' | 'service-token'; id: string }) =>
-      rotateGatewayToken(kind, id),
-    onSuccess: (res: any, variables) => {
-      const value = res?.data?.value
-      const token = res?.data?.token
-      if (value) {
-        setOneTimeToken({
-          title:
-            variables.kind === 'service-token'
-              ? '服务账号 token 已轮换'
-              : 'Personal access token 已轮换',
-          value,
-          prefix: token?.tokenPrefix,
-        })
-      }
-      void refreshAll()
-      message.success('已轮换')
+    {
+      label: ['轮换 Gateway token', 'Rotate Gateway token'],
+      target: (input) => input.id,
+      receipt: (result) => ({ message: 'Gateway token 轮换记录已返回', evidence: result.id }),
     },
-    onError: (error: Error) => message.error(error.message),
-  })
-
-  const disableClientMutation = useMutation({
-    mutationFn: disableGatewayClient,
-    onSuccess: () => {
-      void refreshAll()
-      message.success('已禁用')
+  )
+  const disableClientMutation = useOperationMutation(
+    {
+      mutationFn: disableGatewayClient,
+      onSuccess: () => {
+        void refreshAll()
+      },
     },
-    onError: (error: Error) => message.error(error.message),
-  })
-
-  const disableUpstreamMutation = useMutation({
-    mutationFn: disableGatewayUpstream,
-    onSuccess: () => {
-      void refreshAll()
-      message.success('已禁用')
+    { label: ['禁用 Gateway client', 'Disable Gateway client'], target: (record) => record.id },
+  )
+  const disableUpstreamMutation = useOperationMutation(
+    {
+      mutationFn: disableGatewayUpstream,
+      onSuccess: () => {
+        void refreshAll()
+      },
     },
-    onError: (error: Error) => message.error(error.message),
-  })
-
-  const testUpstreamMutation = useMutation({
-    mutationFn: (
-      target:
-        | { record: LLMUpstream; importModels?: boolean }
-        | { values: GatewayDrawerFormValues; importModels: true },
-    ) =>
-      'record' in target
-        ? testGatewayUpstream(target.record)
-        : testGatewayUpstreamDraft(target.values),
-    onSuccess: (response, target) => {
-      const result = response.data
-      if (result.status !== 'success') {
-        message.error(
-          result.errorMessage ||
-            `连接失败${result.httpStatus ? `（HTTP ${result.httpStatus}）` : ''}`,
-        )
-        return
-      }
-      if (target.importModels && result.models?.length) {
-        form.setFieldValue('supportedModels', result.models)
-      }
-      message.success(`连接成功，发现 ${result.modelCount ?? result.models?.length ?? 0} 个模型`)
+    { label: ['禁用模型上游', 'Disable model upstream'], target: (record) => record.id },
+  )
+  const testUpstreamMutation = useOperationMutation(
+    {
+      gcTime: 0,
+      mutationFn: (
+        target:
+          | { record: LLMUpstream; importModels?: boolean }
+          | { values: GatewayDrawerFormValues; importModels: true },
+      ) =>
+        'record' in target
+          ? testGatewayUpstream(target.record)
+          : testGatewayUpstreamDraft(target.values),
+      onSuccess: (response, target) => {
+        const result = response.data
+        if (result.status === 'success' && target.importModels && result.models?.length)
+          form.setFieldValue('supportedModels', result.models)
+      },
     },
-    onError: (error: Error) => message.error(error.message),
-  })
-
+    {
+      label: ['验证模型上游', 'Validate model upstream'],
+      target: (input) =>
+        'record' in input ? input.record.id : String(input.values.name || '当前上游草稿'),
+      readOnly: true,
+      resultError: (response) =>
+        response.data.status === 'success'
+          ? undefined
+          : new Error(response.data.errorMessage || '上游连接验证失败'),
+      receipt: (response) => ({
+        message: '上游验证已返回',
+        evidence: `发现 ${response.data.modelCount ?? response.data.models?.length ?? 0} 个模型；未发起模型推理。`,
+      }),
+    },
+  )
   const testUpstreamFromForm = () => {
+    if (blocked) return
     const fields = drawer?.record
       ? ['name', 'providerKind', 'baseUrl']
       : ['name', 'providerKind', 'baseUrl', 'apiKey']
@@ -1020,18 +1081,113 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
       () => undefined,
     )
   }
-
-  const decisionMutation = useMutation({
-    mutationFn: decideGatewayApproval,
-    onSuccess: (res) => {
-      void refreshAll()
+  const decisionMutation = useOperationMutation(
+    {
+      mutationFn: decideGatewayApproval,
+      onSuccess: () => {
+        void refreshAll()
+        setDecisionTarget(null)
+        decisionForm.resetFields()
+      },
+    },
+    {
+      label: ['更新 Gateway 审批', 'Update Gateway approval'],
+      target: (input) => input.id,
+      receipt: (result) => ({
+        message: 'Gateway 审批记录已返回',
+        evidence: `${result.data.request.id} · ${result.data.request.status}`,
+      }),
+    },
+  )
+  const blocked =
+    upsertMutation.blocked ||
+    deleteMutation.blocked ||
+    rotateTokenMutation.blocked ||
+    disableClientMutation.blocked ||
+    disableUpstreamMutation.blocked ||
+    testUpstreamMutation.blocked ||
+    decisionMutation.blocked
+  const drawerQuery = drawer
+    ? {
+        'ai-client': clientsQuery,
+        'relay-upstream': upstreamsQuery,
+        'relay-route': modelRoutesQuery,
+        'personal-token': personalTokensQuery,
+        'service-account': serviceAccountsQuery,
+        'service-token': serviceAccountTokensQuery,
+        'service-token-revoke': serviceAccountTokensQuery,
+        'tool-grant': grantsQuery,
+        'access-policy': policiesQuery,
+        'skill-binding': bindingsQuery,
+      }[drawer.kind]
+    : undefined
+  const drawerAllowed =
+    !drawer ||
+    {
+      'ai-client': drawer.record ? canUpdateClients : canCreateClients,
+      'relay-upstream': drawer.record ? canRelayUpdate : canRelayCreate,
+      'relay-route': drawer.record ? canRelayUpdate : canRelayCreate,
+      'personal-token': canInvoke || canCreateTokens,
+      'service-account': canCreateTokens,
+      'service-token': canCreateTokens,
+      'service-token-revoke': canRevokeTokens,
+      'tool-grant': canCreateGrants,
+      'access-policy': drawer.record ? canUpdatePolicies : canCreatePolicies,
+      'skill-binding': drawer.record ? canUpdateSkills : canCreateSkills,
+    }[drawer.kind]
+  const drawerDenied =
+    !drawerAllowed ||
+    Boolean(drawerQuery && queryAccessDenied(drawerQuery)) ||
+    queryAccessDenied(upsertMutation)
+  useEffect(() => {
+    if (drawerDenied) {
+      setDrawer(null)
+      form.resetFields()
+      secretGeneration.current += 1
+    }
+  }, [drawerDenied, form])
+  const decisionDenied =
+    !canViewApprovals || queryAccessDenied(approvalsQuery) || queryAccessDenied(decisionMutation)
+  useEffect(() => {
+    if (decisionDenied) {
       setDecisionTarget(null)
       decisionForm.resetFields()
-      const status = res.data.request.status
-      message.success(status === 'executed' ? '已批准并执行' : '已更新审批请求')
+    }
+  }, [decisionDenied, decisionForm])
+  useEffect(() => {
+    if (
+      !canUseGateway ||
+      (oneTimeToken && !secretRights.current[oneTimeToken.source]) ||
+      queryAccessDenied(upsertMutation) ||
+      queryAccessDenied(rotateTokenMutation)
+    ) {
+      secretGeneration.current += 1
+      setOneTimeToken(null)
+    }
+  }, [
+    canUseGateway,
+    canInvoke,
+    canCreateTokens,
+    canRotateTokens,
+    personalTokensQuery.error,
+    serviceAccountTokensQuery.error,
+    upsertMutation.error,
+    rotateTokenMutation.error,
+    oneTimeToken,
+  ])
+  useEffect(
+    () => () => {
+      secretGeneration.current += 1
     },
-    onError: (error: Error) => message.error(error.message),
-  })
+    [],
+  )
+  function openDrawer(next: DrawerState) {
+    if (blocked) return
+    upsertMutation.reset()
+    testUpstreamMutation.reset()
+    form.resetFields()
+    setDrawer(next)
+  }
 
   const aiClientColumns: TableColumnsType<AIClient> = [
     {
@@ -1071,10 +1227,11 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
             tooltip="编辑"
             aria-label="编辑 client"
             icon={<EditOutlined />}
-            disabled={!canUpdateClients}
-            onClick={() => setDrawer({ kind: 'ai-client', record })}
+            disabled={blocked || !canUpdateClients}
+            onClick={() => openDrawer({ kind: 'ai-client', record })}
           />
           <Popconfirm
+            disabled={blocked}
             title="确认禁用 client？"
             description="该操作会立即更新 AI Gateway 控制面。"
             okButtonProps={{ danger: true, loading: disableClientMutation.isPending }}
@@ -1087,7 +1244,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
               danger
               icon={<StopOutlined />}
               loading={disableClientMutation.isPending}
-              disabled={!canUpdateClients || record.status === 'disabled'}
+              disabled={blocked || !canUpdateClients || record.status === 'disabled'}
             />
           </Popconfirm>
         </Space>
@@ -1166,7 +1323,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
             tooltip="测试连接"
             aria-label="测试上游连接"
             icon={<CheckOutlined />}
-            disabled={!canRelayTest || record.status === 'disabled'}
+            disabled={blocked || !canRelayTest || record.status === 'disabled'}
             loading={
               testUpstreamMutation.isPending &&
               !!testUpstreamMutation.variables &&
@@ -1181,10 +1338,11 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
             tooltip="编辑"
             aria-label="编辑上游"
             icon={<EditOutlined />}
-            disabled={!canRelayUpdate}
-            onClick={() => setDrawer({ kind: 'relay-upstream', record })}
+            disabled={blocked || !canRelayUpdate}
+            onClick={() => openDrawer({ kind: 'relay-upstream', record })}
           />
           <Popconfirm
+            disabled={blocked}
             title="禁用上游？"
             description="该操作会停止新的模型中转请求选择该上游。"
             okButtonProps={{ danger: true, loading: disableUpstreamMutation.isPending }}
@@ -1197,7 +1355,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
               danger
               icon={<StopOutlined />}
               loading={disableUpstreamMutation.isPending}
-              disabled={!canRelayUpdate || record.status === 'disabled'}
+              disabled={blocked || !canRelayUpdate || record.status === 'disabled'}
             />
           </Popconfirm>
         </Space>
@@ -1274,9 +1432,9 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
             tooltip="复制"
             aria-label="复制模型路由"
             icon={<CopyOutlined />}
-            disabled={!canRelayCreate}
+            disabled={blocked || !canRelayCreate}
             onClick={() =>
-              setDrawer({
+              openDrawer({
                 kind: 'relay-route',
                 initialValues: {
                   ...record,
@@ -1296,10 +1454,11 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
             tooltip="编辑"
             aria-label="编辑模型路由"
             icon={<EditOutlined />}
-            disabled={!canRelayUpdate}
-            onClick={() => setDrawer({ kind: 'relay-route', record })}
+            disabled={blocked || !canRelayUpdate}
+            onClick={() => openDrawer({ kind: 'relay-route', record })}
           />
           <Popconfirm
+            disabled={blocked}
             title="删除模型路由？"
             description="删除后该 public model 不再使用这条路由。"
             okButtonProps={{ danger: true, loading: deleteMutation.isPending }}
@@ -1311,7 +1470,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
               aria-label="删除模型路由"
               danger
               icon={<DeleteOutlined />}
-              disabled={!canRelayDelete}
+              disabled={blocked || !canRelayDelete}
             />
           </Popconfirm>
         </Space>
@@ -1441,6 +1600,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
         return (
           <Space className="soha-row-action-icons">
             <Popconfirm
+              disabled={blocked}
               title="轮换 personal login key？"
               description="旧 key 会被吊销，新明文只展示一次。只有 owner 本人可以轮换。"
               okButtonProps={{ loading: rotateTokenMutation.isPending }}
@@ -1454,10 +1614,11 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
                 aria-label="轮换 personal login key"
                 icon={<ReloadOutlined />}
                 loading={rotateTokenMutation.isPending}
-                disabled={!canRotate || !!record.revokedAt}
+                disabled={blocked || !canRotate || !!record.revokedAt}
               />
             </Popconfirm>
             <Popconfirm
+              disabled={blocked}
               title="吊销 personal login key？"
               description="吊销后该 key 将不能再登录或调用 AI Gateway，审计记录会保留。"
               okButtonProps={{ danger: true, loading: deleteMutation.isPending }}
@@ -1469,7 +1630,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
                 aria-label="吊销 personal login key"
                 danger
                 icon={<StopOutlined />}
-                disabled={!canRevoke || !!record.revokedAt}
+                disabled={blocked || !canRevoke || !!record.revokedAt}
               />
             </Popconfirm>
           </Space>
@@ -1508,8 +1669,8 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
           <Button
             size="small"
             icon={<KeyOutlined />}
-            disabled={!canCreateTokens || record.status !== 'active'}
-            onClick={() => setDrawer({ kind: 'service-token', record })}
+            disabled={blocked || !canCreateTokens || record.status !== 'active'}
+            onClick={() => openDrawer({ kind: 'service-token', record })}
           />
         </Space>
       ),
@@ -1564,6 +1725,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
       render: (_, record) => (
         <Space className="soha-row-action-icons">
           <Popconfirm
+            disabled={blocked}
             title="轮换服务账号 token？"
             description="系统会生成新明文并吊销旧 token，新明文只展示一次。"
             okButtonProps={{ loading: rotateTokenMutation.isPending }}
@@ -1575,7 +1737,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
               aria-label="轮换服务 token"
               icon={<ReloadOutlined />}
               loading={rotateTokenMutation.isPending}
-              disabled={!canRotateTokens || !!record.revokedAt}
+              disabled={blocked || !canRotateTokens || !!record.revokedAt}
             />
           </Popconfirm>
           <ManagementIconButton
@@ -1584,9 +1746,9 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
             aria-label="吊销服务 token"
             danger
             icon={<StopOutlined />}
-            disabled={!canRevokeTokens || !!record.revokedAt}
+            disabled={blocked || !canRevokeTokens || !!record.revokedAt}
             onClick={() =>
-              setDrawer({ kind: 'service-token-revoke', initialValues: { tokenId: record.id } })
+              openDrawer({ kind: 'service-token-revoke', initialValues: { tokenId: record.id } })
             }
           />
         </Space>
@@ -1635,6 +1797,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
       width: 80,
       render: (_, record) => (
         <Popconfirm
+          disabled={blocked}
           title="删除 MCP tool grant？"
           description="该操作会立即更新 AI Gateway 控制面。"
           okButtonProps={{ danger: true, loading: deleteMutation.isPending }}
@@ -1646,7 +1809,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
             aria-label="删除 MCP tool grant"
             danger
             icon={<DeleteOutlined />}
-            disabled={!canDeleteGrants}
+            disabled={blocked || !canDeleteGrants}
           />
         </Popconfirm>
       ),
@@ -1707,10 +1870,11 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
             tooltip="编辑"
             aria-label="编辑 access policy"
             icon={<EditOutlined />}
-            disabled={!canUpdatePolicies}
-            onClick={() => setDrawer({ kind: 'access-policy', record })}
+            disabled={blocked || !canUpdatePolicies}
+            onClick={() => openDrawer({ kind: 'access-policy', record })}
           />
           <Popconfirm
+            disabled={blocked}
             title="删除 access policy？"
             description="该操作会立即更新 AI Gateway 控制面。"
             okButtonProps={{ danger: true, loading: deleteMutation.isPending }}
@@ -1722,7 +1886,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
               aria-label="删除 access policy"
               danger
               icon={<DeleteOutlined />}
-              disabled={!canDeletePolicies}
+              disabled={blocked || !canDeletePolicies}
             />
           </Popconfirm>
         </Space>
@@ -1774,10 +1938,11 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
             tooltip="编辑"
             aria-label="编辑 skill binding"
             icon={<EditOutlined />}
-            disabled={!canUpdateSkills}
-            onClick={() => setDrawer({ kind: 'skill-binding', record })}
+            disabled={blocked || !canUpdateSkills}
+            onClick={() => openDrawer({ kind: 'skill-binding', record })}
           />
           <Popconfirm
+            disabled={blocked}
             title="删除 skill binding？"
             description="该操作会立即更新 AI Gateway 控制面。"
             okButtonProps={{ danger: true, loading: deleteMutation.isPending }}
@@ -1789,7 +1954,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
               aria-label="删除 skill binding"
               danger
               icon={<DeleteOutlined />}
-              disabled={!canDeleteSkills}
+              disabled={blocked || !canDeleteSkills}
             />
           </Popconfirm>
         </Space>
@@ -1956,24 +2121,39 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
           <Button
             size="small"
             icon={<CheckOutlined />}
-            disabled={!canApprove || !isPendingApproval(record)}
+            disabled={blocked || !canApprove || !isPendingApproval(record)}
             loading={decisionMutation.isPending}
-            onClick={() => setDecisionTarget({ action: 'approve', record })}
+            onClick={() => {
+              if (!blocked) {
+                decisionMutation.reset()
+                setDecisionTarget({ action: 'approve', record })
+              }
+            }}
           />
           <Button
             size="small"
             danger
             icon={<CloseOutlined />}
-            disabled={!canReject || !isPendingApproval(record)}
+            disabled={blocked || !canReject || !isPendingApproval(record)}
             loading={decisionMutation.isPending}
-            onClick={() => setDecisionTarget({ action: 'reject', record })}
+            onClick={() => {
+              if (!blocked) {
+                decisionMutation.reset()
+                setDecisionTarget({ action: 'reject', record })
+              }
+            }}
           />
           <Button
             size="small"
             icon={<StopOutlined />}
-            disabled={!canCancel || !isPendingApproval(record)}
+            disabled={blocked || !canCancel || !isPendingApproval(record)}
             loading={decisionMutation.isPending}
-            onClick={() => setDecisionTarget({ action: 'cancel', record })}
+            onClick={() => {
+              if (!blocked) {
+                decisionMutation.reset()
+                setDecisionTarget({ action: 'cancel', record })
+              }
+            }}
           />
         </Space>
       ),
@@ -2301,6 +2481,56 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
 
   return (
     <div className="soha-page">
+      {!drawer ? (
+        <>
+          {upsertMutation.feedback}
+          {testUpstreamMutation.feedback}
+        </>
+      ) : null}
+      {!decisionTarget ? decisionMutation.feedback : null}
+      {deleteMutation.feedback}
+      {rotateTokenMutation.feedback}
+      {disableClientMutation.feedback}
+      {disableUpstreamMutation.feedback}
+      <ReadFeedback label="AI Client" query={clientsQuery} canRead={clientsQuery.isEnabled} />
+      <ReadFeedback
+        label="个人 token"
+        query={personalTokensQuery}
+        canRead={personalTokensQuery.isEnabled}
+      />
+      <ReadFeedback
+        label="模型转发指标"
+        query={relayMetricsQuery}
+        canRead={relayMetricsQuery.isEnabled}
+      />
+      <ReadFeedback label="模型上游" query={upstreamsQuery} canRead={upstreamsQuery.isEnabled} />
+      <ReadFeedback
+        label="模型路由"
+        query={modelRoutesQuery}
+        canRead={modelRoutesQuery.isEnabled}
+      />
+      <ReadFeedback
+        label="模型调用记录"
+        query={modelCallsQuery}
+        canRead={modelCallsQuery.isEnabled}
+      />
+      <ReadFeedback
+        label="服务账号"
+        query={serviceAccountsQuery}
+        canRead={serviceAccountsQuery.isEnabled}
+      />
+      <ReadFeedback
+        label="服务 token"
+        query={serviceAccountTokensQuery}
+        canRead={serviceAccountTokensQuery.isEnabled}
+      />
+      <ReadFeedback label="工具授权" query={grantsQuery} canRead={grantsQuery.isEnabled} />
+      <ReadFeedback label="访问策略" query={policiesQuery} canRead={policiesQuery.isEnabled} />
+      <ReadFeedback label="Skill 绑定" query={bindingsQuery} canRead={bindingsQuery.isEnabled} />
+      <ReadFeedback label="能力清单" query={manifestQuery} canRead={manifestQuery.isEnabled} />
+      <ReadFeedback label="审计记录" query={auditQuery} canRead={auditQuery.isEnabled} />
+      <ReadFeedback label="审批记录" query={approvalsQuery} canRead={approvalsQuery.isEnabled} />
+      <ReadFeedback label="治理状态" query={governanceQuery} canRead={governanceQuery.isEnabled} />
       <Suspense
         fallback={
           <ManagementState
@@ -2353,7 +2583,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
             onUpstreamProviderFilterChange={setUpstreamProviderFilter}
             onUpstreamStatusFilterChange={setUpstreamStatusFilter}
             onRefreshUpstreams={() => void upstreamsQuery.refetch()}
-            onCreateUpstream={() => setDrawer({ kind: 'relay-upstream' })}
+            onCreateUpstream={() => openDrawer({ kind: 'relay-upstream' })}
             modelRouteColumns={modelRouteColumns}
             modelRoutes={filteredModelRoutes}
             modelRoutesLoading={modelRoutesQuery.isLoading}
@@ -2365,7 +2595,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
             onModelRouteProviderFilterChange={setModelRouteProviderFilter}
             onModelRouteUpstreamFilterChange={setModelRouteUpstreamFilter}
             onRefreshModelRoutes={() => void modelRoutesQuery.refetch()}
-            onCreateModelRoute={() => setDrawer({ kind: 'relay-route' })}
+            onCreateModelRoute={() => openDrawer({ kind: 'relay-route' })}
             onRefreshModelCalls={() => void modelCallsQuery.refetch()}
             expandedErrorRowRender={(record) => (
               <JsonBlock
@@ -2409,7 +2639,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
             canCreate={canCreateClients}
             filter={clientFilter}
             onFilterChange={setClientFilter}
-            onCreate={() => setDrawer({ kind: 'ai-client' })}
+            onCreate={() => openDrawer({ kind: 'ai-client' })}
           />
         ) : section === 'tokens' ? (
           <GatewayTokensSection
@@ -2432,9 +2662,9 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
             serviceTokenFilter={serviceTokenFilter}
             onTokenFilterChange={setTokenFilter}
             onServiceTokenFilterChange={setServiceTokenFilter}
-            onCreatePersonalToken={() => setDrawer({ kind: 'personal-token' })}
-            onCreateServiceAccount={() => setDrawer({ kind: 'service-account' })}
-            onRevokeServiceToken={() => setDrawer({ kind: 'service-token-revoke' })}
+            onCreatePersonalToken={() => openDrawer({ kind: 'personal-token' })}
+            onCreateServiceAccount={() => openDrawer({ kind: 'service-account' })}
+            onRevokeServiceToken={() => openDrawer({ kind: 'service-token-revoke' })}
           />
         ) : section === 'governance' ? (
           <GatewayGovernanceSection
@@ -2448,17 +2678,17 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
             grantsLoading={grantsQuery.isLoading}
             grantFilter={grantFilter}
             onGrantFilterChange={setGrantFilter}
-            onCreateGrant={() => setDrawer({ kind: 'tool-grant' })}
+            onCreateGrant={() => openDrawer({ kind: 'tool-grant' })}
             policyColumns={policyColumns}
             policies={filteredPolicies}
             policiesLoading={policiesQuery.isLoading}
             policyFilter={policyFilter}
             onPolicyFilterChange={setPolicyFilter}
-            onCreatePolicy={() => setDrawer({ kind: 'access-policy' })}
+            onCreatePolicy={() => openDrawer({ kind: 'access-policy' })}
             bindingColumns={bindingColumns}
             bindings={bindings}
             bindingsLoading={bindingsQuery.isLoading}
-            onCreateBinding={() => setDrawer({ kind: 'skill-binding' })}
+            onCreateBinding={() => openDrawer({ kind: 'skill-binding' })}
             governanceStatus={governanceStatus}
             governanceLoading={governanceQuery.isLoading}
             governanceFetching={governanceQuery.isFetching}
@@ -2539,12 +2769,27 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
             manifest={manifest}
             upstreams={upstreams}
             saving={upsertMutation.isPending}
+            disabled={blocked || drawerDenied}
+            feedback={
+              <>
+                {upsertMutation.feedback}
+                {testUpstreamMutation.feedback}
+              </>
+            }
             canTestUpstream={canRelayTest}
             testingUpstream={
               testUpstreamMutation.isPending && !!testUpstreamMutation.variables?.importModels
             }
-            onClose={() => setDrawer(null)}
-            onSubmit={(values) => upsertMutation.mutate(values)}
+            onClose={() => {
+              if (!blocked) {
+                setDrawer(null)
+                form.resetFields()
+                testUpstreamMutation.reset()
+              }
+            }}
+            onSubmit={(values) => {
+              if (!blocked && !drawerDenied) upsertMutation.mutate({ drawer, values })
+            }}
             onTestUpstream={testUpstreamFromForm}
           />
         </Suspense>
@@ -2552,7 +2797,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
 
       <Modal
         title={oneTimeToken?.title}
-        open={!!oneTimeToken}
+        open={!!oneTimeToken && secretRights.current[oneTimeToken.source]}
         onCancel={() => setOneTimeToken(null)}
         footer={
           <Button type="primary" onClick={() => setOneTimeToken(null)}>
@@ -2566,21 +2811,41 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
           title="token 只展示一次；关闭后无法再次查看明文。"
           style={{ marginBottom: 12 }}
         />
-        <Input.TextArea value={oneTimeToken?.value} autoSize={{ minRows: 3 }} readOnly />
+        <Input.TextArea
+          value={
+            oneTimeToken && secretRights.current[oneTimeToken.source]
+              ? oneTimeToken.value
+              : undefined
+          }
+          autoSize={{ minRows: 3 }}
+          readOnly
+        />
         {oneTimeToken?.prefix ? <Text type="secondary">prefix: {oneTimeToken.prefix}</Text> : null}
       </Modal>
 
       <Modal
         title={decisionModalTitle(decisionTarget)}
-        open={!!decisionTarget}
-        onCancel={() => setDecisionTarget(null)}
+        open={!!decisionTarget && !decisionDenied}
+        closable={!blocked}
+        keyboard={!blocked}
+        mask={{ closable: !blocked }}
+        cancelButtonProps={{ disabled: blocked }}
+        onCancel={() => {
+          if (!blocked) {
+            setDecisionTarget(null)
+            decisionForm.resetFields()
+          }
+        }}
         okText="确认"
         cancelText="取消"
         confirmLoading={decisionMutation.isPending}
-        okButtonProps={{ danger: decisionTarget?.action !== 'approve' }}
+        okButtonProps={{
+          danger: decisionTarget?.action !== 'approve',
+          disabled: blocked || decisionDenied,
+        }}
         onOk={() => {
           void decisionForm.validateFields().then((values) => {
-            if (!decisionTarget) return
+            if (!decisionTarget || blocked || decisionDenied) return
             decisionMutation.mutate({
               action: decisionTarget.action,
               id: decisionTarget.record.id,
@@ -2589,6 +2854,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
           })
         }}
       >
+        {decisionMutation.feedback}
         {decisionTarget ? (
           <Space orientation="vertical" size={12} style={{ width: '100%' }}>
             <Descriptions
@@ -2609,7 +2875,7 @@ export function GatewayPageCoordinator({ section }: { section: GatewaySectionKey
                 },
               ]}
             />
-            <Form form={decisionForm} layout="vertical" preserve={false}>
+            <Form disabled={blocked} form={decisionForm} layout="vertical" preserve={false}>
               <Form.Item name="comment" label="备注">
                 <Input.TextArea autoSize={{ minRows: 3 }} />
               </Form.Item>

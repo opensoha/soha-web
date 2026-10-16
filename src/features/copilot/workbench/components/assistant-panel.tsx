@@ -1,6 +1,26 @@
-import { ContextRows } from './context-usage'
-import { modeLabel } from '../mode'
-import { taskUsageSummary } from '../context-selection'
+import { ManagementState } from '@/components/management-list'
+import { StatusTag } from '@/components/status-tag'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import {
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  EditOutlined,
+  ExclamationCircleOutlined,
+  FileTextOutlined,
+  MinusCircleOutlined,
+  PictureOutlined,
+  SafetyCertificateOutlined,
+  UnorderedListOutlined,
+  UserOutlined,
+} from '@ant-design/icons'
+import type {
+  PersonalEnvironment,
+  PersonalEnvironmentActionRequest,
+  PersonalEnvironmentDataDeletionRequest,
+  PersonalEnvironmentTemplate,
+  WorkbenchSource,
+} from '@opensoha/contracts/gen/ts/sohaapi'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   App,
   Badge,
@@ -13,55 +33,14 @@ import {
   Space,
   Typography,
 } from 'antd'
+import type { ReactNode } from 'react'
 import { useState } from 'react'
-import type {
-  WorkbenchSource,
-  PersonalEnvironment,
-  PersonalEnvironmentTemplate,
-  PersonalEnvironmentActionRequest,
-  PersonalEnvironmentDataDeletionRequest,
-} from '@opensoha/contracts/gen/ts/sohaapi'
-import type { PersonalEnvironmentDataExportRequest } from '../api'
-import { PersonalWorkspace } from './personal-workspace'
-import {
-  CheckCircleOutlined,
-  ClockCircleOutlined,
-  SafetyCertificateOutlined,
-  UserOutlined,
-  UnorderedListOutlined,
-  FileTextOutlined,
-  ExclamationCircleOutlined,
-  MinusCircleOutlined,
-  EditOutlined,
-  PictureOutlined,
-} from '@ant-design/icons'
-import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { ManagementState } from '@/components/management-list'
-import { StatusTag } from '@/components/status-tag'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { observeQueries } from '../../observe/queries'
-import type { WorkbenchArtifactEntry } from '../artifacts'
 import { agentConnectionUnavailableReason } from '../agent-selection'
-import {
-  metadataSources,
-  metadataToolExecutions,
-  toolApprovalId,
-  toolExecutionLabel,
-  toolExecutionSummary,
-} from '../stream-presentation'
-import type { ConversationMessage } from '../conversation'
-import type {
-  WorkbenchAgentProvider,
-  WorkbenchAgentRun,
-  WorkbenchSession,
-  PersonalAssistant,
-  PersonalArtifact,
-} from '../types'
-import { MessageApproval } from './message-approval'
-import { WorkbenchMarkdown } from './markdown'
+import type { PersonalEnvironmentDataExportRequest } from '../api'
 import { workbenchApi } from '../api'
-import { AssistantAvatar } from './assistant-avatar'
+import type { WorkbenchArtifactEntry } from '../artifacts'
 import {
   activityDateLabel,
   activitySummary,
@@ -69,6 +48,28 @@ import {
   conciseActivityText,
   type AssistantActivity,
 } from '../assistant-activity'
+import { taskUsageSummary } from '../context-selection'
+import type { ConversationMessage } from '../conversation'
+import { modeLabel } from '../mode'
+import {
+  metadataSources,
+  metadataToolExecutions,
+  toolApprovalId,
+  toolExecutionLabel,
+  toolExecutionSummary,
+} from '../stream-presentation'
+import type {
+  PersonalArtifact,
+  PersonalAssistant,
+  WorkbenchAgentProvider,
+  WorkbenchAgentRun,
+  WorkbenchSession,
+} from '../types'
+import { AssistantAvatar } from './assistant-avatar'
+import { ContextRows } from './context-usage'
+import { WorkbenchMarkdown } from './markdown'
+import { MessageApproval } from './message-approval'
+import { PersonalWorkspace } from './personal-workspace'
 
 export type AssistantTab = 'activity' | 'results' | 'approvals' | 'upcoming' | 'identity'
 
@@ -118,6 +119,8 @@ export function AssistantPanel({
   environmentTemplatesLoading,
   onRetryEnvironmentTemplates,
   environmentChanging,
+  environmentUncertain,
+  environmentFeedback,
   onChangeEnvironment,
   canRetryDeletion,
   onDeleteEnvironment,
@@ -160,6 +163,8 @@ export function AssistantPanel({
   environmentTemplatesError?: boolean
   environmentTemplatesLoading?: boolean
   onRetryEnvironmentTemplates?: () => void
+  environmentUncertain?: boolean
+  environmentFeedback?: ReactNode
   environmentChanging?: boolean
   onChangeEnvironment?: (input: PersonalEnvironmentActionRequest) => void
   canRetryDeletion?: boolean
@@ -197,6 +202,7 @@ export function AssistantPanel({
     !environmentError &&
     !environmentLoading &&
     !environmentChanging &&
+    !environmentUncertain &&
     !renaming &&
     environment.dataInitialized &&
     (environment.state === 'sleeping' ||
@@ -801,7 +807,9 @@ export function AssistantPanel({
                       placeholder="选择个人环境模板"
                       value={selectedEnvironmentTemplate?.id}
                       loading={environmentTemplatesLoading}
-                      disabled={environmentChanging || environmentTemplatesError}
+                      disabled={
+                        environmentChanging || environmentUncertain || environmentTemplatesError
+                      }
                       options={environmentTemplates.map((item) => ({
                         value: item.id,
                         label: `${item.name}（${item.backend === 'vm' ? `VM · ${item.provider?.toUpperCase() || '提供方未确认'}` : 'Docker'}）`,
@@ -834,6 +842,7 @@ export function AssistantPanel({
                     <Button
                       loading={environmentChanging}
                       disabled={
+                        environmentUncertain ||
                         !selectedEnvironmentTemplate ||
                         environmentTemplatesError ||
                         environmentTemplatesLoading
@@ -856,6 +865,7 @@ export function AssistantPanel({
                       <Button
                         disabled={
                           environmentChanging ||
+                          environmentUncertain ||
                           environmentError ||
                           environmentLoading ||
                           environment.assistantId !== assistant?.id
@@ -875,6 +885,7 @@ export function AssistantPanel({
                     {['ready', 'quota_exceeded'].includes(environment.state) ? (
                       <Button
                         loading={environmentChanging}
+                        disabled={environmentUncertain}
                         onClick={() => onChangeEnvironment({ action: 'sleep' })}
                       >
                         休眠环境
@@ -883,6 +894,7 @@ export function AssistantPanel({
                     {['sleeping', 'expired', 'missing'].includes(environment.state) ? (
                       <Button
                         loading={environmentChanging}
+                        disabled={environmentUncertain}
                         onClick={() => onChangeEnvironment({ action: 'wake' })}
                       >
                         {environment.state === 'missing' ? '恢复环境' : '唤醒环境'}
@@ -921,6 +933,7 @@ export function AssistantPanel({
                 ) : null}
               </div>
             ) : null}
+            {!deletionTarget ? environmentFeedback : null}
             <Modal
               title="删除个人持久数据"
               open={Boolean(deletionTarget)}
@@ -952,13 +965,14 @@ export function AssistantPanel({
                 }
               }}
             >
+              {environmentFeedback}
               <p>将永久删除「{deletionTarget?.name}」的持久文件。请先自行保留所需文件。</p>
               <p>输入助手完整名称「{deletionTarget?.name}」确认；取消不会发送删除请求。</p>
               <Input
                 aria-label="确认删除数据的助手全名"
                 value={deletionName}
                 maxLength={60}
-                disabled={environmentChanging}
+                disabled={environmentChanging || environmentUncertain}
                 onChange={(event) => setDeletionName(event.target.value)}
               />
               {deletionTarget && !canDeleteData ? (

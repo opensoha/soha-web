@@ -1,5 +1,40 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import type { ChangeEvent } from 'react'
+import {
+  ManagementIconButton,
+  ManagementState,
+  ManagementToolbarSearch,
+} from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import {
+  BUILTIN_COMPANION_PLUGIN_ID,
+  companionApi,
+  companionKeys,
+  createLocalLive2DPack,
+  getLive2DCubismRuntime,
+  LOCAL_LIVE2D_PLUGIN_ID,
+  useLocalCompanionPackStore,
+} from '@/features/companion'
+import { pluginQueries } from '@/features/plugins'
+import { useAuthStore } from '@/stores/auth-store'
+import { usePreferencesStore } from '@/stores/preferences-store'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import { tableColumnPresets } from '@/utils/table-columns'
+import { formatDateTime } from '@/utils/time'
+import {
+  ArrowDownOutlined,
+  ArrowUpOutlined,
+  CheckCircleOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  FolderOpenOutlined,
+  LinkOutlined,
+  PlusOutlined,
+  SaveOutlined,
+} from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TableColumnsType } from 'antd'
 import {
   Alert,
   App,
@@ -20,53 +55,22 @@ import {
   Switch,
   Typography,
 } from 'antd'
-import type { TableColumnsType } from 'antd'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import type { ChangeEvent } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import type {
+  AISkillSetting,
+  AIWorkbenchModelSettings,
+  AnalysisProfile,
+  DataSource,
+} from '../ai-settings-model'
 import {
-  ManagementIconButton,
-  ManagementState,
-  ManagementToolbarSearch,
-} from '@/components/management-list'
-import { MetadataTag, StatusTag } from '@/components/status-tag'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
-import {
-  companionApi,
-  companionKeys,
-  BUILTIN_COMPANION_PLUGIN_ID,
-  createLocalLive2DPack,
-  getLive2DCubismRuntime,
-  LOCAL_LIVE2D_PLUGIN_ID,
-  useLocalCompanionPackStore,
-} from '@/features/companion'
-import { pluginQueries } from '@/features/plugins'
-import { usePreferencesStore } from '@/stores/preferences-store'
-import { formatDateTime } from '@/utils/time'
-import { tableColumnPresets } from '@/utils/table-columns'
-import {
-  ArrowDownOutlined,
-  ArrowUpOutlined,
-  CheckCircleOutlined,
-  DeleteOutlined,
-  EditOutlined,
-  FolderOpenOutlined,
-  LinkOutlined,
-  PlusOutlined,
-  SaveOutlined,
-} from '@ant-design/icons'
-import {
-  PLAYBOOK_OPTIONS,
-  TRACES_BACKEND_OPTIONS,
   buildDataSourceFormValues,
   buildDataSourcePayload,
   buildProfileFormValues,
   buildProfilePayload,
-} from '../ai-settings-model'
-import type {
-  AIWorkbenchModelSettings,
-  AISkillSetting,
-  AnalysisProfile,
-  DataSource,
+  PLAYBOOK_OPTIONS,
+  TRACES_BACKEND_OPTIONS,
 } from '../ai-settings-model'
 import { settingsMutations } from '../mutations'
 import { normalizeWorkbenchModelSettings, settingsQueries } from '../queries'
@@ -79,8 +83,8 @@ import {
   TagSelect,
   WIDE_FORM_LAYOUT,
 } from '../shared/components'
-import type { AISettingsPageProps } from '../types'
 import '../shared/styles.css'
+import type { AISettingsPageProps } from '../types'
 import './styles.css'
 
 const { Paragraph, Text } = Typography
@@ -88,6 +92,9 @@ const { Paragraph, Text } = Typography
 export function AISettingsPage({ embedded = false, section = 'model' }: AISettingsPageProps = {}) {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
+  const companionOwner = useAuthStore((state) => state.user?.userId ?? '')
+  const companionOwnerRef = useRef(companionOwner)
+  companionOwnerRef.current = companionOwner
   const navigate = useNavigate()
   const permissionSnapshotQuery = usePermissionSnapshot()
   const [dataSourceModalVisible, setDataSourceModalVisible] = useState(false)
@@ -97,33 +104,44 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
   const [skillsModalVisible, setSkillsModalVisible] = useState(false)
   const [editingSkill, setEditingSkill] = useState<AISkillSetting | null>(null)
   const [skillsRegistryDraft, setSkillsRegistryDraft] = useState<AISkillSetting[]>([])
+  const [skillsDirty, setSkillsDirty] = useState(false)
   const [skillsFilter, setSkillsFilter] = useState('')
   const [dataSourceSourceKind, setDataSourceSourceKind] = useState('logs')
   const [dataSourceBackendType, setDataSourceBackendType] = useState('es')
-  const canViewAISettings = hasPermission(permissionSnapshotQuery.data?.data, 'settings.ai.view')
+  const canViewAISettings = hasPermission(
+    readableQueryData(permissionSnapshotQuery)?.data,
+    'settings.ai.view',
+  )
   const canManageAISettings = hasPermission(
-    permissionSnapshotQuery.data?.data,
+    readableQueryData(permissionSnapshotQuery)?.data,
     'settings.ai.update',
   )
   const canViewDataSources =
-    hasPermission(permissionSnapshotQuery.data?.data, 'ai.data-sources.view') || canViewAISettings
+    hasPermission(readableQueryData(permissionSnapshotQuery)?.data, 'ai.data-sources.view') ||
+    canViewAISettings
   const canCreateDataSources =
-    hasPermission(permissionSnapshotQuery.data?.data, 'ai.data-sources.create') ||
+    hasPermission(readableQueryData(permissionSnapshotQuery)?.data, 'ai.data-sources.create') ||
     canManageAISettings
   const canUpdateDataSources =
-    hasPermission(permissionSnapshotQuery.data?.data, 'ai.data-sources.update') ||
+    hasPermission(readableQueryData(permissionSnapshotQuery)?.data, 'ai.data-sources.update') ||
     canManageAISettings
   const canValidateDataSources =
-    hasPermission(permissionSnapshotQuery.data?.data, 'ai.data-sources.validate') ||
+    hasPermission(readableQueryData(permissionSnapshotQuery)?.data, 'ai.data-sources.validate') ||
     canManageAISettings
   const canViewSkills =
-    hasPermission(permissionSnapshotQuery.data?.data, 'ai.gateway.skills.view') ||
+    hasPermission(readableQueryData(permissionSnapshotQuery)?.data, 'ai.gateway.skills.view') ||
     canViewAISettings
   const canManageSkills =
-    hasPermission(permissionSnapshotQuery.data?.data, 'ai.gateway.skills.update') ||
+    hasPermission(readableQueryData(permissionSnapshotQuery)?.data, 'ai.gateway.skills.update') ||
     canManageAISettings
-  const canUseCompanion = hasPermission(permissionSnapshotQuery.data?.data, 'observe.ai.chat')
-  const canViewPlugins = hasPermission(permissionSnapshotQuery.data?.data, 'plugin.view')
+  const canUseCompanion = hasPermission(
+    readableQueryData(permissionSnapshotQuery)?.data,
+    'observe.ai.chat',
+  )
+  const canViewPlugins = hasPermission(
+    readableQueryData(permissionSnapshotQuery)?.data,
+    'plugin.view',
+  )
   const showModel = section === 'model'
   const showCompanion = section === 'companion'
   const showSkills = section === 'skills'
@@ -163,7 +181,7 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
   }, [dataSourceModalVisible, editingDataSource])
 
   const settingsQuery = useQuery(settingsQueries.ai.detail(canViewAISettings && showModel))
-  const { data } = settingsQuery
+  const data = settingsQuery.isEnabled ? readableQueryData(settingsQuery) : undefined
   const skillsQuery = useQuery(settingsQueries.ai.skills(canViewSkills && showSkills))
   const modelRoutesQuery = useQuery(settingsQueries.ai.modelRoutes(canViewAISettings && showModel))
   const dataSourcesQuery = useQuery(
@@ -180,15 +198,6 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
   const companionPacksQuery = useQuery(
     pluginQueries.installed(showCompanion && canUseCompanion && canViewPlugins),
   )
-  const hasQueryError =
-    permissionSnapshotQuery.isError ||
-    (showModel && settingsQuery.isError) ||
-    (showSkills && skillsQuery.isError) ||
-    (showModel && modelRoutesQuery.isError) ||
-    ((showDataSources || showProfiles) && dataSourcesQuery.isError) ||
-    (showProfiles && profilesQuery.isError) ||
-    (showDataSources && capabilitiesQuery.isError) ||
-    (showCompanion && canViewPlugins && companionPacksQuery.isError)
   const isPageLoading =
     permissionSnapshotQuery.isLoading ||
     (showModel && settingsQuery.isLoading) ||
@@ -198,14 +207,20 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
     (showProfiles && profilesQuery.isLoading) ||
     (showDataSources && capabilitiesQuery.isLoading) ||
     (showCompanion && canViewPlugins && companionPacksQuery.isLoading)
-  const resetCompanionMutation = useMutation({
-    mutationFn: () => companionApi.reset({ pluginId: selectedCompanionPluginId }),
-    onSuccess: (profile) => {
-      queryClient.setQueryData(companionKeys.profile(), profile)
-      void message.success('宠物成长数据已重置')
+  const resetCompanionMutation = useOperationMutation(
+    {
+      mutationFn: (input: { owner: string; pluginId: string }) =>
+        companionApi.reset({ pluginId: input.pluginId }),
+      onSuccess: (profile, input) => {
+        if (companionOwnerRef.current !== input.owner) return
+        queryClient.setQueryData(companionKeys.profile(input.owner), profile)
+      },
     },
-    onError: (error: Error) => void message.error(error.message),
-  })
+    {
+      label: ['重置 Companion 成长', 'Reset Companion growth'],
+      target: (input) => input.pluginId,
+    },
+  )
 
   const importLocalLive2D = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files
@@ -224,58 +239,101 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
     }
   }
 
-  const saveWorkbenchModelMutation = useMutation(
+  const saveWorkbenchModelMutation = useOperationMutation(
     settingsMutations.ai.saveWorkbenchModel(queryClient),
+    {
+      label: ['保存 Workbench 默认模型', 'Save Workbench model'],
+      target: () => 'Workbench 默认模型',
+    },
   )
-  const saveSkillsMutation = useMutation(settingsMutations.ai.saveSkills(queryClient))
-  const dataSourceMutation = useMutation(settingsMutations.ai.upsertDataSource(queryClient))
-  const validateDataSourceMutation = useMutation(
+  const saveSkillsMutation = useOperationMutation(settingsMutations.ai.saveSkills(queryClient), {
+    label: ['保存 Skills registry', 'Save Skills registry'],
+    target: () => 'Skills registry',
+  })
+  const dataSourceMutation = useOperationMutation(
+    settingsMutations.ai.upsertDataSource(queryClient),
+    {
+      label: ['保存 AI 数据源', 'Save AI data source'],
+      target: (input) => String(input.id || input.values.name || '新数据源'),
+    },
+  )
+  const validateDataSourceMutation = useOperationMutation(
     settingsMutations.ai.validateDataSource(queryClient),
+    { label: ['校验 AI 数据源', 'Validate AI data source'], target: (id) => id, readOnly: true },
   )
-  const profileMutation = useMutation(settingsMutations.ai.upsertAnalysisProfile(queryClient))
+  const profileMutation = useOperationMutation(
+    settingsMutations.ai.upsertAnalysisProfile(queryClient),
+    {
+      label: ['保存分析模板', 'Save analysis profile'],
+      target: (input) => String(input.id || input.values.name || '新分析模板'),
+    },
+  )
 
+  const blocked =
+    saveWorkbenchModelMutation.blocked ||
+    saveSkillsMutation.blocked ||
+    dataSourceMutation.blocked ||
+    profileMutation.blocked ||
+    resetCompanionMutation.blocked ||
+    validateDataSourceMutation.isPending
+  const dataSourceDenied =
+    queryAccessDenied(dataSourcesQuery) ||
+    queryAccessDenied(dataSourceMutation) ||
+    !(editingDataSource ? canUpdateDataSources : canCreateDataSources)
+  const profileDenied =
+    queryAccessDenied(profilesQuery) || queryAccessDenied(profileMutation) || !canManageAISettings
+  const skillsDenied = queryAccessDenied(skillsQuery) || !canViewSkills
+  useEffect(() => {
+    if (dataSourceDenied) {
+      setDataSourceModalVisible(false)
+      setEditingDataSource(null)
+    }
+  }, [dataSourceDenied])
+  useEffect(() => {
+    if (profileDenied) {
+      setProfileModalVisible(false)
+      setEditingProfile(null)
+    }
+  }, [profileDenied])
+  useEffect(() => {
+    if (skillsDenied) {
+      setSkillsModalVisible(false)
+      setEditingSkill(null)
+      setSkillsRegistryDraft([])
+      setSkillsDirty(false)
+    }
+  }, [skillsDenied])
   const saveWorkbenchModel = (values: AIWorkbenchModelSettings) =>
-    saveWorkbenchModelMutation.mutate(values, {
-      onSuccess: () => void message.success('Workbench 默认模型已保存'),
-      onError: (err) => void message.error(err.message),
-    })
+    saveWorkbenchModelMutation.mutate(values, {})
   const saveSkills = () =>
     saveSkillsMutation.mutate(skillsRegistryDraft, {
-      onSuccess: () => void message.success('Skills registry 已保存'),
-      onError: (err) => void message.error(err.message),
+      onSuccess: () => setSkillsDirty(false),
     })
   const saveDataSource = (input: { id?: string; values: Record<string, unknown> }) =>
     dataSourceMutation.mutate(
       { ...input, values: buildDataSourcePayload(input.values) },
       {
         onSuccess: () => {
-          void message.success('数据源已保存')
           setDataSourceModalVisible(false)
           setEditingDataSource(null)
           setDataSourceBackendType('es')
         },
-        onError: (err) => void message.error(err.message),
       },
     )
   const validateDataSource = (dataSourceID: string) =>
-    validateDataSourceMutation.mutate(dataSourceID, {
-      onSuccess: () => void message.success('数据源校验通过'),
-      onError: (err) => void message.error(err.message),
-    })
+    validateDataSourceMutation.mutate(dataSourceID)
   const saveProfile = (input: { id?: string; values: Record<string, unknown> }) =>
     profileMutation.mutate(
       { ...input, values: buildProfilePayload(input.values) },
       {
         onSuccess: () => {
-          void message.success('分析模板已保存')
           setProfileModalVisible(false)
           setEditingProfile(null)
         },
-        onError: (err) => void message.error(err.message),
       },
     )
   const settings = data
-  const modelRoutes = modelRoutesQuery.data ?? []
+  const modelRoutes = readableQueryData(modelRoutesQuery) ?? []
   const enabledModelRoutes = modelRoutes.filter((route) => route.enabled)
   const routeOptions = enabledModelRoutes.map((route) => ({
     value: route.id,
@@ -295,10 +353,11 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
     (route) => route.id === settings?.workbenchModel?.defaultRouteId,
   )
 
+  const loadedSkills = readableQueryData(skillsQuery)
   useEffect(() => {
-    if (!showSkills || !skillsQuery.data) return
+    if (!showSkills || !loadedSkills || skillsDirty) return
     setSkillsRegistryDraft(
-      skillsQuery.data.map((item) => ({
+      loadedSkills.map((item) => ({
         id: item.id,
         name: item.name,
         category: item.category,
@@ -313,7 +372,7 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
         outputSchema: item.outputSchema ?? {},
       })),
     )
-  }, [showSkills, skillsQuery.data])
+  }, [showSkills, loadedSkills, skillsDirty])
 
   const visibleSkills = useMemo(() => {
     const keyword = skillsFilter.trim().toLowerCase()
@@ -329,40 +388,6 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
     return (
       <div className="flex items-center justify-center h-64">
         <Spin size="large" />
-      </div>
-    )
-  }
-
-  if (hasQueryError) {
-    return (
-      <div className="soha-page">
-        <ManagementState
-          kind="error"
-          actions={
-            <Button
-              onClick={() => {
-                void permissionSnapshotQuery.refetch()
-                if (canViewSection) {
-                  void Promise.all([
-                    showModel ? settingsQuery.refetch() : Promise.resolve(),
-                    showSkills ? skillsQuery.refetch() : Promise.resolve(),
-                    showModel ? modelRoutesQuery.refetch() : Promise.resolve(),
-                    showDataSources || showProfiles
-                      ? dataSourcesQuery.refetch()
-                      : Promise.resolve(),
-                    showProfiles ? profilesQuery.refetch() : Promise.resolve(),
-                    showDataSources ? capabilitiesQuery.refetch() : Promise.resolve(),
-                    showCompanion && canViewPlugins
-                      ? companionPacksQuery.refetch()
-                      : Promise.resolve(),
-                  ])
-                }
-              }}
-            >
-              重试
-            </Button>
-          }
-        />
       </div>
     )
   }
@@ -386,9 +411,9 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
     )
   }
 
-  const dataSources = dataSourcesQuery.data ?? []
-  const profiles = profilesQuery.data ?? []
-  const capabilityOptions = capabilitiesQuery.data ?? []
+  const dataSources = readableQueryData(dataSourcesQuery) ?? []
+  const profiles = readableQueryData(profilesQuery) ?? []
+  const capabilityOptions = readableQueryData(capabilitiesQuery) ?? []
   const filteredCapabilityOptions = capabilityOptions.filter(
     (item) => item.sourceKind === dataSourceSourceKind,
   )
@@ -454,6 +479,7 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
           <Space className="soha-row-action-icons">
             {canValidateDataSources ? (
               <ManagementIconButton
+                disabled={blocked}
                 aria-label="校验数据源连接"
                 tooltip="校验连接"
                 icon={<CheckCircleOutlined />}
@@ -467,6 +493,7 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
             ) : null}
             {canUpdateDataSources ? (
               <ManagementIconButton
+                disabled={blocked}
                 aria-label="编辑数据源"
                 tooltip="编辑"
                 icon={<EditOutlined />}
@@ -475,6 +502,7 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
                   setEditingDataSource(record)
                   setDataSourceSourceKind(record.sourceKind)
                   setDataSourceBackendType(record.backendType)
+                  dataSourceMutation.reset()
                   setDataSourceModalVisible(true)
                 }}
               />
@@ -519,12 +547,14 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
       render: (_: unknown, record: AnalysisProfile) =>
         canManageAISettings ? (
           <ManagementIconButton
+            disabled={blocked}
             aria-label="编辑分析模板"
             tooltip="编辑"
             icon={<EditOutlined />}
             size="small"
             onClick={() => {
               setEditingProfile(record)
+              profileMutation.reset()
               setProfileModalVisible(true)
             }}
           />
@@ -562,6 +592,7 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
           title="模型 Provider 在 AI Gateway 管理。这里仅选择 AI Workbench 使用的默认模型与路由。"
         />
         <Form
+          disabled={blocked}
           data-testid="ai-workbench-model-form"
           {...WIDE_FORM_LAYOUT}
           initialValues={normalizeWorkbenchModelSettings(settings?.workbenchModel)}
@@ -608,7 +639,7 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
             </Col>
             <Col xs={24} md={12}>
               <Form.Item name="enabled" label="启用 Workbench 模型" valuePropName="checked">
-                <Switch />
+                <Switch disabled={blocked} />
               </Form.Item>
             </Col>
           </Row>
@@ -626,6 +657,7 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
           {canManageAISettings ? (
             <div className="soha-form-actions">
               <Button
+                disabled={blocked}
                 htmlType="submit"
                 type="primary"
                 loading={saveWorkbenchModelMutation.isPending}
@@ -649,7 +681,10 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
           },
         ]
       : []),
-    ...(Array.isArray(companionPacksQuery.data) ? companionPacksQuery.data : [])
+    ...(Array.isArray(readableQueryData(companionPacksQuery))
+      ? (readableQueryData(companionPacksQuery) ?? [])
+      : []
+    )
       .filter(
         (item) =>
           item.type === 'companion-pack' &&
@@ -669,6 +704,7 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
           <label>
             <span>悬浮模式</span>
             <Segmented
+              disabled={blocked}
               options={[
                 { value: 'companion', label: '宠物' },
                 { value: 'icon', label: '图标' },
@@ -693,13 +729,18 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
             <span>本地 Live2D</span>
             <div className="soha-companion-local-import__actions">
               <Button
+                disabled={blocked}
                 icon={<FolderOpenOutlined />}
                 loading={localLive2DImporting}
                 onClick={() => localLive2DInputRef.current?.click()}
               >
                 导入模型目录
               </Button>
-              {localCompanionPack ? <Button onClick={clearLocalCompanionPack}>清除</Button> : null}
+              {localCompanionPack ? (
+                <Button disabled={blocked} onClick={clearLocalCompanionPack}>
+                  清除
+                </Button>
+              ) : null}
             </div>
             <input
               ref={localLive2DInputRef}
@@ -712,17 +753,27 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
           </div>
           <label>
             <span>对话气泡</span>
-            <Switch checked={companionBubbleEnabled} onChange={setCompanionBubbleEnabled} />
+            <Switch
+              disabled={blocked}
+              checked={companionBubbleEnabled}
+              onChange={setCompanionBubbleEnabled}
+            />
           </label>
           <Popconfirm
+            disabled={blocked}
             title="重置宠物成长数据？"
             okText="重置"
             cancelText="取消"
-            onConfirm={() => resetCompanionMutation.mutate()}
+            onConfirm={() =>
+              resetCompanionMutation.mutate({
+                owner: companionOwner,
+                pluginId: selectedCompanionPluginId,
+              })
+            }
           >
             <Button
               danger
-              disabled={Boolean(localCompanionPack)}
+              disabled={blocked || Boolean(localCompanionPack)}
               loading={resetCompanionMutation.isPending}
             >
               重置成长数据
@@ -748,6 +799,35 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
 
   const content = (
     <>
+      <ReadFeedback label="AI 默认模型" query={settingsQuery} canRead={settingsQuery.isEnabled} />
+      <ReadFeedback label="Skills registry" query={skillsQuery} canRead={skillsQuery.isEnabled} />
+      <ReadFeedback
+        label="模型路由选项"
+        query={modelRoutesQuery}
+        canRead={modelRoutesQuery.isEnabled}
+      />
+      <ReadFeedback
+        label="AI 数据源"
+        query={dataSourcesQuery}
+        canRead={dataSourcesQuery.isEnabled}
+      />
+      <ReadFeedback label="分析模板" query={profilesQuery} canRead={profilesQuery.isEnabled} />
+      <ReadFeedback
+        label="数据源能力"
+        query={capabilitiesQuery}
+        canRead={capabilitiesQuery.isEnabled}
+      />
+      <ReadFeedback
+        label="Companion 资源包"
+        query={companionPacksQuery}
+        canRead={companionPacksQuery.isEnabled}
+      />
+      {saveWorkbenchModelMutation.feedback}
+      {saveSkillsMutation.feedback}
+      {validateDataSourceMutation.feedback}
+      {resetCompanionMutation.feedback}
+      {!dataSourceModalVisible ? dataSourceMutation.feedback : null}
+      {!profileModalVisible ? profileMutation.feedback : null}
       {showModel ? workbenchModelCard : null}
       {showCompanion ? companionCard : null}
       {showSkills ? (
@@ -762,6 +842,7 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
             {canManageSkills ? (
               <Space size={8}>
                 <Button
+                  disabled={blocked}
                   icon={<PlusOutlined />}
                   size="small"
                   onClick={() => {
@@ -772,6 +853,7 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
                   新增
                 </Button>
                 <Button
+                  disabled={blocked}
                   type="primary"
                   icon={<SaveOutlined />}
                   size="small"
@@ -826,8 +908,9 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
                         tooltip="上移"
                         icon={<ArrowUpOutlined />}
                         size="small"
-                        disabled={skillsRegistryDraft[0]?.id === record.id}
+                        disabled={blocked || skillsRegistryDraft[0]?.id === record.id}
                         onClick={() => {
+                          setSkillsDirty(true)
                           setSkillsRegistryDraft((current) => {
                             const index = current.findIndex((item) => item.id === record.id)
                             if (index <= 0) return current
@@ -843,9 +926,11 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
                         icon={<ArrowDownOutlined />}
                         size="small"
                         disabled={
+                          blocked ||
                           skillsRegistryDraft[skillsRegistryDraft.length - 1]?.id === record.id
                         }
                         onClick={() => {
+                          setSkillsDirty(true)
                           setSkillsRegistryDraft((current) => {
                             const index = current.findIndex((item) => item.id === record.id)
                             if (index < 0 || index >= current.length - 1) return current
@@ -856,6 +941,7 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
                         }}
                       />
                       <ManagementIconButton
+                        disabled={blocked}
                         aria-label="编辑 Skill"
                         tooltip="编辑"
                         icon={<EditOutlined />}
@@ -866,16 +952,19 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
                         }}
                       />
                       <Popconfirm
+                        disabled={blocked}
                         title="确认删除 Skill？"
                         description="保存设置后生效。"
                         okButtonProps={{ danger: true }}
-                        onConfirm={() =>
+                        onConfirm={() => {
+                          setSkillsDirty(true)
                           setSkillsRegistryDraft((current) =>
                             current.filter((item) => item.id !== record.id),
                           )
-                        }
+                        }}
                       >
                         <ManagementIconButton
+                          disabled={blocked}
                           aria-label="删除 Skill"
                           tooltip="删除"
                           danger
@@ -897,11 +986,13 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
             headerExtra={
               canCreateDataSources ? (
                 <Button
+                  disabled={blocked}
                   type="primary"
                   onClick={() => {
                     setEditingDataSource(null)
                     setDataSourceSourceKind('logs')
                     setDataSourceBackendType('es')
+                    dataSourceMutation.reset()
                     setDataSourceModalVisible(true)
                   }}
                 >
@@ -922,9 +1013,11 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
             headerExtra={
               canManageAISettings ? (
                 <Button
+                  disabled={blocked}
                   type="primary"
                   onClick={() => {
                     setEditingProfile(null)
+                    profileMutation.reset()
                     setProfileModalVisible(true)
                   }}
                 >
@@ -942,15 +1035,20 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
       {showSkills ? (
         <Modal
           title={editingSkill ? '编辑 Skill' : '新增 Skill'}
-          open={skillsModalVisible}
+          open={skillsModalVisible && !skillsDenied}
+          closable={!blocked}
+          keyboard={!blocked}
+          mask={{ closable: !blocked }}
           footer={null}
           onCancel={() => {
+            if (blocked) return
             setSkillsModalVisible(false)
             setEditingSkill(null)
           }}
           destroyOnHidden
         >
           <Form
+            disabled={blocked}
             {...DEFAULT_FORM_LAYOUT}
             initialValues={{
               id: editingSkill?.id ?? '',
@@ -1009,6 +1107,7 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
                 void message.error(`Skill ID 已存在: ${next.id}`)
                 return
               }
+              setSkillsDirty(true)
               setSkillsRegistryDraft((current) => {
                 const rest = current.filter((item) => item.id !== next.id)
                 return [...rest, next]
@@ -1051,7 +1150,7 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
               <Input.TextArea rows={4} spellCheck={false} />
             </Form.Item>
             <Form.Item name="enabled" label="启用" valuePropName="checked">
-              <Switch />
+              <Switch disabled={blocked} />
             </Form.Item>
             <div className="text-sm text-[var(--ant-colorTextSecondary)]">
               ID 需要在全局 registry 中唯一；作用域用于提示这个 skill
@@ -1059,6 +1158,7 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
             </div>
             <div className="soha-form-actions">
               <Button
+                disabled={blocked}
                 onClick={() => {
                   setSkillsModalVisible(false)
                   setEditingSkill(null)
@@ -1066,7 +1166,7 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
               >
                 取消
               </Button>
-              <Button htmlType="submit" type="primary">
+              <Button disabled={blocked} htmlType="submit" type="primary">
                 保存
               </Button>
             </div>
@@ -1077,9 +1177,13 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
       {showDataSources ? (
         <Modal
           title={editingDataSource ? '编辑数据源' : '新增数据源'}
-          open={dataSourceModalVisible}
+          open={dataSourceModalVisible && !dataSourceDenied}
+          closable={!blocked}
+          keyboard={!blocked}
+          mask={{ closable: !blocked }}
           footer={null}
           onCancel={() => {
+            if (blocked) return
             setDataSourceModalVisible(false)
             setEditingDataSource(null)
             setDataSourceSourceKind('logs')
@@ -1087,7 +1191,9 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
           }}
           destroyOnHidden
         >
+          {dataSourceMutation.feedback}
           <Form
+            disabled={blocked}
             {...DEFAULT_FORM_LAYOUT}
             initialValues={buildDataSourceFormValues(editingDataSource)}
             onFinish={(values) => {
@@ -1184,7 +1290,7 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
               label="Truncate Long Lines"
               valuePropName="checked"
             >
-              <Switch />
+              <Switch disabled={blocked} />
             </Form.Item>
             <SectionCallout
               title="3. 后端连接"
@@ -1320,10 +1426,11 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
               </Form.Item>
             ) : null}
             <Form.Item name="enabled" label="启用" valuePropName="checked">
-              <Switch />
+              <Switch disabled={blocked} />
             </Form.Item>
             <div className="soha-form-actions">
               <Button
+                disabled={blocked}
                 onClick={() => {
                   setDataSourceModalVisible(false)
                   setEditingDataSource(null)
@@ -1334,7 +1441,12 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
                 取消
               </Button>
               {(editingDataSource ? canUpdateDataSources : canCreateDataSources) ? (
-                <Button htmlType="submit" type="primary" loading={dataSourceMutation.isPending}>
+                <Button
+                  disabled={blocked}
+                  htmlType="submit"
+                  type="primary"
+                  loading={dataSourceMutation.isPending}
+                >
                   保存
                 </Button>
               ) : null}
@@ -1346,15 +1458,21 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
       {showProfiles ? (
         <Modal
           title={editingProfile ? '编辑分析模板' : '新增分析模板'}
-          open={profileModalVisible}
+          open={profileModalVisible && !profileDenied}
+          closable={!blocked}
+          keyboard={!blocked}
+          mask={{ closable: !blocked }}
           footer={null}
           onCancel={() => {
+            if (blocked) return
             setProfileModalVisible(false)
             setEditingProfile(null)
           }}
           destroyOnHidden
         >
+          {profileMutation.feedback}
           <Form
+            disabled={blocked}
             {...DEFAULT_FORM_LAYOUT}
             initialValues={buildProfileFormValues(editingProfile)}
             onFinish={(values) => {
@@ -1425,27 +1543,28 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
               label="Include Evidence Detail"
               valuePropName="checked"
             >
-              <Switch />
+              <Switch disabled={blocked} />
             </Form.Item>
             <Form.Item
               name="outputIncludeRecommendations"
               label="Include Recommendations"
               valuePropName="checked"
             >
-              <Switch />
+              <Switch disabled={blocked} />
             </Form.Item>
             <Form.Item
               name="outputIncludeTimeline"
               label="Include Timeline"
               valuePropName="checked"
             >
-              <Switch />
+              <Switch disabled={blocked} />
             </Form.Item>
             <Form.Item name="enabled" label="启用" valuePropName="checked">
-              <Switch />
+              <Switch disabled={blocked} />
             </Form.Item>
             <div className="soha-form-actions">
               <Button
+                disabled={blocked}
                 onClick={() => {
                   setProfileModalVisible(false)
                   setEditingProfile(null)
@@ -1454,7 +1573,12 @@ export function AISettingsPage({ embedded = false, section = 'model' }: AISettin
                 取消
               </Button>
               {canManageAISettings ? (
-                <Button htmlType="submit" type="primary" loading={profileMutation.isPending}>
+                <Button
+                  disabled={blocked}
+                  htmlType="submit"
+                  type="primary"
+                  loading={profileMutation.isPending}
+                >
                   保存
                 </Button>
               ) : null}

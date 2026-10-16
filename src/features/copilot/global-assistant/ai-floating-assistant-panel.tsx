@@ -1,24 +1,25 @@
-import { useMemo } from 'react'
-import { Bubble, Sender, Sources, Suggestion, ThoughtChain, XProvider } from '@ant-design/x'
-import type { ThoughtChainItemType } from '@ant-design/x'
-import { Button, Empty, Space, Tag, Typography } from 'antd'
 import {
   CloseOutlined,
   ExpandAltOutlined,
   FileSearchOutlined,
   RobotOutlined,
 } from '@ant-design/icons'
+import type { ThoughtChainItemType } from '@ant-design/x'
+import { Bubble, Sender, Sources, Suggestion, ThoughtChain, XProvider } from '@ant-design/x'
 import type { WorkbenchSource } from '@opensoha/contracts/gen/ts/sohaapi'
+import { Button, Empty, Space, Tag, Typography } from 'antd'
+import { useMemo, type ReactNode } from 'react'
+import type { WorkbenchStreamToolCall } from '../workbench/stream'
 import type { AIGlobalAssistantMessage, AIPageContext } from './ai-context'
 import { contextDisplayName } from './ai-context'
 import { defaultPromptSuggestions } from './ai-prompts'
-import type { WorkbenchStreamToolCall } from '../workbench/stream'
 
 const { Text } = Typography
 
 interface AIFloatingAssistantPanelProps {
   context: AIPageContext
   disabled?: boolean
+  feedback?: ReactNode
   inputValue: string
   messages: AIGlobalAssistantMessage[]
   onCancel: () => void
@@ -75,6 +76,7 @@ function contextTags(context: AIPageContext) {
 export function AIFloatingAssistantPanel({
   context,
   disabled = false,
+  feedback,
   inputValue,
   messages,
   onCancel,
@@ -228,6 +230,7 @@ export function AIFloatingAssistantPanel({
           </div>
         ) : null}
 
+        {feedback}
         <div className="soha-ai-panel__sender">
           <Suggestion
             items={promptSuggestions.map((prompt) => ({ label: prompt, value: prompt }))}
@@ -238,7 +241,9 @@ export function AIFloatingAssistantPanel({
                 autoSize={{ minRows: 1, maxRows: 4 }}
                 disabled={disabled}
                 loading={running}
-                placeholder={disabled ? '没有 AI 助手权限' : '输入问题或使用 / 选择建议'}
+                placeholder={
+                  disabled ? '当前暂不能发送，请查看状态提示' : '输入问题或使用 / 选择建议'
+                }
                 value={inputValue}
                 onCancel={onCancel}
                 onChange={(value) => {

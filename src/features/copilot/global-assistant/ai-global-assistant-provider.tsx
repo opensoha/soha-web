@@ -1,11 +1,14 @@
-import { workbenchApi } from '../workbench/api'
-import { workbenchQueries } from '../workbench/queries'
-import { preferredExternalAgent } from '../workbench/agent-selection'
-import {
-  sortedAgentRunReplayEvents,
-  isRunningExternalAgentRun,
-} from '../workbench/agent-run-replay'
-import { watchAgentRun } from '../workbench/watch-agent-run'
+import { hasPermission } from '@/features/auth'
+import { systemKeys } from '@/features/system'
+import { api } from '@/services/api-client'
+import { usePreferencesStore } from '@/stores/preferences-store'
+import type { ApiResponse, PermissionSnapshot } from '@/types'
+import type {
+  WorkbenchGlobalAssistantOpenRequest,
+  WorkbenchSendMessageStreamRequest,
+} from '@opensoha/contracts/gen/ts/sohaapi'
+import { useQueryClient } from '@tanstack/react-query'
+import { Alert, App as AntdApp, Button, Select, Space } from 'antd'
 import {
   lazy,
   Suspense,
@@ -16,19 +19,16 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
-import { App as AntdApp } from 'antd'
 import { useLocation, useNavigate } from 'react-router-dom'
-import type {
-  WorkbenchGlobalAssistantOpenRequest,
-  WorkbenchSendMessageStreamRequest,
-} from '@opensoha/contracts/gen/ts/sohaapi'
-import { hasPermission } from '@/features/auth'
-import { systemKeys } from '@/features/system'
-import { api } from '@/services/api-client'
-import { usePreferencesStore } from '@/stores/preferences-store'
-import type { ApiResponse, PermissionSnapshot } from '@/types'
+import {
+  isRunningExternalAgentRun,
+  sortedAgentRunReplayEvents,
+} from '../workbench/agent-run-replay'
+import { preferredExternalAgent } from '../workbench/agent-selection'
+import { workbenchApi } from '../workbench/api'
+import { workbenchKeys } from '../workbench/keys'
 import { getAIWorkbenchPathForMode } from '../workbench/navigation'
+import { workbenchQueries } from '../workbench/queries'
 import {
   createWorkbenchStreamState,
   reduceWorkbenchStreamState,
@@ -37,8 +37,7 @@ import {
   type WorkbenchStreamState,
 } from '../workbench/stream'
 import type { WorkbenchSession } from '../workbench/types'
-import { workbenchKeys } from '../workbench/keys'
-import { AIContextMenu, type AIContextMenuState } from './ai-context-menu'
+import { watchAgentRun } from '../workbench/watch-agent-run'
 import {
   contextIdentityKey,
   decodeAIContextFromElement,
@@ -53,6 +52,7 @@ import {
   type AIPageContext,
   type AISelectionContext,
 } from './ai-context'
+import { AIContextMenu, type AIContextMenuState } from './ai-context-menu'
 import { AIPageContextRegistry, type AIPageContextRegistryValue } from './ai-context-provider'
 import { AIFloatButton } from './ai-float-button'
 import { buildGlobalAssistantPrompt, buildGlobalAssistantTitle } from './ai-prompts'
@@ -87,6 +87,12 @@ interface GlobalAIAssistantProviderProps {
   nativeCompanionWindow?: boolean
   permissionSnapshot?: PermissionSnapshot
   renderCompanion?: (props: GlobalAssistantCompanionRenderProps) => ReactNode
+}
+
+interface PendingAssistantCancellation {
+  sessionId: string
+  runId?: string
+  cancelAttempted: boolean
 }
 
 interface SharedAssistantSession {
@@ -307,6 +313,14 @@ export function GlobalAIAssistantProvider({
   const [contextMenu, setContextMenu] = useState<AIContextMenuState | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const externalRunRef = useRef<{ sessionId: string; runId?: string } | null>(null)
+  const cancellationRef = useRef<PendingAssistantCancellation | null>(null)
+  const cancellationController = useRef<AbortController | null>(null)
+  const [cancellation, setCancellation] = useState<PendingAssistantCancellation | null>(null)
+  const [cancellationError, setCancellationError] = useState<Error | null>(null)
+  const [cancellationRuns, setCancellationRuns] = useState<{ id: string; status: string }[]>([])
+  const [checkingCancellation, setCheckingCancellation] = useState(false)
+  const chatAllowedRef = useRef(canUseChat && enabled)
+  chatAllowedRef.current = canUseChat && enabled
   const selectionTimerRef = useRef<number | null>(null)
 
   const activeContext = useMemo(() => mergeAIPageContext(pageContext), [pageContext])
@@ -315,6 +329,7 @@ export function GlobalAIAssistantProvider({
     if (typeof BroadcastChannel === 'undefined') return undefined
     const channel = new BroadcastChannel(sharedSessionChannelName)
     channel.onmessage = (event: MessageEvent<SharedAssistantSession | null>) => {
+      if (!chatAllowedRef.current) return
       const shared = event.data
       setCurrentSession(shared?.session ?? null)
       setCurrentSessionContextKey(shared?.contextKey ?? null)
@@ -373,6 +388,75 @@ export function GlobalAIAssistantProvider({
     [currentSession, currentSessionContextKey, nativeCompanionWindow, queryClient],
   )
 
+  const readCancellation = useCallback(
+    async (target: PendingAssistantCancellation, requestCancel = false) => {
+      if (cancellationController.current || !chatAllowedRef.current) return
+      const controller = new AbortController()
+      cancellationController.current = controller
+      setCheckingCancellation(true)
+      setCancellationError(null)
+      try {
+        const response = await workbenchApi.agentRuns.session(target.sessionId)
+        if (controller.signal.aborted) return
+        if (!target.runId) {
+          setCancellationRuns(
+            response.data
+              .filter((run) => !run.sessionId || run.sessionId === target.sessionId)
+              .map(({ id, status }) => ({ id, status })),
+          )
+          throw new Error(
+            '尚未取得本次任务 ID。请选择与本次请求对应的任务，或打开完整工作台核对；不会自动取消其他任务。',
+          )
+        }
+        let run = response.data.find(
+          (item) =>
+            item.id === target.runId && (!item.sessionId || item.sessionId === target.sessionId),
+        )
+        if (!run) throw new Error('暂未读到对应任务，请稍后重新读取状态。')
+        if (requestCancel && isRunningExternalAgentRun(run)) {
+          target.cancelAttempted = true
+          const receipt = await workbenchApi.agentRuns.cancel(target.runId)
+          if (controller.signal.aborted) return
+          if (
+            receipt.data.id !== target.runId ||
+            (receipt.data.sessionId && receipt.data.sessionId !== target.sessionId)
+          )
+            throw new Error('取消回执与原任务不一致，请读取状态核对。')
+          run = receipt.data
+        }
+        if (isRunningExternalAgentRun(run) && !requestCancel)
+          throw new Error('任务仍在运行，可继续读取状态或明确请求取消。')
+        if (isRunningExternalAgentRun(run)) {
+          run = await watchAgentRun(
+            target.sessionId,
+            target.runId,
+            controller.signal,
+            () => undefined,
+          )
+        }
+        if (controller.signal.aborted || cancellationRef.current !== target) return
+        setMessages((items) =>
+          items.concat({
+            id: nextMessageId('ai-cancel'),
+            role: 'system',
+            content: `任务 ${run.id} 已确认终态：${run.status}`,
+            status: 'success',
+          }),
+        )
+        cancellationRef.current = null
+        setCancellation(null)
+        await queryClient.invalidateQueries({ queryKey: workbenchKeys.agentRuns.all() })
+      } catch (error) {
+        if (!controller.signal.aborted && cancellationRef.current === target)
+          setCancellationError(error instanceof Error ? error : new Error('任务状态未确认'))
+      } finally {
+        if (cancellationController.current === controller) cancellationController.current = null
+        setCheckingCancellation(false)
+      }
+    },
+    [queryClient],
+  )
+
   const sendPrompt = useCallback(
     async (
       action: AIGlobalAssistantAction,
@@ -384,7 +468,7 @@ export function GlobalAIAssistantProvider({
         void message.warning('当前账号没有 AI 助手权限')
         return
       }
-      if (running) {
+      if (running || abortRef.current || cancellationRef.current) {
         void message.warning('当前回复仍在生成')
         return
       }
@@ -407,6 +491,8 @@ export function GlobalAIAssistantProvider({
       const controller = new AbortController()
       abortRef.current = controller
       let createdSessionId: string | null = null
+      let submitted = false
+      let terminalConfirmed = false
 
       try {
         const ensured = await ensureSession(context, action, controller.signal)
@@ -431,10 +517,14 @@ export function GlobalAIAssistantProvider({
           pinnedContext: pinnedContextFromAIContext(context),
         }
 
+        if (controller.signal.aborted)
+          throw new DOMException('The operation was aborted.', 'AbortError')
+        submitted = true
         await streamWorkbenchMessage(
           `/copilot/sessions/${session.id}/messages/stream`,
           request,
           (event) => {
+            if (controller.signal.aborted || !chatAllowedRef.current) return
             if (
               event.type === 'agent.status' &&
               event.status === 'queued' &&
@@ -473,6 +563,7 @@ export function GlobalAIAssistantProvider({
             externalRunRef.current.runId,
             controller.signal,
             (snapshot) => {
+              if (controller.signal.aborted || !chatAllowedRef.current) return
               for (const event of sortedAgentRunReplayEvents(snapshot, session.id)) {
                 const key = workbenchStreamEventKey(event)
                 if (seenEvents.has(key)) continue
@@ -493,6 +584,7 @@ export function GlobalAIAssistantProvider({
               )
             },
           )
+          terminalConfirmed = true
           if (run.status !== 'completed' && run.status !== 'succeeded')
             throw new Error(
               run.status === 'canceled' || run.status === 'cancelled'
@@ -509,6 +601,7 @@ export function GlobalAIAssistantProvider({
             ),
           )
         }
+        if (controller.signal.aborted || !chatAllowedRef.current) return
         setCurrentSession((current) =>
           current?.id === session.id
             ? {
@@ -531,7 +624,7 @@ export function GlobalAIAssistantProvider({
         await queryClient.invalidateQueries({ queryKey: systemKeys.audit.all })
       } catch (error) {
         const isAbort = error instanceof DOMException && error.name === 'AbortError'
-        if (isAbort && createdSessionId && !externalRunRef.current?.runId) {
+        if (isAbort && createdSessionId && !submitted) {
           const sessionId = createdSessionId
           setCurrentSession((current) => (current?.id === sessionId ? null : current))
           setCurrentSessionContextKey(null)
@@ -539,24 +632,38 @@ export function GlobalAIAssistantProvider({
           await api.delete(`/copilot/sessions/${sessionId}`).catch(() => undefined)
           await queryClient.invalidateQueries({ queryKey: workbenchKeys.sessions.all() })
         }
-        setMessages((items) =>
-          items.map((item) =>
-            item.id === assistantMessageId
-              ? {
-                  ...item,
-                  content: isAbort
-                    ? '已取消本次回复。'
-                    : error instanceof Error
-                      ? error.message
-                      : 'AI 请求失败。',
-                  status: isAbort ? 'abort' : 'error',
-                }
-              : item,
-          ),
-        )
-        if (!isAbort) {
-          void message.error(error instanceof Error ? error.message : 'AI 请求失败')
+        if (
+          submitted &&
+          !terminalConfirmed &&
+          !(error instanceof WorkbenchStreamEventError) &&
+          externalRunRef.current &&
+          !cancellationRef.current
+        ) {
+          const target = { ...externalRunRef.current, cancelAttempted: false }
+          cancellationRef.current = target
+          setCancellation(target)
+          setCancellationError(
+            new Error('输出已中断，后台任务状态尚未确认。请读取状态或在完整工作台核对。'),
+          )
         }
+        if (chatAllowedRef.current)
+          setMessages((items) =>
+            items.map((item) =>
+              item.id === assistantMessageId
+                ? {
+                    ...item,
+                    content: isAbort
+                      ? submitted
+                        ? '输出已停止，后台任务状态待确认。'
+                        : '已停止本次请求。'
+                      : error instanceof Error
+                        ? error.message
+                        : 'AI 请求失败。',
+                    status: isAbort ? 'abort' : 'error',
+                  }
+                : item,
+            ),
+          )
       } finally {
         abortRef.current = null
         externalRunRef.current = null
@@ -603,32 +710,41 @@ export function GlobalAIAssistantProvider({
 
   const cancelStream = useCallback(() => {
     const active = externalRunRef.current
-    if (active) {
-      void workbenchApi.agentRuns
-        .session(active.sessionId)
-        .then((response) =>
-          Promise.all(
-            response.data
-              .filter(
-                (run) =>
-                  isRunningExternalAgentRun(run) && (!active.runId || run.id === active.runId),
-              )
-              .map((run) => workbenchApi.agentRuns.cancel(run.id)),
-          ),
-        )
-        .catch((error: Error) => void message.error(error.message))
-    }
     abortRef.current?.abort()
-  }, [message])
+    if (!active || cancellationRef.current) return
+    const target = { ...active, cancelAttempted: false }
+    cancellationRef.current = target
+    setCancellation(target)
+    void readCancellation(target, true)
+  }, [readCancellation])
 
-  const closeAssistant = useCallback(() => {
-    abortRef.current?.abort()
-    setPanelOpen(false)
-  }, [])
+  const closeAssistant = useCallback(() => setPanelOpen(false), [])
+
+  useEffect(
+    () => () => {
+      abortRef.current?.abort()
+      cancellationController.current?.abort()
+    },
+    [],
+  )
 
   useEffect(() => {
-    if (enabled) return
+    if (enabled && canUseChat) return
     abortRef.current?.abort()
+    cancellationController.current?.abort()
+    if (externalRunRef.current && !cancellationRef.current) {
+      const target = { ...externalRunRef.current, cancelAttempted: false }
+      cancellationRef.current = target
+      setCancellation(target)
+    }
+    setMessages([])
+    setCancellationRuns([])
+    setCancellationError(new Error('权限已变化，重新取得权限后请读取任务状态。'))
+    setAssistantInput('')
+    setStreamState(createWorkbenchStreamState())
+    setCurrentSession(null)
+    setCurrentSessionContextKey(null)
+    writeSharedSession(null)
     if (selectionTimerRef.current !== null) {
       window.clearTimeout(selectionTimerRef.current)
       selectionTimerRef.current = null
@@ -637,7 +753,7 @@ export function GlobalAIAssistantProvider({
     setSelectionContext(null)
     setSelectionToolbar(null)
     setContextMenu(null)
-  }, [enabled])
+  }, [enabled, canUseChat])
 
   useEffect(() => {
     if (!enabled || !canUseChat) {
@@ -752,11 +868,62 @@ export function GlobalAIAssistantProvider({
           onOpenWorkbench={openWorkbench}
         />
       ) : null}
-      {enabled && panelOpen ? (
+      {enabled && canUseChat && panelOpen ? (
         <Suspense fallback={null}>
           <AIFloatingAssistantPanel
             context={activeContext}
-            disabled={!canUseChat}
+            disabled={!canUseChat || Boolean(cancellation)}
+            feedback={
+              cancellation ? (
+                <Alert
+                  showIcon
+                  type="warning"
+                  title="后台任务取消待确认"
+                  description={
+                    <Space orientation="vertical">
+                      <span>{cancellation.runId || cancellation.sessionId}</span>
+                      <span>{cancellationError?.message || '正在核对后台任务终态'}</span>
+                      {!cancellation.runId && cancellationRuns.length ? (
+                        <Select
+                          aria-label="待核对助手任务"
+                          style={{ width: '100%' }}
+                          placeholder="选择本次请求对应的任务 ID"
+                          options={cancellationRuns.map((run) => ({
+                            value: run.id,
+                            label: `${run.id} · ${run.status}`,
+                          }))}
+                          onChange={(runId) => {
+                            const target = { ...cancellation, runId }
+                            cancellationRef.current = target
+                            setCancellation(target)
+                            setCancellationError(null)
+                          }}
+                        />
+                      ) : null}
+                    </Space>
+                  }
+                  action={
+                    <Space orientation="vertical">
+                      <Button
+                        size="small"
+                        loading={checkingCancellation}
+                        onClick={() => void readCancellation(cancellation)}
+                      >
+                        读取状态
+                      </Button>
+                      {cancellation.runId && !checkingCancellation ? (
+                        <Button
+                          size="small"
+                          onClick={() => void readCancellation(cancellation, true)}
+                        >
+                          请求取消
+                        </Button>
+                      ) : null}
+                    </Space>
+                  }
+                />
+              ) : undefined
+            }
             inputValue={assistantInput}
             messages={messages}
             open

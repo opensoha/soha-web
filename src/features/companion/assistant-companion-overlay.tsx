@@ -1,19 +1,24 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Button } from 'antd'
+import { ReadFeedback } from '@/components/request-feedback'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import type { AIGlobalAssistantAction, AIGlobalAssistantMessage } from '@/features/copilot'
+import { DraggableFloatShell } from '@/features/copilot'
+import type { InstalledPlugin } from '@/features/plugins'
+import { pluginQueries } from '@/features/plugins'
+import { useAuthStore } from '@/stores/auth-store'
+import { usePreferencesStore } from '@/stores/preferences-store'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
 import {
+  ExclamationCircleOutlined,
   ExpandAltOutlined,
   HeartOutlined,
   MessageOutlined,
   SearchOutlined,
 } from '@ant-design/icons'
-import { DraggableFloatShell } from '@/features/copilot'
-import type { AIGlobalAssistantAction, AIGlobalAssistantMessage } from '@/features/copilot'
-import { pluginQueries } from '@/features/plugins'
-import type { InstalledPlugin } from '@/features/plugins'
-import { usePreferencesStore } from '@/stores/preferences-store'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Button, Popover } from 'antd'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { companionApi, companionKeys } from './api'
-import { builtinCompanionPack, BUILTIN_COMPANION_PLUGIN_ID } from './builtin-pack'
+import { BUILTIN_COMPANION_PLUGIN_ID, builtinCompanionPack } from './builtin-pack'
 import { CompanionRenderer } from './companion-renderer'
 import { useLocalCompanionPackStore } from './local-live2d-store'
 import {
@@ -69,6 +74,9 @@ export function AssistantCompanionOverlay({
   nativeWindow = false,
 }: AssistantCompanionOverlayProps) {
   const queryClient = useQueryClient()
+  const owner = useAuthStore((state) => state.user?.userId ?? '')
+  const ownerRef = useRef(owner)
+  ownerRef.current = owner
   const selectedPluginId = usePreferencesStore((state) => state.selectedCompanionPluginId)
   const bubbleEnabled = usePreferencesStore((state) => state.companionBubbleEnabled)
   const localPack = useLocalCompanionPackStore((state) => state.pack)
@@ -76,48 +84,50 @@ export function AssistantCompanionOverlay({
   const [hovered, setHovered] = useState(false)
   const [interactionMotion, setInteractionMotion] = useState<CompanionInteractionMotion>()
   const interactionTimerRef = useRef<number>()
-  const installedQuery = useQuery(pluginQueries.installed())
+  const installedQuery = useQuery({ ...pluginQueries.installed(), enabled: !disabled })
   const profileQuery = useQuery({
-    queryKey: companionKeys.profile(),
+    queryKey: companionKeys.profile(owner),
     queryFn: companionApi.profile,
-    enabled: !disabled,
+    enabled: !disabled && Boolean(owner),
   })
+  const allowedRef = useRef(!disabled)
+  allowedRef.current = !disabled
+  const installed = disabled ? undefined : readableQueryData(installedQuery)
   const pack = useMemo(
-    () =>
-      activePack(
-        selectedPluginId,
-        Array.isArray(installedQuery.data) ? installedQuery.data : [],
-        localPack,
-      ),
-    [installedQuery.data, localPack, selectedPluginId],
+    () => activePack(selectedPluginId, Array.isArray(installed) ? installed : [], localPack),
+    [installed, localPack, selectedPluginId],
   )
-  const interactionMutation = useMutation({
-    mutationFn: (interactionId: string) =>
-      companionApi.interact({
-        pluginId: pack.pluginId,
-        interactionId,
-        clientRevision: profileQuery.data?.revision,
-      }),
-    onSuccess: (receipt) => {
-      queryClient.setQueryData(companionKeys.profile(), receipt.profile)
-      try {
-        const channel = new BroadcastChannel('soha-companion')
-        channel.postMessage({ type: 'profile-updated' })
-        channel.close()
-      } catch {
-        // BroadcastChannel is optional; React Query remains authoritative in this view.
-      }
+  const interactionMutation = useOperationMutation(
+    {
+      mutationFn: ({
+        input,
+      }: {
+        owner: string
+        input: Parameters<typeof companionApi.interact>[0]
+      }) => companionApi.interact(input),
+      onSuccess: (receipt, submitted) => {
+        if (!allowedRef.current || ownerRef.current !== submitted.owner) return
+        queryClient.setQueryData(companionKeys.profile(owner), receipt.profile)
+        try {
+          const channel = new BroadcastChannel('soha-companion')
+          channel.postMessage({ type: 'profile-updated' })
+          channel.close()
+        } catch {
+          // BroadcastChannel is optional; React Query remains authoritative in this view.
+        }
+      },
     },
-  })
+    { label: ['宠物互动', 'Companion interaction'], target: (v) => v.input.interactionId },
+  )
 
   useEffect(() => {
     if (typeof BroadcastChannel === 'undefined') return undefined
     const channel = new BroadcastChannel('soha-companion')
     channel.onmessage = () => {
-      void queryClient.invalidateQueries({ queryKey: companionKeys.profile() })
+      void queryClient.invalidateQueries({ queryKey: companionKeys.profile(owner) })
     }
     return () => channel.close()
-  }, [queryClient])
+  }, [queryClient, owner])
 
   useEffect(
     () => () => {
@@ -135,9 +145,10 @@ export function AssistantCompanionOverlay({
     messages,
   })
   const speech = companionSpeech(messages, running)
-  const profile = profileQuery.data
+  const profile = disabled ? undefined : readableQueryData(profileQuery)
 
   const runInteraction = (interactionId: string) => {
+    if (!owner || disabled || interactionMutation.blocked || queryAccessDenied(profileQuery)) return
     const animation = companionInteractionAnimation(pack.manifest, interactionId)
     if (animation) {
       window.clearTimeout(interactionTimerRef.current)
@@ -147,7 +158,15 @@ export function AssistantCompanionOverlay({
       }))
       interactionTimerRef.current = window.setTimeout(() => setInteractionMotion(undefined), 600)
     }
-    if (!pack.local) void interactionMutation.mutateAsync(interactionId).catch(() => undefined)
+    if (!pack.local)
+      interactionMutation.mutate({
+        owner,
+        input: {
+          pluginId: pack.pluginId,
+          interactionId,
+          clientRevision: profile?.revision,
+        },
+      })
   }
 
   const companion = (
@@ -183,7 +202,7 @@ export function AssistantCompanionOverlay({
       <div aria-label="宠物操作" className="soha-companion__actions" role="toolbar">
         <Button
           aria-label="摸摸宠物"
-          disabled={disabled}
+          disabled={disabled || interactionMutation.blocked || queryAccessDenied(profileQuery)}
           icon={<HeartOutlined />}
           loading={interactionMutation.isPending}
           shape="circle"
@@ -214,6 +233,26 @@ export function AssistantCompanionOverlay({
           onClick={onOpenWorkbench}
         />
       </div>
+      {!disabled && (interactionMutation.isError || profileQuery.isError) ? (
+        <Popover
+          content={
+            <div style={{ maxWidth: 360 }}>
+              {interactionMutation.feedback}
+              <ReadFeedback query={profileQuery} label="宠物档案" />
+            </div>
+          }
+          trigger="click"
+        >
+          <Button
+            className="soha-companion__feedback"
+            size="small"
+            icon={<ExclamationCircleOutlined />}
+            aria-label="查看宠物互动状态"
+          >
+            {interactionMutation.outcomeUnknown ? '互动待确认' : '查看状态'}
+          </Button>
+        </Popover>
+      ) : null}
       {profile ? (
         <div
           aria-label={`等级 ${profile.level}，亲密度 ${profile.affinity}`}

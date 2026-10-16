@@ -1,4 +1,3 @@
-import { useMemo, type CSSProperties } from 'react'
 import {
   Background,
   Controls,
@@ -11,10 +10,11 @@ import {
   type NodeProps,
 } from '@xyflow/react'
 import dagre from 'dagre'
+import { useMemo, type CSSProperties } from 'react'
 
-import '@xyflow/react/dist/style.css'
 import { StatusTag } from '@/components/status-tag'
 import { WorkflowCanvasSurface } from '@/components/workflow-canvas-surface'
+import '@xyflow/react/dist/style.css'
 import type { WorkbenchGraph, WorkbenchGraphNode } from '../types'
 
 const GRAPH_NODE_WIDTH = 248
@@ -73,7 +73,7 @@ function graphNodeLabel(kind: string) {
   }
 }
 
-function graphEdges(graph: WorkbenchGraph): WorkbenchFlowEdge[] {
+function graphEdges(graph: WorkbenchGraph, selectedNodeId: string | null): WorkbenchFlowEdge[] {
   return (graph.edges ?? []).map((item) => ({
     id: item.id,
     source: item.source,
@@ -87,7 +87,13 @@ function graphEdges(graph: WorkbenchGraph): WorkbenchFlowEdge[] {
     label: item.relation,
     style: {
       stroke: graphEdgeColor(item.severity),
-      strokeWidth: item.relation === 'supports' ? 1.4 : 1.8,
+      strokeWidth:
+        selectedNodeId && [item.source, item.target].includes(selectedNodeId)
+          ? 2.4
+          : item.relation === 'supports'
+            ? 1.4
+            : 1.8,
+      opacity: selectedNodeId && ![item.source, item.target].includes(selectedNodeId) ? 0.25 : 1,
       strokeDasharray: item.relation === 'supports' ? '8 4' : undefined,
     },
     labelStyle: { fontSize: 11, fill: 'var(--soha-text-secondary)' },
@@ -150,24 +156,29 @@ const WORKBENCH_GRAPH_NODE_TYPES = {
 
 function WorkbenchGraphCanvas({
   graph,
+  selectedNodeId,
   onSelectNode,
 }: {
   graph: WorkbenchGraph
+  selectedNodeId: string | null
   onSelectNode: (nodeId: string | null) => void
 }) {
-  const edges = useMemo(() => graphEdges(graph), [graph])
+  const edges = useMemo(() => graphEdges(graph, selectedNodeId), [graph, selectedNodeId])
   const nodes = useMemo(
     () =>
       layoutWorkbenchGraph(
         (graph.nodes ?? []).map((item) => ({
           id: item.id,
           type: 'workbenchGraphNode',
+          selected: item.id === selectedNodeId,
+          ariaRole: 'button',
+          ariaLabel: `${graphNodeLabel(item.kind)} ${item.title}`,
           position: { x: 0, y: 0 },
           data: { ...item } as WorkbenchGraphNode & Record<string, unknown>,
         })),
         edges,
       ),
-    [edges, graph],
+    [edges, graph, selectedNodeId],
   )
 
   return (
@@ -177,6 +188,20 @@ function WorkbenchGraphCanvas({
         edges={edges}
         nodeTypes={WORKBENCH_GRAPH_NODE_TYPES}
         fitView
+        fitViewOptions={{ duration: 0 }}
+        deleteKeyCode={null}
+        multiSelectionKeyCode={null}
+        onNodesChange={(changes) => {
+          const selected = changes.find((change) => change.type === 'select' && change.selected)
+          if (selected?.type === 'select') onSelectNode(selected.id)
+          else if (
+            changes.some(
+              (change) =>
+                change.type === 'select' && change.id === selectedNodeId && !change.selected,
+            )
+          )
+            onSelectNode(null)
+        }}
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable
@@ -195,15 +220,22 @@ function WorkbenchGraphCanvas({
 export default function WorkbenchGraphView({
   fitKey,
   graph,
+  selectedNodeId,
   onSelectNode,
 }: {
   fitKey: string
   graph: WorkbenchGraph
+  selectedNodeId: string | null
   onSelectNode: (nodeId: string | null) => void
 }) {
   return (
     <ReactFlowProvider>
-      <WorkbenchGraphCanvas key={fitKey} graph={graph} onSelectNode={onSelectNode} />
+      <WorkbenchGraphCanvas
+        key={fitKey}
+        graph={graph}
+        selectedNodeId={selectedNodeId}
+        onSelectNode={onSelectNode}
+      />
     </ReactFlowProvider>
   )
 }

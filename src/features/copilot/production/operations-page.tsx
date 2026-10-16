@@ -1,7 +1,3 @@
-import type { ReactNode } from 'react'
-import { ReloadOutlined } from '@ant-design/icons'
-import { Space, Tabs } from 'antd'
-import type { TableColumnsType } from 'antd'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
@@ -10,6 +6,10 @@ import {
   ManagementTableToolbar,
 } from '@/components/management-list'
 import { StatusTag } from '@/components/status-tag'
+import { ReloadOutlined } from '@ant-design/icons'
+import type { TableColumnsType } from 'antd'
+import { Space, Tabs } from 'antd'
+import type { ReactNode } from 'react'
 
 export interface ProductionRecord {
   id: string
@@ -26,7 +26,8 @@ export interface ProductionTab<T extends ProductionRecord = ProductionRecord> {
   label: string
   records: T[]
   loading?: boolean
-  error?: boolean
+  error?: Error | null
+  hasReadData?: boolean
   columns?: TableColumnsType<T>
   actions?: (record: T) => ReactNode
   emptyDescription: string
@@ -38,6 +39,7 @@ interface ProductionOperationsPageProps {
   onRefresh: () => void
   refreshing?: boolean
   notice?: ReactNode
+  feedback?: ReactNode
   children?: ReactNode
 }
 
@@ -79,12 +81,18 @@ export function ProductionOperationsPage({
   onRefresh,
   refreshing,
   notice,
+  feedback,
   children,
 }: ProductionOperationsPageProps) {
   return (
     <ManagementDataPage
       className="soha-ai-production-capability"
-      beforeQuery={notice}
+      beforeQuery={
+        <>
+          {notice}
+          {feedback}
+        </>
+      }
       tableNode={
         <Tabs
           className="soha-resource-tabs"
@@ -103,7 +111,7 @@ export function ProductionOperationsPage({
           }
           items={tabs.map((tab) => ({
             key: tab.key,
-            label: `${tab.label} (${tab.records.length})`,
+            label: `${tab.label} (${tab.loading || (tab.error && !tab.hasReadData) ? '—' : tab.records.length})`,
             children: (
               <AdminTable
                 columns={[
@@ -121,17 +129,13 @@ export function ProductionOperationsPage({
                 ]}
                 dataSource={tab.records}
                 loading={tab.loading}
+                error={tab.error}
+                hasReadData={tab.hasReadData}
+                onRetry={onRefresh}
                 columnSettingIconOnly
                 rowKey="id"
                 empty={
-                  tab.error ? (
-                    <ManagementState kind="error" title={`${tab.label}加载失败`} />
-                  ) : (
-                    <ManagementState
-                      title={`暂无${tab.label}`}
-                      description={tab.emptyDescription}
-                    />
-                  )
+                  <ManagementState title={`暂无${tab.label}`} description={tab.emptyDescription} />
                 }
               />
             ),

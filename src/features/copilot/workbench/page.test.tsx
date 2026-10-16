@@ -1,26 +1,27 @@
 /** @vitest-environment jsdom */
+import { ApiError } from '@/services/api-error'
 
-import { act } from 'react'
-import { webcrypto } from 'node:crypto'
-import { App as AntdApp } from 'antd'
+import { useAuthStore } from '@/stores/auth-store'
+import type { PermissionSnapshot } from '@/types'
+import type {
+  PersonalEnvironment,
+  PersonalEnvironmentTemplate,
+  WorkbenchStreamEvent,
+} from '@opensoha/contracts/gen/ts/sohaapi'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { App as AntdApp } from 'antd'
+import { webcrypto } from 'node:crypto'
+import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  WorkbenchStreamEvent,
-  PersonalEnvironment,
-  PersonalEnvironmentTemplate,
-} from '@opensoha/contracts/gen/ts/sohaapi'
-import { AIWorkbenchPage, RUNNABLE_ANALYSIS_MODE_OPTIONS } from './page'
-import type { PermissionSnapshot } from '@/types'
-import { useAuthStore } from '@/stores/auth-store'
 import type { MemoryPolicy } from '../memory/types'
 import {
   forgetNativeRequest,
   pendingNativeRequests,
   rememberNativeRequest,
 } from './native-request-journal'
+import { AIWorkbenchPage, RUNNABLE_ANALYSIS_MODE_OPTIONS } from './page'
 import type {
   WorkbenchAgentRun,
   WorkbenchMessage,
@@ -1839,14 +1840,19 @@ describe('AIWorkbenchPage', () => {
       })
       await waitForWorkbenchText(container, '核对环境')
       expect(container.textContent).not.toContain('唤醒环境')
-      apiPostMock.mockRejectedValueOnce(new Error('lost receipt'))
+      apiPostMock.mockRejectedValueOnce(
+        new ApiError(503, 'lost receipt', {
+          method: 'POST',
+          path: '/copilot/assistant/environment',
+        }),
+      )
       await act(async () => {
         Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
           .find((b) => b.textContent === '核对环境')!
           .click()
         await flushAsyncWork()
       })
-      await waitForWorkbenchText(document.body, '环境操作未确认')
+      await waitForWorkbenchText(document.body, '环境操作：请求结果不明')
       expect(
         apiPostMock.mock.calls.filter(([path]) => path === '/copilot/assistant/environment'),
       ).toEqual([['/copilot/assistant/environment', { action: 'reconcile' }]])
@@ -2240,6 +2246,103 @@ describe('AIWorkbenchPage', () => {
       }),
     )
     expect(streamWorkbenchMessageMock).not.toHaveBeenCalled()
+  })
+
+  it('drops an account-owned dialog draft when the account changes', async () => {
+    const account = (userId: string) => ({
+      userId,
+      userName: userId,
+      email: '',
+      roles: [],
+      teams: [],
+      projects: [],
+      tags: [],
+    })
+    useAuthStore.getState().setUser(account('first-owner'))
+    try {
+      const container = await renderPage('/ai-workbench/chat?session=session-1')
+      await act(async () => {
+        container.querySelector<HTMLButtonElement>('[aria-label="新增旁聊"]')!.click()
+        await flushAsyncWork()
+      })
+      const input = document.body.querySelector<HTMLInputElement>('[aria-label="旁聊名称"]')!
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!.call(
+          input,
+          'private first-owner draft',
+        )
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+      expect(input.value).toBe('private first-owner draft')
+      await act(async () => {
+        useAuthStore.getState().setUser(account('second-owner'))
+        await flushAsyncWork()
+      })
+      expect(
+        document.body.querySelector<HTMLInputElement>('[aria-label="旁聊名称"]')?.value,
+      ).not.toBe('private first-owner draft')
+      expect(apiPostMock.mock.calls.filter(([path]) => path === '/copilot/sessions')).toEqual([])
+    } finally {
+      await act(async () => useAuthStore.getState().clearAuth())
+    }
+  })
+
+  it('hides cached conversation content and clears a private draft after a denied reread', async () => {
+    testState.messageScenario = 'plain'
+    const container = await renderPage('/ai-workbench/chat?session=session-1')
+    await typeSenderMessage(container, 'private unsent draft')
+    expect(container.textContent).toContain('我们可以从一个简单例子开始。')
+    const original = apiGetMock.getMockImplementation()!
+    apiGetMock.mockImplementation(async (path) => {
+      if (path === '/copilot/sessions/session-1/messages')
+        throw new ApiError(403, 'Forbidden', { method: 'GET' })
+      return original(path)
+    })
+    try {
+      await act(async () => {
+        await container.queryClient.refetchQueries({
+          queryKey: ['copilot-workbench-messages', 'session-1'],
+        })
+        await flushAsyncWork()
+      })
+      await waitForWorkbenchText(container, '当前会话内容不可访问')
+      expect(container.textContent).not.toContain('我们可以从一个简单例子开始。')
+      expect(senderInput(container)).toBeNull()
+    } finally {
+      apiGetMock.mockImplementation(original)
+    }
+  })
+
+  it('keeps a failed rename draft and fences its unknown original target', async () => {
+    const container = await renderPage('/ai-workbench/chat?session=session-1')
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[aria-label="重命名 支付告警调查"]')!.click()
+      await flushAsyncWork()
+    })
+    const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')!
+    apiPatchMock.mockRejectedValueOnce(
+      new ApiError(503, 'Unknown rename', { method: 'PATCH', requestId: 'rename-original' }),
+    )
+    const save = dialog.querySelector<HTMLButtonElement>('.ant-modal-footer .ant-btn-primary')!
+    await act(async () => {
+      save.click()
+      await flushAsyncWork()
+    })
+    await waitForWorkbenchText(dialog, '保存会话：请求结果不明')
+    expect(dialog.querySelector<HTMLInputElement>('[aria-label="会话名称"]')?.value).toBe(
+      '支付告警调查',
+    )
+    expect(save.disabled).toBe(true)
+    expect(dialog.querySelector<HTMLButtonElement>('.ant-modal-close')).toBeNull()
+    await act(async () => {
+      save.click()
+      await flushAsyncWork()
+    })
+    expect(apiPatchMock).toHaveBeenCalledTimes(1)
+    expect(apiPatchMock).toHaveBeenCalledWith(
+      '/copilot/sessions/session-1',
+      expect.objectContaining({ title: '支付告警调查' }),
+    )
   })
 
   it('starts a general conversation without inheriting the previous investigation scope', async () => {

@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
 import type { PermissionSnapshot, RouteMeta } from '@/types'
+import { describe, expect, it } from 'vitest'
 import {
   canAccessRoute,
   filterSidebarNavByWorkbench,
@@ -395,6 +395,9 @@ describe('access route authorization', () => {
     expect(canAccessRoute(getRoute('account-settings'), snapshot)).toBe(true)
     expect(canAccessRoute(getRoute('account-profile'), snapshot)).toBe(true)
     expect(canAccessRoute(getRoute('about'), snapshot)).toBe(true)
+    expect(canAccessRoute(getRoute('settings-about-legacy-redirect'), snapshot)).toBe(true)
+    expect(getRouteWorkbenchId(getRoute('settings-about-legacy-redirect'))).toBeNull()
+    expect(canAccessRoute(getRoute('settings-overview'), snapshot)).toBe(false)
     expect(getAccessibleWorkbenchIds(snapshot)).not.toContain('settings')
     expect(findFirstAccessiblePathForWorkbench('settings', snapshot)).toBeNull()
   })

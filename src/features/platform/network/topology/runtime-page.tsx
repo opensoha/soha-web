@@ -1,4 +1,13 @@
-import { useDeferredValue, useEffect, useMemo, useState } from 'react'
+import { AdminTable } from '@/components/admin-table'
+import { ManagementRefreshButton, ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
+import { StatGrid } from '@/components/stat-grid'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { useI18n } from '@/i18n'
+import { usePlatformScopeStore } from '@/stores/platform-scope-store'
+import { toScopeKey } from '@/types'
+import { readableQueryData } from '@/utils/query-feedback'
+import { useQuery } from '@tanstack/react-query'
 import {
   Background,
   Controls,
@@ -12,21 +21,14 @@ import {
   type Node,
   type NodeProps,
 } from '@xyflow/react'
-import dagre from 'dagre'
-import { Button, Card, Input, Space, Tag, Typography } from 'antd'
-import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
-import type { TableColumnsType } from 'antd'
 import '@xyflow/react/dist/style.css'
-import './topology.css'
-import { AdminTable } from '@/components/admin-table'
-import { ManagementState } from '@/components/management-list'
-import { StatGrid } from '@/components/stat-grid'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
-import { useI18n } from '@/i18n'
-import { usePlatformScopeStore } from '@/stores/platform-scope-store'
-import { toScopeKey } from '@/types'
+import type { TableColumnsType } from 'antd'
+import { Button, Card, Input, Space, Tag, Typography } from 'antd'
+import dagre from 'dagre'
+import { useDeferredValue, useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { topologyQueries } from './queries'
+import './topology.css'
 
 const { Text } = Typography
 
@@ -585,10 +587,6 @@ function buildTopologyGraph(traces: TopologyTrace[]): TopologyGraphData {
   }
 }
 
-function getErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : ''
-}
-
 function renderTraceState(state: TopologyDataState, localeCode: LocaleCode) {
   if (state === 'live') {
     return <Tag color="green">{localeCode === 'zh_CN' ? '已验证' : 'Verified'}</Tag>
@@ -768,7 +766,7 @@ function TopologyCanvasInner({
     }
 
     const frame = requestAnimationFrame(() => {
-      fitView({ padding: 0.16, duration: 240 })
+      fitView({ padding: 0.16, duration: 0 })
     })
 
     return () => cancelAnimationFrame(frame)
@@ -785,6 +783,14 @@ function TopologyCanvasInner({
         nodesDraggable={false}
         nodesConnectable={false}
         edgesFocusable={false}
+        deleteKeyCode={null}
+        multiSelectionKeyCode={null}
+        onNodesChange={(changes) => {
+          const selected = changes.find((change) => change.type === 'select' && change.selected)
+          if (selected?.type === 'select') onSelectNode(selected.id)
+          else if (changes.some((change) => change.type === 'select' && !change.selected))
+            onSelectNode(null)
+        }}
         proOptions={{ hideAttribution: true }}
         onPaneClick={() => onSelectNode(null)}
         onNodeClick={(_, node) => onSelectNode(node.id)}
@@ -824,17 +830,18 @@ export function NetworkTopologyRuntimePage() {
   const navigate = useNavigate()
   const { clusterId, namespace } = usePlatformScopeStore()
   const scope = toScopeKey(clusterId, namespace)
-  const permissionSnapshot = usePermissionSnapshot().data?.data
+  const permissionQuery = usePermissionSnapshot()
+  const permissionSnapshot = readableQueryData(permissionQuery)?.data
+  const canRead = hasPermission(permissionSnapshot, 'platform.network.topology.view')
   const [searchKeyword, setSearchKeyword] = useState('')
   const [selectedNodeID, setSelectedNodeID] = useState<string | null>(null)
   const deferredSearchKeyword = useDeferredValue(searchKeyword.trim().toLowerCase())
 
   const topologyQuery = useQuery({
     ...topologyQueries.detail(scope),
-    enabled:
-      Boolean(clusterId) && hasPermission(permissionSnapshot, 'platform.network.topology.view'),
+    enabled: Boolean(clusterId) && canRead,
   })
-  const topologyData = topologyQuery.data
+  const topologyData = canRead ? readableQueryData(topologyQuery) : undefined
 
   const liveTraces = useMemo(
     () => normalizeBackendTraces(topologyData?.traces),
@@ -856,6 +863,8 @@ export function NetworkTopologyRuntimePage() {
       topologyGraph.nodes.map((node) => ({
         ...node,
         selected: node.id === selectedNodeID,
+        ariaRole: 'button',
+        ariaLabel: `${node.data.kind} ${node.data.name}`,
         data: {
           ...node.data,
           subtitle:
@@ -891,6 +900,16 @@ export function NetworkTopologyRuntimePage() {
     [localeCode, selectedNodeID, topologyGraph.nodes],
   )
 
+  const flowEdges = useMemo(
+    () =>
+      topologyGraph.edges.map((edge) =>
+        selectedNodeID && (edge.source === selectedNodeID || edge.target === selectedNodeID)
+          ? { ...edge, style: { ...edge.style, stroke: 'var(--soha-primary)', strokeWidth: 2.5 } }
+          : edge,
+      ),
+    [topologyGraph.edges, selectedNodeID],
+  )
+  useEffect(() => setSelectedNodeID(null), [clusterId, namespace])
   const tableRows = useMemo<TableRow[]>(
     () =>
       filteredTraces.map((trace) => ({
@@ -912,10 +931,7 @@ export function NetworkTopologyRuntimePage() {
     }
   }, [selectedNodeID, topologyGraph.nodeMap])
 
-  const liveErrors = [
-    getErrorMessage(topologyQuery.error),
-    ...(topologyData?.warnings ?? []),
-  ].filter(Boolean)
+  const liveErrors = topologyData?.warnings ?? []
   const liveLoading = clusterId && topologyQuery.isLoading
   const topologyViewState = !clusterId
     ? 'cluster-required'
@@ -1126,32 +1142,49 @@ export function NetworkTopologyRuntimePage() {
 
   return (
     <div className="soha-page">
+      <ReadFeedback
+        label={localeCode === 'zh_CN' ? '网络拓扑' : 'Network topology'}
+        query={topologyQuery}
+        canRead={canRead && Boolean(clusterId)}
+      />
+      {!canRead && !permissionQuery.isLoading ? (
+        <ManagementState
+          kind="error"
+          title={
+            localeCode === 'zh_CN' ? '没有网络拓扑查看权限' : 'Network topology access unavailable'
+          }
+        />
+      ) : null}
       <StatGrid
         items={[
           {
             label: localeCode === 'zh_CN' ? '入口节点' : 'Entry nodes',
-            value: topologySummary?.entryCount ?? topologyGraph.entryCount,
+            value: topologyData ? (topologySummary?.entryCount ?? topologyGraph.entryCount) : '—',
           },
           {
             label: localeCode === 'zh_CN' ? '路由节点' : 'Route nodes',
-            value: topologySummary?.routeCount ?? topologyGraph.routeCount,
+            value: topologyData ? (topologySummary?.routeCount ?? topologyGraph.routeCount) : '—',
           },
           {
             label: localeCode === 'zh_CN' ? 'Service 节点' : 'Service nodes',
-            value: topologySummary
-              ? topologySummary.serviceCount + topologySummary.missingServiceCount
-              : topologyGraph.serviceCount,
+            value: !topologyData
+              ? '—'
+              : topologySummary
+                ? topologySummary.serviceCount + topologySummary.missingServiceCount
+                : topologyGraph.serviceCount,
           },
           {
             label: localeCode === 'zh_CN' ? '后端 Pods' : 'Backend pods',
-            value: topologySummary?.backendPodCount ?? topologyGraph.podCount,
+            value: topologyData
+              ? (topologySummary?.backendPodCount ?? topologyGraph.podCount)
+              : '—',
           },
         ]}
       />
 
       <Card className="soha-detail-card">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-[280px] flex-1 flex-wrap items-center gap-3">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
             <Input
               value={searchKeyword}
               onChange={(event) => setSearchKeyword(event.target.value)}
@@ -1160,11 +1193,18 @@ export function NetworkTopologyRuntimePage() {
                   ? '搜索入口 / 路由 / Service / Pod / 说明'
                   : 'Search entry / route / service / pod / note'
               }
-              style={{ width: 340 }}
+              style={{ width: 340, maxWidth: '100%' }}
               className="soha-platform-compact-field"
             />
           </div>
           <Space wrap>
+            <ManagementRefreshButton
+              aria-label="刷新网络拓扑"
+              tooltip="刷新网络拓扑"
+              disabled={!canRead || !clusterId}
+              loading={topologyQuery.isFetching}
+              onClick={() => void topologyQuery.refetch()}
+            />
             <Tag color={viewTagColor}>{viewTag}</Tag>
             {liveErrors.length > 0 ? (
               <Tag color="red">
@@ -1232,7 +1272,7 @@ export function NetworkTopologyRuntimePage() {
           <>
             <TopologyCanvas
               nodes={flowNodes}
-              edges={topologyGraph.edges}
+              edges={flowEdges}
               fitKey={topologyGraph.fitKey}
               onSelectNode={setSelectedNodeID}
             />

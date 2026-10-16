@@ -1,20 +1,26 @@
-import { queryOptions, infiniteQueryOptions } from '@tanstack/react-query'
+import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query'
 
 import { workbenchApi } from './api'
 import { workbenchKeys } from './keys'
 
 export const workbenchQueries = {
-  workspaceRuntime: (owner: string, assistantId: string, enabled: boolean) => queryOptions({
-    queryKey: workbenchKeys.workspaceRuntime(owner, assistantId),
-    queryFn: () => workbenchApi.assistant.workspaceRuntime(assistantId),
-    enabled, retry: false, refetchInterval: 3000,
-  }),
-  guestToolsOperation: (owner: string, assistantId: string, id: string) => queryOptions({
-    queryKey: workbenchKeys.guestToolsOperation(owner, assistantId, id),
-    queryFn: () => workbenchApi.assistant.guestToolsOperation(id),
-    enabled: !!id, retry: false,
-    refetchInterval: (query) => ['queued','running'].includes(query.state.data?.data?.status ?? '') ? 3000 : false,
-  }),
+  workspaceRuntime: (owner: string, assistantId: string, enabled: boolean) =>
+    queryOptions({
+      queryKey: workbenchKeys.workspaceRuntime(owner, assistantId),
+      queryFn: () => workbenchApi.assistant.workspaceRuntime(assistantId),
+      enabled,
+      retry: false,
+      refetchInterval: 3000,
+    }),
+  guestToolsOperation: (owner: string, assistantId: string, id: string) =>
+    queryOptions({
+      queryKey: workbenchKeys.guestToolsOperation(owner, assistantId, id),
+      queryFn: () => workbenchApi.assistant.guestToolsOperation(id),
+      enabled: !!id,
+      retry: false,
+      refetchInterval: (query) =>
+        ['queued', 'running'].includes(query.state.data?.data?.status ?? '') ? 3000 : false,
+    }),
   messageSearch: (owner: string | undefined, query: string, enabled: boolean, personal = false) =>
     infiniteQueryOptions({
       queryKey: workbenchKeys.messageSearch(owner, query, personal),
@@ -40,6 +46,7 @@ export const workbenchQueries = {
       enabled: !!owner && enabled,
       retry: false,
       refetchInterval: (query) =>
+        !query.state.error &&
         ['queued', 'running'].includes(query.state.data?.pages[0]?.data?.state ?? '')
           ? 3000
           : false,
@@ -135,7 +142,7 @@ export const workbenchQueries = {
           afterSequence,
           page: (await workbenchApi.agentRuns.events(runId, afterSequence)).data,
         }),
-        refetchInterval: 2500,
+        refetchInterval: (query) => (query.state.error ? false : 2500),
         gcTime: 30000,
       }),
     all: () =>

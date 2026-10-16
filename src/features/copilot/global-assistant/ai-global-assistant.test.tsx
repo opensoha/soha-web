@@ -1,16 +1,14 @@
 /** @vitest-environment jsdom */
 
-import { act, useState } from 'react'
-import { App as AntdApp } from 'antd'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { createRoot } from 'react-dom/client'
-import { MemoryRouter } from 'react-router-dom'
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/services/api-client'
 import { usePreferencesStore } from '@/stores/preferences-store'
 import type { PermissionSnapshot } from '@/types'
-import { GlobalAIAssistantProvider, sourceWorkbenchFromPath } from './ai-global-assistant-provider'
-import { useAIGlobalAssistant, useAIPageContext } from './ai-context-provider'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { App as AntdApp } from 'antd'
+import { act, useState } from 'react'
+import { createRoot } from 'react-dom/client'
+import { MemoryRouter } from 'react-router-dom'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   encodeAIContextForElement,
   inferSelectionKind,
@@ -18,6 +16,8 @@ import {
   workbenchScopeFromAIContext,
   type AIPageContext,
 } from './ai-context'
+import { useAIGlobalAssistant, useAIPageContext } from './ai-context-provider'
+import { GlobalAIAssistantProvider, sourceWorkbenchFromPath } from './ai-global-assistant-provider'
 import { buildGlobalAssistantPrompt } from './ai-prompts'
 import { clampFloatPosition, snapFloatPosition } from './draggable-float-shell'
 
@@ -474,7 +474,15 @@ describe('GlobalAIAssistantProvider', () => {
           } as never
         return get(path, ...args)
       })
-      vi.mocked(api.post).mockResolvedValue({ data: {} })
+      vi.mocked(api.post).mockResolvedValue({
+        data: {
+          id: 'run-global',
+          sessionId: 'session-global',
+          providerId: 'hermes',
+          providerKind: 'hermes',
+          status: 'canceled',
+        },
+      })
       vi.mocked(window.fetch).mockResolvedValue(
         new Response(
           `data: ${JSON.stringify({
@@ -516,6 +524,134 @@ describe('GlobalAIAssistantProvider', () => {
     },
   )
 
+  it('keeps sending locked after an uncertain cancel, supports status reads and explicit cancellation retry', async () => {
+    const get = vi.mocked(api.get).getMockImplementation()!
+    let status = 'running'
+    let failRead = false
+    vi.mocked(api.get).mockImplementation(async (path, ...args) => {
+      if (String(path).startsWith('/copilot/agent-runs?')) {
+        if (failRead) throw new Error('状态读取暂不可用')
+        return {
+          data: [
+            {
+              id: 'run-global',
+              sessionId: 'session-global',
+              providerId: 'hermes',
+              providerKind: 'hermes',
+              status,
+            },
+            {
+              id: 'another-run',
+              sessionId: 'session-global',
+              providerId: 'hermes',
+              providerKind: 'hermes',
+              status: 'running',
+            },
+          ],
+        } as never
+      }
+      return get(path, ...args)
+    })
+    vi.mocked(api.post)
+      .mockRejectedValueOnce(new Error('取消回执丢失'))
+      .mockImplementation(async () => {
+        status = 'canceled'
+        return {
+          data: {
+            id: 'run-global',
+            sessionId: 'session-global',
+            providerId: 'hermes',
+            providerKind: 'hermes',
+            status,
+          },
+        } as never
+      })
+    vi.mocked(window.fetch).mockResolvedValue(
+      new Response(
+        `data: ${JSON.stringify({ type: 'agent.status', id: 'queued-global', sessionId: 'session-global', sequence: 1, createdAt: '2026-10-16T00:00:00Z', providerId: 'hermes', status: 'queued', runId: 'run-global' })}\n\ndata: ${JSON.stringify({ type: 'message.done', id: 'queued-message-global', sessionId: 'session-global', sequence: 2, createdAt: '2026-10-16T00:00:00Z', messageId: 'queued-message', role: 'assistant', content: '已提交给助手。' })}\n\n`,
+        { status: 200 },
+      ),
+    )
+    const container = await renderProvider()
+    const click = async (text: string) => {
+      await act(async () => {
+        Array.from(container.querySelectorAll('button'))
+          .find((b) => b.textContent?.replace(/ /g, '').includes(text))
+          ?.click()
+      })
+    }
+    await click('ask')
+    await waitForText(container, '助手正在处理当前请求。')
+    await click('Stoploading')
+    await waitForText(container, '取消回执丢失')
+    expect(api.post).toHaveBeenCalledTimes(1)
+    const submissions = vi.mocked(window.fetch).mock.calls.length
+    await click('ask')
+    expect(window.fetch).toHaveBeenCalledTimes(submissions)
+    failRead = true
+    await click('读取状态')
+    await waitForText(container, '状态读取暂不可用')
+    expect(api.post).toHaveBeenCalledTimes(1)
+    failRead = false
+    await click('读取状态')
+    await waitForText(container, '任务仍在运行')
+    await click('请求取消')
+    await waitForText(container, '任务 run-global 已确认终态：canceled')
+    expect(api.post).toHaveBeenCalledTimes(2)
+    expect(
+      vi
+        .mocked(api.post)
+        .mock.calls.every(([path]) => path === '/copilot/agent-runs/run-global/cancel'),
+    ).toBe(true)
+    expect(container.textContent).not.toContain('后台任务取消待确认')
+    expect(api.delete).not.toHaveBeenCalled()
+  }, 15000)
+
+  it('reads candidates without canceling any run when the submitted stream has no run ID', async () => {
+    const get = vi.mocked(api.get).getMockImplementation()!
+    vi.mocked(api.get).mockImplementation(async (path, ...args) =>
+      String(path).startsWith('/copilot/agent-runs?')
+        ? ({
+            data: [
+              {
+                id: 'unrelated-run',
+                sessionId: 'session-global',
+                status: 'running',
+                providerKind: 'hermes',
+              },
+            ],
+          } as never)
+        : get(path, ...args),
+    )
+    vi.mocked(window.fetch).mockImplementation(
+      (_input, init) =>
+        new Promise<Response>((_resolve, reject) =>
+          init?.signal?.addEventListener(
+            'abort',
+            () => reject(new DOMException('Stopped', 'AbortError')),
+            { once: true },
+          ),
+        ),
+    )
+    const container = await renderProvider()
+    await act(async () => {
+      Array.from(container.querySelectorAll('button'))
+        .find((b) => b.textContent === 'ask')
+        ?.click()
+    })
+    await vi.waitFor(() => expect(window.fetch).toHaveBeenCalled())
+    await act(async () => {
+      Array.from(container.querySelectorAll('button'))
+        .find((b) => b.textContent?.includes('Stop loading'))
+        ?.click()
+    })
+    await waitForText(container, '尚未取得本次任务 ID')
+    expect(api.get).toHaveBeenCalledWith('/copilot/agent-runs?sessionId=session-global')
+    expect(api.post).not.toHaveBeenCalled()
+    expect(api.delete).not.toHaveBeenCalled()
+    expect(container.querySelector('[aria-label="待核对助手任务"]')).toBeTruthy()
+  })
+
   it('reuses the shared session in the native companion window', async () => {
     window.localStorage.setItem(
       'soha.ai.global-assistant.session',
@@ -546,7 +682,7 @@ describe('GlobalAIAssistantProvider', () => {
     )
   })
 
-  it('cancels session creation work and archives a new empty session when the panel closes', async () => {
+  it('keeps a submitted session and its running stream when the panel closes', async () => {
     let streamSignal: AbortSignal | undefined
     vi.spyOn(window, 'fetch').mockImplementation((_input, init) => {
       streamSignal = init?.signal ?? undefined
@@ -580,8 +716,8 @@ describe('GlobalAIAssistantProvider', () => {
       await Promise.resolve()
     })
 
-    expect(streamSignal?.aborted).toBe(true)
-    expect(api.delete).toHaveBeenCalledWith('/copilot/sessions/session-global')
+    expect(streamSignal?.aborted).toBe(false)
+    expect(api.delete).not.toHaveBeenCalled()
     expect(container.querySelector('[data-testid="soha-ai-panel"]')).toBeNull()
   })
 

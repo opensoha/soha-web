@@ -1,8 +1,3 @@
-import { useState } from 'react'
-import { EyeOutlined, PlusOutlined, ReloadOutlined, RocketOutlined } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, Button, Descriptions, Drawer, Form, Input, Modal, Select, Space, Tabs } from 'antd'
-import type { TableColumnsType } from 'antd'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
@@ -11,7 +6,14 @@ import {
   ManagementTableToolbar,
 } from '@/components/management-list'
 import { MetadataTag, StatusTag } from '@/components/status-tag'
+import { useOperationMutation } from '@/components/use-operation-mutation'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import { EyeOutlined, PlusOutlined, ReloadOutlined, RocketOutlined } from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TableColumnsType } from 'antd'
+import { Alert, Button, Descriptions, Drawer, Form, Input, Modal, Select, Space, Tabs } from 'antd'
+import { useEffect, useState } from 'react'
 import { evaluationMutations } from './mutations'
 import { evaluationQueries } from './queries'
 import type {
@@ -49,14 +51,53 @@ export function EvaluationStudioPage() {
   const datasetsQuery = useQuery(evaluationQueries.datasets())
   const runsQuery = useQuery(evaluationQueries.runs())
   const resultsQuery = useQuery(evaluationQueries.results(selectedRun?.id))
-  const createDatasetMutation = useMutation(evaluationMutations.createDataset(queryClient))
-  const startRunMutation = useMutation(evaluationMutations.startRun(queryClient))
-  const datasets = datasetsQuery.data?.data ?? []
-  const runs = runsQuery.data?.data ?? []
-  const permissionSnapshot = permissionSnapshotQuery.data?.data
+  const createDatasetMutation = useOperationMutation(
+    evaluationMutations.createDataset(queryClient),
+    {
+      label: ['创建评测数据集', 'createDataset'],
+      target: (v) => v.id,
+      receipt: (r) => ({ message: '创建评测数据集：请求已返回', evidence: r.data.id }),
+    },
+  )
+  const startRunMutation = useOperationMutation(evaluationMutations.startRun(queryClient), {
+    label: ['提交评测运行', 'startRun'],
+    target: (v) => v.id,
+    receipt: (r) => ({ message: '提交评测运行：请求已返回', evidence: r.data.id }),
+  })
+  const datasets = readableQueryData(datasetsQuery)?.data ?? []
+  const runs = readableQueryData(runsQuery)?.data ?? []
+  const permissionSnapshot = readableQueryData(permissionSnapshotQuery)?.data
   const canCreate = hasPermission(permissionSnapshot, 'ai.evaluations.create')
   const canExecute = hasPermission(permissionSnapshot, 'ai.evaluations.execute')
 
+  const blocked =
+    createDatasetMutation.blocked ||
+    startRunMutation.blocked ||
+    queryAccessDenied(datasetsQuery) ||
+    queryAccessDenied(runsQuery)
+  const datasetDenied =
+    queryAccessDenied(datasetsQuery) ||
+    queryAccessDenied(createDatasetMutation) ||
+    queryAccessDenied(permissionSnapshotQuery)
+  const runDenied =
+    queryAccessDenied(runsQuery) ||
+    queryAccessDenied(startRunMutation) ||
+    queryAccessDenied(permissionSnapshotQuery)
+  useEffect(() => {
+    if (datasetDenied || !canCreate) {
+      setDatasetOpen(false)
+      datasetForm.resetFields()
+    }
+  }, [datasetDenied, canCreate, datasetForm])
+  useEffect(() => {
+    if (runDenied || !canExecute) {
+      setRunOpen(false)
+      runForm.resetFields()
+    }
+  }, [runDenied, canExecute, runForm])
+  useEffect(() => {
+    if (queryAccessDenied(runsQuery) || queryAccessDenied(resultsQuery)) setSelectedRun(undefined)
+  }, [runsQuery.error, resultsQuery.error])
   const runColumns: TableColumnsType<EvaluationRun> = [
     { title: 'Run', dataIndex: 'id', key: 'id' },
     {
@@ -134,6 +175,7 @@ export function EvaluationStudioPage() {
   ]
 
   const createDataset = async () => {
+    if (blocked || !canCreate) return
     const values = await datasetForm.validateFields()
     await createDatasetMutation.mutateAsync({
       schemaVersion: 'opensoha.dev/evaluation-dataset/v1',
@@ -156,6 +198,7 @@ export function EvaluationStudioPage() {
   }
 
   const startRun = async () => {
+    if (blocked || !canExecute) return
     const values = await runForm.validateFields()
     const selected = datasets.find((dataset) => datasetKey(dataset) === values.datasetKey)
     if (!selected) return
@@ -176,12 +219,16 @@ export function EvaluationStudioPage() {
     <ManagementDataPage
       className="soha-ai-evaluation-studio"
       beforeQuery={
-        <Alert
-          type="warning"
-          showIcon
-          title="候选执行器尚未接入"
-          description="数据集和运行已持久化；候选执行、隔离回放与发布门禁尚未接入。"
-        />
+        <>
+          {!datasetOpen && createDatasetMutation.feedback}
+          {!runOpen && startRunMutation.feedback}
+          <Alert
+            type="warning"
+            showIcon
+            title="候选执行器尚未接入"
+            description="数据集和运行已持久化；候选执行、隔离回放与发布门禁尚未接入。"
+          />
+        </>
       }
       tableNode={
         <Tabs
@@ -196,7 +243,15 @@ export function EvaluationStudioPage() {
                 刷新
               </Button>
               {canCreate ? (
-                <Button icon={<PlusOutlined />} onClick={() => setDatasetOpen(true)}>
+                <Button
+                  icon={<PlusOutlined />}
+                  disabled={blocked}
+                  onClick={() => {
+                    createDatasetMutation.reset()
+                    datasetForm.resetFields()
+                    setDatasetOpen(true)
+                  }}
+                >
                   新建数据集
                 </Button>
               ) : null}
@@ -204,8 +259,12 @@ export function EvaluationStudioPage() {
                 <Button
                   type="primary"
                   icon={<RocketOutlined />}
-                  disabled={!datasets.length}
-                  onClick={() => setRunOpen(true)}
+                  disabled={blocked || !datasets.length}
+                  onClick={() => {
+                    startRunMutation.reset()
+                    runForm.resetFields()
+                    setRunOpen(true)
+                  }}
                 >
                   启动评测
                 </Button>
@@ -221,6 +280,9 @@ export function EvaluationStudioPage() {
                   columns={runColumns}
                   dataSource={runs}
                   loading={runsQuery.isLoading}
+                  error={runsQuery.error}
+                  hasReadData={readableQueryData(runsQuery) !== undefined}
+                  onRetry={() => void runsQuery.refetch()}
                   rowKey="id"
                   empty={
                     runsQuery.isError ? (
@@ -243,6 +305,9 @@ export function EvaluationStudioPage() {
                   columns={datasetColumns}
                   dataSource={datasets}
                   loading={datasetsQuery.isLoading}
+                  error={datasetsQuery.error}
+                  hasReadData={readableQueryData(datasetsQuery) !== undefined}
+                  onRetry={() => void datasetsQuery.refetch()}
                   rowKey={(dataset) => datasetKey(dataset)}
                   empty={
                     datasetsQuery.isError ? (
@@ -263,15 +328,27 @@ export function EvaluationStudioPage() {
     >
       <Modal
         open={datasetOpen}
+        closable={!blocked}
+        keyboard={!blocked}
+        mask={{ closable: !blocked }}
+        cancelButtonProps={{ disabled: blocked }}
+        okButtonProps={{ disabled: blocked }}
         title="新建评测数据集"
         okText="创建"
         cancelText="取消"
         confirmLoading={createDatasetMutation.isPending}
         destroyOnHidden
-        onCancel={() => setDatasetOpen(false)}
-        onOk={() => void createDataset()}
+        onCancel={() => {
+          if (!blocked) {
+            setDatasetOpen(false)
+            datasetForm.resetFields()
+          }
+        }}
+        onOk={() => void createDataset().catch(() => undefined)}
       >
+        {createDatasetMutation.feedback}
         <Form
+          disabled={blocked}
           form={datasetForm}
           layout="vertical"
           preserve={false}
@@ -333,15 +410,27 @@ export function EvaluationStudioPage() {
       </Modal>
       <Modal
         open={runOpen}
+        closable={!blocked}
+        keyboard={!blocked}
+        mask={{ closable: !blocked }}
+        cancelButtonProps={{ disabled: blocked }}
+        okButtonProps={{ disabled: blocked }}
         title="启动评测"
         okText="启动"
         cancelText="取消"
         confirmLoading={startRunMutation.isPending}
         destroyOnHidden
-        onCancel={() => setRunOpen(false)}
-        onOk={() => void startRun()}
+        onCancel={() => {
+          if (!blocked) {
+            setRunOpen(false)
+            runForm.resetFields()
+          }
+        }}
+        onOk={() => void startRun().catch(() => undefined)}
       >
+        {startRunMutation.feedback}
         <Form
+          disabled={blocked}
           form={runForm}
           layout="vertical"
           preserve={false}
@@ -441,8 +530,11 @@ export function EvaluationStudioPage() {
               render: (reasons?: string[]) => reasons?.join(', ') || '-',
             },
           ]}
-          dataSource={resultsQuery.data?.data ?? []}
+          dataSource={readableQueryData(resultsQuery)?.data ?? []}
           loading={resultsQuery.isLoading}
+          error={resultsQuery.error}
+          hasReadData={readableQueryData(resultsQuery) !== undefined}
+          onRetry={() => void resultsQuery.refetch()}
           rowKey="sampleId"
           empty={
             <ManagementState

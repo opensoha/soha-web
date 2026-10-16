@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
 import { PlayCircleOutlined } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Alert, Button, Form, Input, Modal, Select } from 'antd'
-import { ProductionOperationsPage } from '../production/operations-page'
+import { useEffect, useState } from 'react'
 import { AIWorkbenchFeatureGate } from '../production/feature-gate'
+import { ProductionOperationsPage } from '../production/operations-page'
 import { aiProductionOperationsMutations } from './mutations'
 import { aiProductionOperationsQueries } from './queries'
 import type { StartAIOperationInput } from './types'
@@ -21,14 +23,29 @@ function AIProductionOperationsPageContent() {
   const [form] = Form.useForm<StartAIOperationInput>()
   const snapshots = useQuery(aiProductionOperationsQueries.snapshots())
   const evidence = useQuery(aiProductionOperationsQueries.evidence())
-  const start = useMutation(aiProductionOperationsMutations.start(c))
+  const start = useOperationMutation(aiProductionOperationsMutations.start(c), {
+    label: ['提交 AI 生产操作', 'Submit AI production operation'],
+    target: (v) => v.targetRef,
+    receipt: (r) => ({ message: '提交 AI 生产操作请求已返回', evidence: r.data.id }),
+  })
+  const writeBlocked = start.blocked
+  const blocked = writeBlocked || queryAccessDenied(snapshots) || queryAccessDenied(evidence)
+  const openDenied = queryAccessDenied(start) || queryAccessDenied(snapshots)
+  useEffect(() => {
+    if (openDenied) {
+      setOpen(false)
+      form.resetFields()
+    }
+  }, [openDenied, form])
   const submit = async () => {
+    if (blocked) return
     await start.mutateAsync(await form.validateFields())
     form.resetFields()
     setOpen(false)
   }
   return (
     <ProductionOperationsPage
+      feedback={<> {!open ? start.feedback : null} </>}
       notice={
         <Alert
           showIcon
@@ -40,7 +57,18 @@ function AIProductionOperationsPageContent() {
       refreshing={snapshots.isFetching || evidence.isFetching}
       onRefresh={() => void Promise.all([snapshots.refetch(), evidence.refetch()])}
       actions={
-        <Button type="primary" icon={<PlayCircleOutlined />} onClick={() => setOpen(true)}>
+        <Button
+          disabled={blocked}
+          type="primary"
+          icon={<PlayCircleOutlined />}
+          onClick={() => {
+            if (!blocked) {
+              form.resetFields()
+              start.reset()
+              setOpen(true)
+            }
+          }}
+        >
           启动操作
         </Button>
       }
@@ -48,30 +76,49 @@ function AIProductionOperationsPageContent() {
         {
           key: 'capacity',
           label: 'Capacity & SLO',
-          records: snapshots.data?.data ?? [],
+          records: readableQueryData(snapshots)?.data ?? [],
           loading: snapshots.isLoading,
-          error: snapshots.isError,
+          error: snapshots.error,
+          hasReadData: snapshots.data !== undefined,
           emptyDescription: '采集 queue age、吞吐、成本与 deletion lag 后显示。',
         },
         {
           key: 'evidence',
           label: 'Runbook Evidence',
-          records: evidence.data?.data ?? [],
+          records: readableQueryData(evidence)?.data ?? [],
           loading: evidence.isLoading,
-          error: evidence.isError,
+          error: evidence.error,
+          hasReadData: evidence.data !== undefined,
           emptyDescription: '完成备份恢复或演练后显示证据。',
         },
       ]}
     >
       <Modal
         title="启动 AI 生产操作"
-        open={open}
-        onCancel={() => setOpen(false)}
-        onOk={() => void submit()}
+        open={open && !openDenied}
+        closable={!writeBlocked}
+        keyboard={!writeBlocked}
+        mask={{ closable: !writeBlocked }}
+        okButtonProps={{ disabled: blocked }}
+        cancelButtonProps={{ disabled: writeBlocked }}
+        onCancel={() => {
+          if (!writeBlocked) {
+            setOpen(false)
+            form.resetFields()
+          }
+        }}
+        onOk={() => void submit().catch(() => undefined)}
         confirmLoading={start.isPending}
         destroyOnHidden
       >
-        <Form form={form} layout="vertical" preserve={false} initialValues={{ kind: 'drill' }}>
+        <> {start.feedback} </>
+        <Form
+          disabled={blocked}
+          form={form}
+          layout="vertical"
+          preserve={false}
+          initialValues={{ kind: 'drill' }}
+        >
           <Form.Item name="kind" label="操作" rules={[{ required: true }]}>
             <Select
               options={[

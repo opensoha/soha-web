@@ -19,8 +19,36 @@ for (const width of [1440, 390]) {
         toolset: { enabledAdapterIds: ['metrics.v1', 'traces.v1'] },
       },
     }
-    const evidence = await installMocks(context, page, (url) => {
+    const requests: Array<Record<string, unknown>> = []
+    const evidence = await installMocks(context, page, (url, method) => {
       const path = url.pathname
+      if (method === 'GET' && path === `/api/v1/copilot/sessions/${session.id}/native-request`) {
+        const request = requests.find(
+          (item) => item.requestId === url.searchParams.get('requestId'),
+        )
+        return request
+          ? {
+              body: {
+                data: {
+                  id: `mixed-run-${request.requestId}`,
+                  sessionId: session.id,
+                  providerId: 'internal',
+                  providerKind: 'native',
+                  executionOwner: 'native',
+                  capabilityId: 'general',
+                  status: 'completed',
+                  phase: 'completed',
+                  input: { requestId: request.requestId },
+                  createdAt: session.updatedAt,
+                  completedAt: session.updatedAt,
+                },
+              },
+            }
+          : {
+              status: 404,
+              body: { error: { code: 'not_found', message: 'No matching request receipt' } },
+            }
+      }
       if (path === '/api/v1/access/permission-snapshot')
         return {
           body: {
@@ -138,7 +166,6 @@ for (const width of [1440, 390]) {
         }
       return undefined
     })
-    const requests: Array<Record<string, unknown>> = []
     await page.route(`**/api/v1/copilot/sessions/${session.id}/messages/stream`, async (route) => {
       requests.push(route.request().postDataJSON())
       await route.fulfill({
@@ -194,6 +221,15 @@ for (const width of [1440, 390]) {
         inspectionRunIds: ['inspection-done'],
       })
     await expect(dialog).toBeHidden()
+    await expect
+      .poll(() =>
+        evidence.requests.some(
+          (path) =>
+            path ===
+            `/api/v1/copilot/sessions/${session.id}/native-request?requestId=${requests[0]?.requestId}`,
+        ),
+      )
+      .toBe(true)
     await composer.fill('继续普通对话')
     await composer.press('Enter')
     await expect.poll(() => requests[1]?.taskIntent).toEqual({ capabilities: [] })
@@ -208,7 +244,7 @@ for (const width of [1440, 390]) {
       id: 'native-session',
       title: '主聊天',
       updatedAt: '2026-10-08T00:00:00Z',
-      metadata: { conversationKind: 'main', mode: 'general', agentProviderId: 'internal' },
+      metadata: { conversationKind: 'personal_main', mode: 'general', agentProviderId: 'internal' },
     }
     const run = {
       id: 'native-run',
@@ -272,7 +308,12 @@ for (const width of [1440, 390]) {
         return {
           body: {
             data: {
-              permissionKeys: ['workbench.ai.view', 'observe.ai.chat', 'ai.gateway.approvals.view'],
+              permissionKeys: [
+                'workbench.ai.view',
+                'observe.ai.chat',
+                'ai.gateway.invoke',
+                'ai.gateway.approvals.view',
+              ],
               visibleMenuIds: ['ai-workbench', 'ai-workbench-chat'],
               visibleMenus: [
                 { id: 'ai-workbench', path: '/ai-workbench/overview', labelZh: 'AI 工作台' },
@@ -286,6 +327,8 @@ for (const width of [1440, 390]) {
             },
           },
         }
+      if (path === '/api/v1/copilot/assistant/access' && method === 'GET')
+        return { body: { data: { userId: 'user-1', status: 'approved', version: 1 } } }
       if (path === '/api/v1/copilot/assistant')
         return {
           body: {
@@ -306,6 +349,8 @@ for (const width of [1440, 390]) {
         path === `/api/v1/copilot/sessions/${session.id}`
       )
         return { body: { data: session } }
+      if (method === 'GET' && path === '/api/v1/copilot/assistant/sessions')
+        return { body: { data: [session] } }
       if (path === '/api/v1/copilot/sessions') return { body: { data: [session] } }
       if (path === `/api/v1/copilot/sessions/${session.id}/messages`)
         return {
@@ -410,7 +455,7 @@ for (const width of [1440, 390]) {
       return undefined
     })
     await page.setViewportSize({ width, height: 900 })
-    await page.goto('/ai-workbench/chat')
+    await page.goto('/heya?session=native-session')
     await expect(page).toHaveURL(/session=native-session/)
     await expect(page.locator('body')).toContainText('请补充发布窗口。')
     await expect
@@ -421,7 +466,7 @@ for (const width of [1440, 390]) {
     if (width < 992)
       await page
         .locator('#root .soha-ai-mobile-nav')
-        .getByRole('button', { name: '动态', exact: true })
+        .getByRole('button', { name: '任务', exact: true })
         .click()
     await page
       .locator('[data-activity-id="task:native-run"]')
@@ -469,8 +514,8 @@ for (const width of [1440, 390]) {
     await verifyGeometry(page, approval)
     await page.screenshot({ path: `.tmp/quality/native-approval-${width}.png`, fullPage: true })
     await page
-      .locator('label')
-      .filter({ has: page.getByRole('radio', { name: /动态$/ }) })
+      .locator('.ant-segmented-item')
+      .filter({ has: page.getByRole('radio', { name: /任务活动/ }) })
       .click()
     await page
       .locator('[data-activity-id="task:native-run"]')
