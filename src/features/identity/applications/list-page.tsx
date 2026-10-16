@@ -1,7 +1,23 @@
-import { useCallback, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
-import type { IdentityApplicationOnboardingInput } from '@opensoha/contracts/gen/ts/sohaapi'
+import { ManagementDataPage } from '@/components/management-data-page'
+import {
+  ManagementIconButton,
+  ManagementKeywordField,
+  ManagementQueryActions,
+  ManagementQueryField,
+  ManagementRefreshButton,
+  ManagementState,
+  ManagementTableToolbar,
+} from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { useI18n } from '@/i18n'
 import { isApiError } from '@/services/api-error'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
+import type { IdentityApplicationOnboardingInput } from '@opensoha/contracts/gen/ts/sohaapi'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   App,
   Button,
@@ -14,29 +30,17 @@ import {
   Switch,
   Typography,
 } from 'antd'
-import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ManagementDataPage } from '@/components/management-data-page'
-import {
-  ManagementIconButton,
-  ManagementKeywordField,
-  ManagementQueryActions,
-  ManagementQueryField,
-  ManagementRefreshButton,
-  ManagementState,
-  ManagementTableToolbar,
-} from '@/components/management-list'
-import { MetadataTag, StatusTag } from '@/components/status-tag'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
-import { useI18n } from '@/i18n'
-import type { IdentityApplication, IdentityApplicationInput } from '../shared/types'
-import { identityRuntimeQueries } from '../runtime'
+import { useCallback, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   identityProviderQueries,
   SecretRevealModal,
   type IdentityOIDCSecretReveal,
 } from '../providers'
-
+import { identityRuntimeQueries } from '../runtime'
+import '../shared/application-access.css'
+import type { IdentityApplication, IdentityApplicationInput } from '../shared/types'
+import { listIdentityApplications } from './api'
 import {
   buildIdentityApplicationInput,
   identityApplicationAccessPolicyFor,
@@ -46,17 +50,13 @@ import {
   type IdentityApplicationFormValues,
 } from './application-form-model'
 import { ApplicationDetailDrawer } from './components/application-detail-drawer'
-import { listIdentityApplications } from './api'
 import { ApplicationFormModal } from './components/application-form-modal'
 import { identityApplicationMutations } from './mutations'
-import { IdentityApplicationNameCell, identityApplicationAssignmentsSummary } from './presentation'
+import { identityApplicationAssignmentsSummary, IdentityApplicationNameCell } from './presentation'
 import { identityApplicationQueries } from './queries'
-import type { IdentityApplicationFilters } from './types'
-import '../shared/application-access.css'
 import './styles.css'
-
+import type { IdentityApplicationFilters } from './types'
 const { Text } = Typography
-
 export function IdentityApplicationsPage() {
   const { message } = App.useApp()
   const { t } = useI18n()
@@ -89,48 +89,69 @@ export function IdentityApplicationsPage() {
   const canDelete = hasPermission(snapshot, 'identity.applications.delete')
   const canCreateProvider = hasPermission(snapshot, 'identity.providers.create')
   const canViewProvider = hasPermission(snapshot, 'identity.providers.view')
-
   const resetFilters = () => {
     queryForm.resetFields()
     setFilters({ query: '', status: '' })
     setPagination((current) => ({ ...current, current: 1 }))
   }
-
   const applicationsQuery = useQuery(identityApplicationQueries.list(filters))
+  const visibleApplicationsQueryData =
+    applicationsQuery.isEnabled === false ? undefined : readableQueryData(applicationsQuery)
   const allApplicationsQuery = useQuery(identityApplicationQueries.list({ query: '', status: '' }))
+  const visibleAllApplicationsQueryData =
+    allApplicationsQuery.isEnabled === false ? undefined : readableQueryData(allApplicationsQuery)
   const runtimeQuery = useQuery(identityRuntimeQueries.capabilities())
+  const visibleRuntimeQueryData =
+    runtimeQuery.isEnabled === false ? undefined : readableQueryData(runtimeQuery)
   const providersQuery = useQuery({
     ...identityProviderQueries.list({ applicationId: editing?.id ?? '' }),
     enabled: modalOpen && Boolean(editing?.id) && canViewProvider,
   })
-  const onboardMutation = useMutation(identityApplicationMutations.onboard(queryClient))
-  const updateMutation = useMutation(identityApplicationMutations.update(queryClient))
-  const deleteMutation = useMutation(identityApplicationMutations.remove(queryClient))
-  const stepUpCapability = runtimeQuery.data?.stepUp
-
+  const visibleProvidersQueryData =
+    providersQuery.isEnabled === false ? undefined : readableQueryData(providersQuery)
+  const onboardMutation = useOperationMutation(identityApplicationMutations.onboard(queryClient), {
+    label: ['保存应用接入', 'Save application onboarding'],
+    target: (v) => v.application.slug,
+    receipt: () => ({
+      message: '应用已保存，尚未启用',
+      evidence: '请核对 Provider 配置，再启用应用。',
+    }),
+  })
+  const updateMutation = useOperationMutation(identityApplicationMutations.update(queryClient), {
+    label: ['保存 应用', 'Save application'],
+    target: (v) => v.applicationId,
+  })
+  const deleteMutation = useOperationMutation(identityApplicationMutations.remove(queryClient), {
+    label: ['删除 应用', 'Delete application'],
+    target: (v) => v,
+  })
+  const operationBlocked =
+    onboardMutation.blocked ||
+    updateMutation.blocked ||
+    deleteMutation.blocked ||
+    (applicationsQuery.isEnabled !== false && queryAccessDenied(applicationsQuery))
+  const stepUpCapability = visibleRuntimeQueryData?.stepUp
   const closeModal = () => {
     onboardMutation.reset()
     setModalOpen(false)
     setEditing(null)
   }
-
   const openCreate = () => {
+    if (operationBlocked) return
     setEditing(null)
     setModalOpen(true)
   }
-
   const openEdit = (application: IdentityApplication) => {
+    if (operationBlocked) return
     setEditing(application)
     setModalOpen(true)
   }
-
   const submitForm = (input: IdentityApplicationInput) => {
     if (editing) {
       updateMutation.mutate(
         { applicationId: editing.id, input },
         {
-          onSuccess: (application) => {
-            message.success(t('identity.applications.updated', `已更新 ${application.name}`))
+          onSuccess: () => {
             closeModal()
           },
         },
@@ -138,7 +159,6 @@ export function IdentityApplicationsPage() {
       return
     }
   }
-
   const submitOnboarding = (input: IdentityApplicationOnboardingInput) => {
     onboardMutation.mutate(input, {
       onSuccess: (result) => {
@@ -149,10 +169,8 @@ export function IdentityApplicationsPage() {
             clientId: result.oidcClient.client.clientId,
             clientSecret: result.oidcClient.clientSecret,
           })
-        void message.success('应用已保存，尚未启用。')
       },
       onError: async (error) => {
-        void message.error(error.message)
         if (isApiError(error) && error.status === 409) {
           try {
             const existing = (
@@ -170,32 +188,20 @@ export function IdentityApplicationsPage() {
       },
     })
   }
-
   const quickUpdate = useCallback(
-    (
-      application: IdentityApplication,
-      changes: Partial<IdentityApplicationFormValues>,
-      successMessage: string,
-    ) => {
-      updateMutation.mutate(
-        {
-          applicationId: application.id,
-          input: buildIdentityApplicationInput(
-            { ...identityApplicationFormValuesFor(application), ...changes },
-            application,
-          ),
-        },
-        {
-          onSuccess: () => void message.success(successMessage),
-          onError: (error: Error) => void message.error(error.message),
-        },
-      )
+    (application: IdentityApplication, changes: Partial<IdentityApplicationFormValues>) => {
+      updateMutation.mutate({
+        applicationId: application.id,
+        input: buildIdentityApplicationInput(
+          { ...identityApplicationFormValuesFor(application), ...changes },
+          application,
+        ),
+      })
     },
-    [message, updateMutation],
+    [updateMutation],
   )
-
   const saving = onboardMutation.isPending || updateMutation.isPending
-  const applications = applicationsQuery.data ?? []
+  const applications = visibleApplicationsQueryData ?? []
   const currentPage = Math.min(
     pagination.current,
     Math.max(1, Math.ceil(applications.length / pagination.pageSize)),
@@ -205,28 +211,38 @@ export function IdentityApplicationsPage() {
     currentPage * pagination.pageSize,
   )
   const applicationTagOptions = useMemo(
-    () => identityApplicationTagOptions(allApplicationsQuery.data ?? applications),
-    [allApplicationsQuery.data, applications],
+    () => identityApplicationTagOptions(visibleAllApplicationsQueryData ?? applications),
+    [visibleAllApplicationsQueryData, applications],
   )
-
   return (
     <>
+      {!(
+        modalOpen &&
+        !(applicationsQuery.isEnabled !== false && queryAccessDenied(applicationsQuery))
+      ) && (
+        <>
+          {' '}
+          {onboardMutation.feedback}
+          {updateMutation.feedback}
+          {deleteMutation.feedback}{' '}
+        </>
+      )}
+
+      <ReadFeedback
+        canRead={applicationsQuery.isEnabled}
+        query={applicationsQuery}
+        label="应用目录"
+      />
+      <ReadFeedback
+        canRead={allApplicationsQuery.isEnabled}
+        query={allApplicationsQuery}
+        label="应用标签"
+      />
+      <ReadFeedback canRead={runtimeQuery.isEnabled} query={runtimeQuery} label="运行能力" />
+      <ReadFeedback canRead={providersQuery.isEnabled} query={providersQuery} label="认证接入" />
+
       <ManagementDataPage
         className="soha-identity-access-page soha-identity-applications-page"
-        beforeQuery={
-          applicationsQuery.isError && (
-            <ManagementState
-              kind={
-                isApiError(applicationsQuery.error) && applicationsQuery.error.status === 403
-                  ? 'no-permission'
-                  : 'error'
-              }
-              title="应用目录加载失败"
-              description={applicationsQuery.error.message}
-              actions={<Button onClick={() => void applicationsQuery.refetch()}>重试</Button>}
-            />
-          )
-        }
         query={{
           form: queryForm,
           initialValues: { query: '', status: '' },
@@ -276,7 +292,7 @@ export function IdentityApplicationsPage() {
               <ManagementTableToolbar>
                 <Button
                   autoInsertSpace={false}
-                  disabled={!canCreate}
+                  disabled={operationBlocked || !canCreate}
                   icon={<PlusOutlined />}
                   type="primary"
                   onClick={openCreate}
@@ -288,11 +304,16 @@ export function IdentityApplicationsPage() {
                   loading={applicationsQuery.isFetching}
                   title={t('common.refresh', '刷新')}
                   tooltip={t('common.refresh', '刷新')}
-                  onClick={() => void applicationsQuery.refetch()}
+                  onClick={() =>
+                    void (applicationsQuery.isEnabled === false
+                      ? undefined
+                      : applicationsQuery.refetch())
+                  }
                 />
               </ManagementTableToolbar>
             </div>
-            {applicationsQuery.isError ? null : applicationsQuery.isLoading ? (
+            {applicationsQuery.isError &&
+            !visibleApplicationsQueryData ? null : applicationsQuery.isLoading ? (
               <ManagementState kind="loading" title="正在读取应用目录" />
             ) : applications.length ? (
               <>
@@ -354,17 +375,13 @@ export function IdentityApplicationsPage() {
                             <Switch
                               aria-label={`${application.name} ${t('identity.applications.column.enabled', '启用状态')}`}
                               checked={application.status === 'enabled'}
-                              disabled={!canUpdate}
+                              disabled={operationBlocked || !canUpdate}
                               loading={updating}
                               size="small"
                               onChange={(checked) =>
-                                quickUpdate(
-                                  application,
-                                  { status: checked ? 'enabled' : 'disabled' },
-                                  checked
-                                    ? t('identity.applications.enabled', '应用已启用')
-                                    : t('identity.applications.disabled', '应用已停用'),
-                                )
+                                quickUpdate(application, {
+                                  status: checked ? 'enabled' : 'disabled',
+                                })
                               }
                             />
                           </label>
@@ -375,17 +392,11 @@ export function IdentityApplicationsPage() {
                             <Switch
                               aria-label={`${application.name} ${t('identity.applications.column.portalVisible', '门户可见')}`}
                               checked={application.portalVisible}
-                              disabled={!canUpdate}
+                              disabled={operationBlocked || !canUpdate}
                               loading={updating}
                               size="small"
                               onChange={(checked) =>
-                                quickUpdate(
-                                  application,
-                                  { portalVisible: checked },
-                                  checked
-                                    ? t('identity.applications.portalShown', '已在门户显示')
-                                    : t('identity.applications.portalHidden', '已从门户隐藏'),
-                                )
+                                quickUpdate(application, { portalVisible: checked })
                               }
                             />
                           </label>
@@ -394,25 +405,21 @@ export function IdentityApplicationsPage() {
                           <Space size={0}>
                             <ManagementIconButton
                               aria-label={t('common.edit', '编辑')}
-                              disabled={!canUpdate}
+                              disabled={operationBlocked || !canUpdate}
                               icon={<EditOutlined />}
                               tooltip={t('common.edit', '编辑')}
                               onClick={() => openEdit(application)}
                             />
                             <Popconfirm
                               cancelText={t('common.cancel', '取消')}
-                              disabled={!canDelete}
-                              okButtonProps={{ danger: true, loading: deleteMutation.isPending }}
+                              disabled={operationBlocked || !canDelete}
+                              okButtonProps={{
+                                ...{ danger: true, loading: deleteMutation.isPending },
+                                disabled: operationBlocked,
+                              }}
                               okText={t('common.delete', '删除')}
                               title={`删除 ${application.name}`}
-                              onConfirm={() =>
-                                deleteMutation.mutate(application.id, {
-                                  onSuccess: () =>
-                                    message.success(
-                                      t('identity.applications.deleted', '应用已删除'),
-                                    ),
-                                })
-                              }
+                              onConfirm={() => deleteMutation.mutate(application.id)}
                             >
                               <ManagementIconButton
                                 aria-label={t('common.delete', '删除')}
@@ -456,32 +463,49 @@ export function IdentityApplicationsPage() {
         }
       />
       <ApplicationFormModal
+        blocked={operationBlocked}
+        feedback={
+          <>
+            {onboardMutation.feedback}
+            {updateMutation.feedback}
+          </>
+        }
         application={editing}
-        open={modalOpen}
-        providerOptions={canViewProvider ? (providersQuery.data ?? []) : []}
+        open={
+          modalOpen &&
+          !(applicationsQuery.isEnabled !== false && queryAccessDenied(applicationsQuery))
+        }
+        providerOptions={canViewProvider ? (visibleProvidersQueryData ?? []) : []}
         providerOptionsLoading={providersQuery.isFetching}
         saving={saving}
         stepUpAvailable={stepUpCapability?.available === true}
         stepUpReason={stepUpCapability?.reason}
         tagOptions={applicationTagOptions}
-        onCancel={closeModal}
+        onCancel={() => {
+          if (!operationBlocked) closeModal()
+        }}
         onSubmit={submitForm}
         onOnboard={submitOnboarding}
         canConfigureProvider={canCreateProvider}
-        samlAvailable={runtimeQuery.data?.samlApplicationProvider.available === true}
+        samlAvailable={visibleRuntimeQueryData?.samlApplicationProvider.available === true}
       />
       {params.get('application') && (
         <ApplicationDetailDrawer
           id={params.get('application') ?? ''}
-          onClose={closeDetails}
+          onClose={() => {
+            if (!operationBlocked) closeDetails()
+          }}
           onEdit={openEdit}
         />
       )}
       <SecretRevealModal
         value={createdSecret}
         onClose={() => {
-          setCreatedSecret(null)
-          onboardMutation.reset()
+          if (!operationBlocked)
+            (() => {
+              setCreatedSecret(null)
+              onboardMutation.reset()
+            })()
         }}
       />
     </>

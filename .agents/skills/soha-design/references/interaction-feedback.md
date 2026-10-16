@@ -8,7 +8,10 @@ product-experience.md. Choose composition from the task; this is not a universal
 Use `src/components/request-feedback.tsx` for domain-independent reading and request feedback,
 and `src/utils/query-feedback.ts` for readable cache and uncertain-write decisions. AdminTable
 uses that same reading feedback; keep query, task permissions and evidence routes with each
-feature. Compute's feedback module only adapts Compute task receipts, not global UI policy.
+feature. Ordinary CRUD and configuration requests can reuse `components/use-operation-mutation`;
+its uncertain-write fence lasts only while the owner stays mounted and is not durable reconciliation.
+Keep one visible feedback owner per request, inside its active overlay when necessary.
+Compute's feedback module only adapts Compute task receipts, not global UI policy.
 
 Persistent error feedback claims its API presentation through the shared helper so the global
 handler remains a fallback rather than a second notification. Authentication expiry keeps its

@@ -1,9 +1,11 @@
 import { ApiError } from '@/services/api-error'
 
-export function readableQueryData<T>(query: { data?: T; error: Error | null }) {
+export function queryAccessDenied(query: { error: Error | null }) {
   return query.error instanceof ApiError && [401, 403].includes(query.error.status)
-    ? undefined
-    : query.data
+}
+
+export function readableQueryData<T>(query: { data?: T; error: Error | null }) {
+  return queryAccessDenied(query) ? undefined : query.data
 }
 
 export function writeOutcomeUnknown(error?: Error | null) {

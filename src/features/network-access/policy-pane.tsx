@@ -1,23 +1,14 @@
-import { useMemo, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { AdminTable } from '@/components/admin-table'
 import {
-  Alert,
-  App,
-  Button,
-  Card,
-  Descriptions,
-  Form,
-  Input,
-  InputNumber,
-  Modal,
-  Popconfirm,
-  Select,
-  Space,
-  Switch,
-  Tabs,
-  Tag,
-} from 'antd'
-import type { TableColumnsType, TabsProps } from 'antd'
+  ManagementIconButton,
+  ManagementTableToolbar,
+  ManagementToolbarSearch,
+} from '@/components/management-list'
+import { operationModalStyles } from '@/components/modal-styles'
+import { ReadFeedback } from '@/components/request-feedback'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { useI18n } from '@/i18n'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import type {
   EndpointDevicePostureStatus,
@@ -32,23 +23,32 @@ import type {
   NetworkPolicyEffect,
   NetworkPolicyPreviewRequest,
 } from '@opensoha/contracts/gen/ts/sohaapi'
-import { AdminTable } from '@/components/admin-table'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TableColumnsType, TabsProps } from 'antd'
 import {
-  ManagementIconButton,
-  ManagementState,
-  ManagementTableToolbar,
-  ManagementToolbarSearch,
-} from '@/components/management-list'
-import { useI18n } from '@/i18n'
+  Alert,
+  Button,
+  Card,
+  Descriptions,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Popconfirm,
+  Select,
+  Space,
+  Switch,
+  Tabs,
+  Tag,
+} from 'antd'
+import { useMemo, useState } from 'react'
 import { networkAccessMutations } from './mutations'
 import { networkAccessQueries } from './queries'
-
 interface NetworkPolicyPaneProps {
   canCreate: boolean
   canDelete: boolean
   canUpdate: boolean
 }
-
 interface PolicyFormValues {
   accessProfile: NetworkAccessProfile
   deviceStatuses: EndpointDeviceStatus[]
@@ -64,11 +64,9 @@ interface PolicyFormValues {
   teamsText?: string
   usersText?: string
 }
-
 interface ConflictFormValues {
   rangesText?: string
 }
-
 const LIST_FILTER = { limit: 200 } as const
 const MODES: NetworkAccessMode[] = [
   'internal_direct',
@@ -85,14 +83,12 @@ const CONFLICT_SOURCE_TYPES: NetworkConflictSourceType[] = [
   'kubernetes_service',
   'mihomo_fake_ip',
 ]
-
 function parseTextList(value?: string) {
   return String(value ?? '')
     .split(/[\s,]+/)
     .map((item) => item.trim())
     .filter(Boolean)
 }
-
 function parseConflictRanges(value?: string): NetworkConflictRange[] {
   return String(value ?? '')
     .split('\n')
@@ -118,34 +114,58 @@ function parseConflictRanges(value?: string): NetworkConflictRange[] {
       }
     })
 }
-
 function textList(values: string[]) {
   return values.join('\n')
 }
-
 export function NetworkPolicyPane({ canCreate, canDelete, canUpdate }: NetworkPolicyPaneProps) {
-  const { message } = App.useApp()
   const { t } = useI18n()
   const queryClient = useQueryClient()
   const policies = useQuery(networkAccessQueries.policies(LIST_FILTER))
+  const visiblePoliciesData = policies.isEnabled === false ? undefined : readableQueryData(policies)
   const snapshot = useQuery(networkAccessQueries.policySnapshot())
-  const createPolicy = useMutation(networkAccessMutations.policy.create(queryClient))
-  const updatePolicy = useMutation(networkAccessMutations.policy.update(queryClient))
-  const deletePolicy = useMutation(networkAccessMutations.policy.remove(queryClient))
-  const compilePolicy = useMutation(networkAccessMutations.policy.compile(queryClient))
-  const previewPolicy = useMutation(networkAccessMutations.policy.preview())
-  const analyzeConflicts = useMutation(networkAccessMutations.policy.analyzeConflicts())
+  const visibleSnapshotData = snapshot.isEnabled === false ? undefined : readableQueryData(snapshot)
+  const createPolicy = useOperationMutation(networkAccessMutations.policy.create(queryClient), {
+    label: ['创建 网络策略', 'Create network policy'],
+    target: (v) => v.name,
+  })
+  const updatePolicy = useOperationMutation(networkAccessMutations.policy.update(queryClient), {
+    label: ['保存 网络策略', 'Save network policy'],
+    target: (v) => v.policyId,
+  })
+  const deletePolicy = useOperationMutation(networkAccessMutations.policy.remove(queryClient), {
+    label: ['删除 网络策略', 'Delete network policy'],
+    target: (v) => v,
+  })
+  const compilePolicy = useOperationMutation(networkAccessMutations.policy.compile(queryClient), {
+    label: ['编译网络策略', 'Compile network policy network policy'],
+    target: () => '网络策略',
+  })
+  const previewPolicy = useOperationMutation(networkAccessMutations.policy.preview(), {
+    label: ['预览网络策略', 'Preview network policy network policy'],
+    target: () => '网络策略',
+    readOnly: true,
+  })
+  const analyzeConflicts = useOperationMutation(networkAccessMutations.policy.analyzeConflicts(), {
+    label: ['分析策略冲突 网络策略', 'Analyze policy conflicts network policy'],
+    target: () => '网络策略',
+    readOnly: true,
+  })
+  const operationBlocked =
+    createPolicy.blocked ||
+    updatePolicy.blocked ||
+    deletePolicy.blocked ||
+    compilePolicy.blocked ||
+    (policies.isEnabled !== false && queryAccessDenied(policies))
   const [search, setSearch] = useState('')
   const [editor, setEditor] = useState<NetworkAccessPolicy | 'new' | null>(null)
   const [policyForm] = Form.useForm<PolicyFormValues>()
   const [previewForm] = Form.useForm<NetworkPolicyPreviewRequest>()
   const [conflictForm] = Form.useForm<ConflictFormValues>()
   const effect = Form.useWatch('effect', policyForm)
-
   const filteredPolicies = useMemo(() => {
     const keyword = search.trim().toLocaleLowerCase()
-    if (!keyword) return policies.data ?? []
-    return (policies.data ?? []).filter((policy) =>
+    if (!keyword) return visiblePoliciesData ?? []
+    return (visiblePoliciesData ?? []).filter((policy) =>
       [
         policy.name,
         policy.effect,
@@ -158,8 +178,7 @@ export function NetworkPolicyPane({ canCreate, canDelete, canUpdate }: NetworkPo
         ...policy.modes,
       ].some((value) => value.toLocaleLowerCase().includes(keyword)),
     )
-  }, [policies.data, search])
-
+  }, [visiblePoliciesData, search])
   function openEditor(policy?: NetworkAccessPolicy) {
     setEditor(policy ?? 'new')
     policyForm.resetFields()
@@ -197,7 +216,6 @@ export function NetworkPolicyPane({ canCreate, canDelete, canUpdate }: NetworkPo
           },
     )
   }
-
   async function submitPolicy() {
     const values = await policyForm.validateFields()
     const input: NetworkAccessPolicyInput = {
@@ -219,10 +237,8 @@ export function NetworkPolicyPane({ canCreate, canDelete, canUpdate }: NetworkPo
     }
     if (editor === 'new') await createPolicy.mutateAsync(input)
     else if (editor) await updatePolicy.mutateAsync({ policyId: editor.id, input })
-    void message.success(t('networkAccess.saved', '已保存'))
     setEditor(null)
   }
-
   function submitPreview(values: NetworkPolicyPreviewRequest) {
     previewPolicy.mutate({
       subjectUserId: values.subjectUserId.trim(),
@@ -232,14 +248,12 @@ export function NetworkPolicyPane({ canCreate, canDelete, canUpdate }: NetworkPo
       ...(values.siteId?.trim() ? { siteId: values.siteId.trim() } : {}),
     })
   }
-
   function submitConflicts(values: ConflictFormValues) {
     const input: NetworkConflictAnalysisRequest = {
       runtimeRanges: parseConflictRanges(values.rangesText),
     }
     analyzeConflicts.mutate(input)
   }
-
   const columns: TableColumnsType<NetworkAccessPolicy> = [
     { title: t('networkAccess.name', '名称'), dataIndex: 'name', width: 180 },
     {
@@ -290,16 +304,15 @@ export function NetworkPolicyPane({ canCreate, canDelete, canUpdate }: NetworkPo
                     icon={<EditOutlined />}
                     tooltip={t('common.edit', '编辑')}
                     onClick={() => openEditor(policy)}
+                    disabled={operationBlocked}
                   />
                 ) : null}
                 {canDelete ? (
                   <Popconfirm
                     title={t('networkAccess.policy.confirmDelete', '确认删除策略？')}
-                    onConfirm={() =>
-                      deletePolicy.mutate(policy.id, {
-                        onSuccess: () => void message.success(t('networkAccess.deleted', '已删除')),
-                      })
-                    }
+                    onConfirm={() => deletePolicy.mutate(policy.id)}
+                    okButtonProps={{ disabled: operationBlocked }}
+                    disabled={operationBlocked}
                   >
                     <ManagementIconButton
                       aria-label={t('networkAccess.policy.delete', '删除策略')}
@@ -315,7 +328,6 @@ export function NetworkPolicyPane({ canCreate, canDelete, canUpdate }: NetworkPo
         ]
       : []),
   ]
-
   const tabs: TabsProps['items'] = [
     {
       key: 'drafts',
@@ -330,19 +342,15 @@ export function NetworkPolicyPane({ canCreate, canDelete, canUpdate }: NetworkPo
                 <Button
                   type="primary"
                   loading={compilePolicy.isPending}
-                  onClick={() =>
-                    compilePolicy.mutate(undefined, {
-                      onSuccess: () =>
-                        void message.success(t('networkAccess.policy.compiled', '策略已发布')),
-                    })
-                  }
+                  onClick={() => compilePolicy.mutate(undefined)}
+                  disabled={operationBlocked}
                 >
                   {t('networkAccess.policy.compile', '发布草稿')}
                 </Button>
               ) : null
             }
           >
-            {snapshot.data ? (
+            {visibleSnapshotData ? (
               <Descriptions
                 size="small"
                 column={{ xs: 1, md: 3 }}
@@ -350,27 +358,27 @@ export function NetworkPolicyPane({ canCreate, canDelete, canUpdate }: NetworkPo
                   {
                     key: 'version',
                     label: t('networkAccess.policyVersion', '策略版本'),
-                    children: snapshot.data.policyVersion,
+                    children: visibleSnapshotData.policyVersion,
                   },
                   {
                     key: 'policies',
                     label: t('networkAccess.policy.policyCount', '策略数'),
-                    children: snapshot.data.policyCount,
+                    children: visibleSnapshotData.policyCount,
                   },
                   {
                     key: 'protected',
                     label: 'ProtectedSet',
-                    children: snapshot.data.protectedResourceCount,
+                    children: visibleSnapshotData.protectedResourceCount,
                   },
                   {
                     key: 'hash',
                     label: t('networkAccess.policy.contentHash', '内容摘要'),
-                    children: snapshot.data.contentHash,
+                    children: visibleSnapshotData.contentHash,
                   },
                   {
                     key: 'publishedAt',
                     label: t('networkAccess.policy.publishedAt', '发布时间'),
-                    children: snapshot.data.publishedAt,
+                    children: visibleSnapshotData.publishedAt,
                   },
                 ]}
               />
@@ -385,7 +393,7 @@ export function NetworkPolicyPane({ canCreate, canDelete, canUpdate }: NetworkPo
           <AdminTable
             columns={columns}
             dataSource={filteredPolicies}
-            empty={policies.isError ? <ManagementState compact kind="error" /> : undefined}
+            empty={policies.isError && !visiblePoliciesData ? null : undefined}
             loading={policies.isLoading}
             localSorting
             rowKey="id"
@@ -401,7 +409,9 @@ export function NetworkPolicyPane({ canCreate, canDelete, canUpdate }: NetworkPo
                   icon={<ReloadOutlined />}
                   loading={policies.isFetching}
                   tooltip={t('networkAccess.refresh', '刷新')}
-                  onClick={() => void policies.refetch()}
+                  onClick={() =>
+                    void (policies.isEnabled === false ? undefined : policies.refetch())
+                  }
                 />
                 {canCreate ? (
                   <Button
@@ -409,6 +419,7 @@ export function NetworkPolicyPane({ canCreate, canDelete, canUpdate }: NetworkPo
                     type="primary"
                     icon={<PlusOutlined />}
                     onClick={() => openEditor()}
+                    disabled={operationBlocked}
                   >
                     {t('networkAccess.policy.add', '新增策略')}
                   </Button>
@@ -425,7 +436,12 @@ export function NetworkPolicyPane({ canCreate, canDelete, canUpdate }: NetworkPo
       label: t('networkAccess.policy.preview', '预览决策'),
       children: (
         <Card>
-          <Form form={previewForm} layout="vertical" onFinish={submitPreview}>
+          <Form
+            form={previewForm}
+            layout="vertical"
+            onFinish={submitPreview}
+            disabled={operationBlocked}
+          >
             <Space wrap align="start">
               {[
                 ['subjectUserId', t('networkAccess.policy.userId', '用户 ID')],
@@ -458,7 +474,12 @@ export function NetworkPolicyPane({ canCreate, canDelete, canUpdate }: NetworkPo
                 />
               </Form.Item>
               <Form.Item label=" ">
-                <Button htmlType="submit" type="primary" loading={previewPolicy.isPending}>
+                <Button
+                  htmlType="submit"
+                  type="primary"
+                  loading={previewPolicy.isPending}
+                  disabled={operationBlocked}
+                >
                   {t('networkAccess.policy.preview', '预览决策')}
                 </Button>
               </Form.Item>
@@ -523,7 +544,12 @@ export function NetworkPolicyPane({ canCreate, canDelete, canUpdate }: NetworkPo
       label: t('networkAccess.policy.conflicts', 'CIDR 冲突'),
       children: (
         <Card>
-          <Form form={conflictForm} layout="vertical" onFinish={submitConflicts}>
+          <Form
+            form={conflictForm}
+            layout="vertical"
+            onFinish={submitConflicts}
+            disabled={operationBlocked}
+          >
             <Form.Item
               name="rangesText"
               label={t('networkAccess.policy.runtimeRanges', '待检查运行时网段')}
@@ -552,7 +578,12 @@ export function NetworkPolicyPane({ canCreate, canDelete, canUpdate }: NetworkPo
                 placeholder="wireguard_overlay,VPN overlay,10.200.0.0/16,gateway-1"
               />
             </Form.Item>
-            <Button htmlType="submit" type="primary" loading={analyzeConflicts.isPending}>
+            <Button
+              htmlType="submit"
+              type="primary"
+              loading={analyzeConflicts.isPending}
+              disabled={operationBlocked}
+            >
               {t('networkAccess.policy.analyzeConflicts', '分析冲突')}
             </Button>
           </Form>
@@ -601,15 +632,31 @@ export function NetworkPolicyPane({ canCreate, canDelete, canUpdate }: NetworkPo
       ),
     },
   ]
-
   return (
     <>
+      {!(editor !== null && !(policies.isEnabled !== false && queryAccessDenied(policies))) && (
+        <>
+          {' '}
+          {createPolicy.feedback}
+          {updatePolicy.feedback}
+          {deletePolicy.feedback}
+          {compilePolicy.feedback}
+          {previewPolicy.feedback}
+          {analyzeConflicts.feedback}{' '}
+        </>
+      )}
+
+      <ReadFeedback canRead={policies.isEnabled} query={policies} label="策略" />
+      <ReadFeedback canRead={snapshot.isEnabled} query={snapshot} label="连接采样" />
+
       <Tabs items={tabs} />
       <Modal
+        styles={operationModalStyles}
+        style={{ top: 32 }}
         centered
         destroyOnHidden
         mask={{ closable: false }}
-        open={editor !== null}
+        open={editor !== null && !(policies.isEnabled !== false && queryAccessDenied(policies))}
         title={
           editor === 'new'
             ? t('networkAccess.policy.add', '新增策略')
@@ -618,10 +665,22 @@ export function NetworkPolicyPane({ canCreate, canDelete, canUpdate }: NetworkPo
         confirmLoading={createPolicy.isPending || updatePolicy.isPending}
         okText={t('common.save', '保存')}
         cancelText={t('common.cancel', '取消')}
-        onCancel={() => setEditor(null)}
+        onCancel={() => {
+          if (!operationBlocked) (() => setEditor(null))()
+        }}
         onOk={() => void submitPolicy()}
+        closable={!operationBlocked}
+        cancelButtonProps={{ disabled: operationBlocked }}
+        okButtonProps={{ disabled: operationBlocked }}
       >
-        <Form form={policyForm} layout="vertical">
+        {createPolicy.feedback}
+        {updatePolicy.feedback}
+        {deletePolicy.feedback}
+        {compilePolicy.feedback}
+        {previewPolicy.feedback}
+        {analyzeConflicts.feedback}
+
+        <Form form={policyForm} layout="vertical" disabled={operationBlocked}>
           <Form.Item
             name="name"
             label={t('networkAccess.name', '名称')}
@@ -659,7 +718,7 @@ export function NetworkPolicyPane({ canCreate, canDelete, canUpdate }: NetworkPo
             >
               <Select
                 style={{ width: 150 }}
-                disabled={effect === 'deny'}
+                disabled={operationBlocked || effect === 'deny'}
                 options={(effect === 'deny'
                   ? ['deny']
                   : ['onboarding', 'full', 'restricted', 'quarantine']

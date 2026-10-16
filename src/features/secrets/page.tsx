@@ -1,15 +1,23 @@
-import { useMemo, useState } from 'react'
-import type {
-  SecretBinding,
-  SecretKind,
-  SecretCreateRequest,
-  SecretMetadata,
-  SecretScopeType,
-  SecretStatus,
-  SecretUpdateRequest,
-  SecretVaultKV2Reference,
-  SecretVersionMetadata,
-} from '@opensoha/contracts/gen/ts/sohaapi'
+import { AdminTable } from '@/components/admin-table'
+import { ManagementDataPage } from '@/components/management-data-page'
+import {
+  ManagementIconButton,
+  ManagementKeywordField,
+  ManagementQueryActions,
+  ManagementQueryField,
+  ManagementRefreshButton,
+  ManagementState,
+  ManagementTableToolbar,
+} from '@/components/management-list'
+import { operationModalStyles } from '@/components/modal-styles'
+import { ReadFeedback } from '@/components/request-feedback'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { isApiError } from '@/services/api-error'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import { tableColumnPresets } from '@/utils/table-columns'
+import { formatDateTime } from '@/utils/time'
 import {
   AppstoreOutlined,
   CopyOutlined,
@@ -22,6 +30,19 @@ import {
   RobotOutlined,
   StopOutlined,
 } from '@ant-design/icons'
+import type {
+  SecretBinding,
+  SecretCreateRequest,
+  SecretKind,
+  SecretMetadata,
+  SecretScopeType,
+  SecretStatus,
+  SecretUpdateRequest,
+  SecretVaultKV2Reference,
+  SecretVersionMetadata,
+} from '@opensoha/contracts/gen/ts/sohaapi'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TableColumnsType } from 'antd'
 import {
   App,
   Button,
@@ -36,38 +57,18 @@ import {
   Space,
   Typography,
 } from 'antd'
-import type { TableColumnsType } from 'antd'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AdminTable } from '@/components/admin-table'
-import { ManagementDataPage } from '@/components/management-data-page'
-import {
-  ManagementIconButton,
-  ManagementKeywordField,
-  ManagementQueryActions,
-  ManagementQueryField,
-  ManagementRefreshButton,
-  ManagementState,
-  ManagementTableToolbar,
-} from '@/components/management-list'
-import { MetadataTag, StatusTag } from '@/components/status-tag'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
-import { tableColumnPresets } from '@/utils/table-columns'
-import { formatDateTime } from '@/utils/time'
+import { useEffect, useMemo, useState } from 'react'
 import { buildSecretReference, type SecretFilters } from './api'
 import { secretMutations } from './mutations'
 import { secretQueries } from './queries'
-
 const { Text } = Typography
-
 type SecretSource = 'local' | 'vault_kv2'
-
 interface SecretValueValues {
   sshPassphrase?: string
   source: SecretSource
   value?: string
   vaultKv2?: Partial<SecretVaultKV2Reference>
 }
-
 interface SecretEditorValues extends SecretValueValues {
   kind?: SecretKind
   keyMode?: 'import' | 'generate'
@@ -78,25 +79,27 @@ interface SecretEditorValues extends SecretValueValues {
   scopeType: SecretScopeType
   status?: SecretStatus
 }
-
 interface SecretPageFilters extends SecretFilters {
   query?: string
 }
-
 const scopeOptions = [
   { value: 'workspace', label: '工作空间' },
   { value: 'project', label: '项目' },
   { value: 'environment', label: '环境' },
-] satisfies Array<{ value: SecretScopeType; label: string }>
-
+] satisfies Array<{
+  value: SecretScopeType
+  label: string
+}>
 const bindingOptions = [
   { value: 'capability', label: 'AI / 工具能力' },
   { value: 'project', label: '项目' },
   { value: 'connection', label: '连接' },
   { value: 'vm', label: 'VM 连接 / 执行' },
   { value: 'vm_create', label: 'VM 首次初始化' },
-] satisfies Array<{ value: SecretBinding['targetType']; label: string }>
-
+] satisfies Array<{
+  value: SecretBinding['targetType']
+  label: string
+}>
 const bindingTargetPlaceholders: Record<SecretBinding['targetType'], string> = {
   capability: '工具名称，例如 docker.projects.deploy.plan',
   connection: '连接 ID',
@@ -104,9 +107,7 @@ const bindingTargetPlaceholders: Record<SecretBinding['targetType'], string> = {
   vm: 'Soha VM ID（不是 PVE VMID）',
   vm_create: '虚拟化连接 ID',
 }
-
 const vaultPathPattern = /^[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/
-
 function toSecretValueInput(values: SecretValueValues) {
   if (values.source === 'vault_kv2') {
     return {
@@ -123,20 +124,22 @@ function toSecretValueInput(values: SecretValueValues) {
     ...(values.sshPassphrase ? { sshPassphrase: values.sshPassphrase } : {}),
   }
 }
-
 function SecretValueFields({
   label,
   source,
   kind = 'opaque',
+  blocked,
 }: {
   label: string
   source: SecretSource
   kind?: SecretKind
+  blocked: boolean
 }) {
   return (
     <>
       <Form.Item name="source" label="来源" rules={[{ required: true }]}>
         <Segmented
+          disabled={blocked}
           block
           options={[
             { label: '本地加密', value: 'local' },
@@ -223,7 +226,6 @@ function SecretValueFields({
     </>
   )
 }
-
 export function SecretsPage() {
   const { message } = App.useApp()
   const queryClient = useQueryClient()
@@ -254,38 +256,94 @@ export function SecretsPage() {
     hasPermission(permissionSnapshot, 'plugin.view') &&
     hasPermission(permissionSnapshot, 'plugin.configure') &&
     hasPermission(permissionSnapshot, 'plugin.configure_secrets')
-
   const secretsQuery = useQuery(
     secretQueries.list({ scopeId: filters.scopeId, scopeType: filters.scopeType }),
   )
+  const visibleSecretsQueryData =
+    secretsQuery.isEnabled === false ? undefined : readableQueryData(secretsQuery)
   const referencesQuery = useQuery(secretQueries.references(usageSecret?.id ?? ''))
+  const visibleReferencesQueryData =
+    referencesQuery.isEnabled === false ? undefined : readableQueryData(referencesQuery)
   const versionsQuery = useQuery(secretQueries.versions(versionSecret?.id ?? ''))
-  const createMutation = useMutation(secretMutations.create(queryClient))
-  const generateMutation = useMutation(secretMutations.generateSSHKey(queryClient))
-  const updateMutation = useMutation(secretMutations.update(queryClient))
-  const disableMutation = useMutation(secretMutations.disable(queryClient))
-  const rotateMutation = useMutation(secretMutations.rotate(queryClient))
-  const revokeMutation = useMutation(secretMutations.revokeVersion(queryClient))
-
+  const visibleVersionsQueryData =
+    versionsQuery.isEnabled === false ? undefined : readableQueryData(versionsQuery)
+  useEffect(() => {
+    if (
+      [secretsQuery.error].some((error) => isApiError(error) && [401, 403].includes(error.status))
+    ) {
+      setEditorOpen(false)
+      setEditing(null)
+      setRotating(null)
+      setUsageSecret(null)
+      setVersionSecret(null)
+      editorForm.resetFields()
+      rotateForm.resetFields()
+    }
+  }, [secretsQuery.error, editorForm, rotateForm])
+  const createMutation = useOperationMutation(secretMutations.create(queryClient), {
+    label: ['创建 Secret', 'Create Secret'],
+    target: (v) => v.name,
+  })
+  const generateMutation = useOperationMutation(secretMutations.generateSSHKey(queryClient), {
+    label: ['生成 SSH 密钥', 'Generate SSH key Secret'],
+    target: (v) => v.name,
+  })
+  const updateMutation = useOperationMutation(secretMutations.update(queryClient), {
+    label: ['保存 Secret', 'Save Secret'],
+    target: (v) => v.secretId,
+  })
+  const disableMutation = useOperationMutation(secretMutations.disable(queryClient), {
+    label: ['停用 Secret', 'Disable Secret'],
+    target: (v) => v,
+  })
+  const rotateMutation = useOperationMutation(secretMutations.rotate(queryClient), {
+    label: ['轮换 Secret', 'Rotate Secret'],
+    target: (v) => v.secretId,
+  })
+  const revokeMutation = useOperationMutation(secretMutations.revokeVersion(queryClient), {
+    label: ['撤销版本 Secret', 'Revoke version Secret'],
+    target: (v) => v.secretId,
+  })
+  const operationBlocked =
+    createMutation.blocked ||
+    generateMutation.blocked ||
+    updateMutation.blocked ||
+    disableMutation.blocked ||
+    rotateMutation.blocked ||
+    revokeMutation.blocked ||
+    (secretsQuery.isEnabled !== false && queryAccessDenied(secretsQuery))
+  const sensitiveWriteDenied = [
+    createMutation.error,
+    generateMutation.error,
+    updateMutation.error,
+    rotateMutation.error,
+  ].find((error) => isApiError(error) && [401, 403].includes(error.status))
+  useEffect(() => {
+    if (!sensitiveWriteDenied) return
+    setEditorOpen(false)
+    setEditing(null)
+    setRotating(null)
+    editorForm.resetFields()
+    rotateForm.resetFields()
+  }, [sensitiveWriteDenied, editorForm, rotateForm])
   const secrets = useMemo(() => {
     const query = filters.query?.trim().toLowerCase()
-    if (!query) return secretsQuery.data ?? []
-    return (secretsQuery.data ?? []).filter((secret) =>
+    if (!query) return visibleSecretsQueryData ?? []
+    return (visibleSecretsQueryData ?? []).filter((secret) =>
       [secret.name, secret.id, secret.description, secret.scopeType, secret.scopeId]
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
         .includes(query),
     )
-  }, [filters.query, secretsQuery.data])
-
+  }, [filters.query, visibleSecretsQueryData])
   function closeEditor() {
     setEditorOpen(false)
     setEditing(null)
     editorForm.resetFields()
   }
-
   function openCreate() {
+    if (operationBlocked) return
     setEditing(null)
     editorForm.setFieldsValue({
       kind: 'opaque',
@@ -302,8 +360,8 @@ export function SecretsPage() {
     })
     setEditorOpen(true)
   }
-
   function openEdit(secret: SecretMetadata) {
+    if (operationBlocked) return
     setEditing(secret)
     editorForm.setFieldsValue({
       bindings: secret.bindings,
@@ -316,7 +374,6 @@ export function SecretsPage() {
     })
     setEditorOpen(true)
   }
-
   function submitEditor(values: SecretEditorValues) {
     const bindings = (values.bindings ?? []).map((binding) => ({
       targetType: binding.targetType,
@@ -333,16 +390,13 @@ export function SecretsPage() {
       updateMutation.mutate(
         { secretId: editing.id, input },
         {
-          onError: (error) => message.error(error.message),
           onSuccess: () => {
-            message.success('Secret 已更新')
             closeEditor()
           },
         },
       )
       return
     }
-
     const input: SecretCreateRequest = {
       kind: values.kind ?? 'opaque',
       bindings,
@@ -362,9 +416,7 @@ export function SecretsPage() {
           bindings,
         },
         {
-          onError: (error) => message.error(error.message),
           onSuccess: (created) => {
-            message.success('SSH 密钥已生成并加密保存')
             closeEditor()
             setUsageSecret(created)
           },
@@ -373,15 +425,12 @@ export function SecretsPage() {
       return
     }
     createMutation.mutate(input, {
-      onError: (error) => message.error(error.message),
       onSuccess: (created) => {
-        message.success('Secret 已创建')
         closeEditor()
         setUsageSecret(created)
       },
     })
   }
-
   function copyReference(secret: SecretMetadata, version?: number) {
     try {
       const reference = buildSecretReference(secret.id, version)
@@ -394,7 +443,6 @@ export function SecretsPage() {
       message.error(error instanceof Error ? error.message : '复制失败')
     }
   }
-
   const columns = useMemo<TableColumnsType<SecretMetadata>>(
     () => [
       {
@@ -487,7 +535,7 @@ export function SecretsPage() {
             />
             <ManagementIconButton
               aria-label="轮换 Secret"
-              disabled={!canRotate || secret.status !== 'active'}
+              disabled={operationBlocked || !canRotate || secret.status !== 'active'}
               icon={<ReloadOutlined />}
               tooltip="轮换"
               onClick={() => {
@@ -498,23 +546,21 @@ export function SecretsPage() {
             />
             <ManagementIconButton
               aria-label="编辑 Secret"
-              disabled={!canUpdate}
+              disabled={operationBlocked || !canUpdate}
               icon={<EditOutlined />}
               tooltip="编辑"
               onClick={() => openEdit(secret)}
             />
             <Popconfirm
               cancelText="取消"
-              disabled={!canUpdate || secret.status === 'disabled'}
-              okButtonProps={{ danger: true, loading: disableMutation.isPending }}
+              disabled={operationBlocked || !canUpdate || secret.status === 'disabled'}
+              okButtonProps={{
+                ...{ danger: true, loading: disableMutation.isPending },
+                disabled: operationBlocked,
+              }}
               okText="停用"
               title={`停用 ${secret.name}`}
-              onConfirm={() =>
-                disableMutation.mutate(secret.id, {
-                  onError: (error) => message.error(error.message),
-                  onSuccess: () => message.success('Secret 已停用'),
-                })
-              }
+              onConfirm={() => disableMutation.mutate(secret.id)}
             >
               <ManagementIconButton
                 aria-label="停用 Secret"
@@ -530,7 +576,6 @@ export function SecretsPage() {
     ],
     [canRotate, canUpdate, disableMutation, message, rotateForm],
   )
-
   const versionColumns: TableColumnsType<SecretVersionMetadata> = [
     {
       title: 'Version',
@@ -560,19 +605,16 @@ export function SecretsPage() {
           />
           <Popconfirm
             cancelText="取消"
-            disabled={!canRevoke || version.status === 'revoked'}
-            okButtonProps={{ danger: true, loading: revokeMutation.isPending }}
+            disabled={operationBlocked || !canRevoke || version.status === 'revoked'}
+            okButtonProps={{
+              ...{ danger: true, loading: revokeMutation.isPending },
+              disabled: operationBlocked,
+            }}
             okText="撤销"
             title={`撤销 v${version.version}`}
             onConfirm={() =>
               versionSecret &&
-              revokeMutation.mutate(
-                { secretId: versionSecret.id, version: version.version },
-                {
-                  onError: (error) => message.error(error.message),
-                  onSuccess: () => message.success('Secret 版本已撤销'),
-                },
-              )
+              revokeMutation.mutate({ secretId: versionSecret.id, version: version.version })
             }
           >
             <ManagementIconButton
@@ -587,9 +629,28 @@ export function SecretsPage() {
       ),
     },
   ]
-
   return (
     <>
+      {!(
+        (editorOpen && !(secretsQuery.isEnabled !== false && queryAccessDenied(secretsQuery))) ||
+        (Boolean(usageSecret) &&
+          !(secretsQuery.isEnabled !== false && queryAccessDenied(secretsQuery))) ||
+        (Boolean(rotating) &&
+          !(secretsQuery.isEnabled !== false && queryAccessDenied(secretsQuery))) ||
+        (Boolean(versionSecret) &&
+          !(secretsQuery.isEnabled !== false && queryAccessDenied(secretsQuery)))
+      ) && (
+        <>
+          {' '}
+          {createMutation.feedback}
+          {generateMutation.feedback}
+          {updateMutation.feedback}
+          {disableMutation.feedback}
+          {rotateMutation.feedback}
+          {revokeMutation.feedback}{' '}
+        </>
+      )}
+
       <ManagementDataPage
         query={{
           actions: (
@@ -622,32 +683,24 @@ export function SecretsPage() {
             }),
         }}
         table={{
+          error: secretsQuery.isEnabled === false ? null : secretsQuery.error,
+          hasReadData:
+            readableQueryData(secretsQuery) !== undefined && secretsQuery.isEnabled !== false,
+          onRetry: () => {
+            if (secretsQuery.isEnabled !== false) void secretsQuery.refetch()
+          },
           columnSettingIconOnly: true,
           columnSettingPlacement: 'header',
           columns,
-          dataSource: secretsQuery.isError ? [] : secrets,
-          empty: secretsQuery.isError ? (
-            <ManagementState
-              kind="error"
-              title="Secret 加载失败"
-              description="Secret 列表请求失败，请稍后重试。"
-              actions={
-                <Button
-                  icon={<ReloadOutlined />}
-                  loading={secretsQuery.isFetching}
-                  onClick={() => void secretsQuery.refetch()}
-                >
-                  重试
-                </Button>
-              }
-            />
-          ) : (
-            <ManagementState kind="empty" title="暂无 Secret" />
-          ),
+          dataSource: secrets,
+          empty:
+            secretsQuery.isError && !visibleSecretsQueryData ? null : (
+              <ManagementState kind="empty" title="暂无 Secret" />
+            ),
           headerExtra: (
             <ManagementTableToolbar>
               <Button
-                disabled={!canCreate}
+                disabled={operationBlocked || !canCreate}
                 icon={<PlusOutlined />}
                 size="small"
                 type="primary"
@@ -660,7 +713,9 @@ export function SecretsPage() {
                 loading={secretsQuery.isFetching}
                 title="刷新"
                 tooltip="刷新"
-                onClick={() => void secretsQuery.refetch()}
+                onClick={() =>
+                  void (secretsQuery.isEnabled === false ? undefined : secretsQuery.refetch())
+                }
               />
             </ManagementTableToolbar>
           ),
@@ -671,23 +726,42 @@ export function SecretsPage() {
       />
 
       <Modal
+        styles={operationModalStyles}
+        style={{ top: 32 }}
         confirmLoading={
           createMutation.isPending || updateMutation.isPending || generateMutation.isPending
         }
         destroyOnHidden
-        open={editorOpen}
+        open={editorOpen && !(secretsQuery.isEnabled !== false && queryAccessDenied(secretsQuery))}
         title={editing ? '编辑 Secret' : '新建 Secret'}
         width={720}
-        onCancel={closeEditor}
+        onCancel={() => {
+          if (!operationBlocked) closeEditor()
+        }}
         onOk={() => void editorForm.submit()}
+        closable={!operationBlocked}
+        cancelButtonProps={{ disabled: operationBlocked }}
+        okButtonProps={{ disabled: operationBlocked }}
       >
-        <Form form={editorForm} layout="vertical" onFinish={submitEditor}>
+        {createMutation.feedback}
+        {generateMutation.feedback}
+        {updateMutation.feedback}
+        {disableMutation.feedback}
+        {rotateMutation.feedback}
+        {revokeMutation.feedback}
+
+        <Form
+          form={editorForm}
+          layout="vertical"
+          onFinish={submitEditor}
+          disabled={operationBlocked}
+        >
           <Form.Item name="name" label="名称" rules={[{ required: true, whitespace: true }]}>
             <Input maxLength={128} />
           </Form.Item>
           <Form.Item name="kind" label="凭证类型">
             <Select
-              disabled={Boolean(editing)}
+              disabled={operationBlocked || Boolean(editing)}
               options={[
                 { value: 'opaque', label: '通用 Secret' },
                 { value: 'ssh_keypair', label: 'SSH 密钥对' },
@@ -721,21 +795,34 @@ export function SecretsPage() {
             </Form.Item>
           ) : null}
           {!editing && !(editorKind === 'ssh_keypair' && editorKeyMode === 'generate') ? (
-            <SecretValueFields label="值" source={editorSource} kind={editorKind} />
+            <SecretValueFields
+              blocked={operationBlocked}
+              label="值"
+              source={editorSource}
+              kind={editorKind}
+            />
           ) : null}
           <Form.Item name="description" label="描述">
             <Input.TextArea maxLength={1024} rows={3} />
           </Form.Item>
           <Space align="start" size={12} wrap>
             <Form.Item name="scopeType" label="作用域" rules={[{ required: true }]}>
-              <Select disabled={Boolean(editing)} options={scopeOptions} style={{ width: 180 }} />
+              <Select
+                disabled={operationBlocked || Boolean(editing)}
+                options={scopeOptions}
+                style={{ width: 180 }}
+              />
             </Form.Item>
             <Form.Item
               name="scopeId"
               label="作用域 ID"
               rules={[{ required: true, whitespace: true }]}
             >
-              <Input disabled={Boolean(editing)} maxLength={128} style={{ width: 260 }} />
+              <Input
+                disabled={operationBlocked || Boolean(editing)}
+                maxLength={128}
+                style={{ width: 260 }}
+              />
             </Form.Item>
             {editing ? (
               <Form.Item name="status" label="状态" rules={[{ required: true }]}>
@@ -860,12 +947,34 @@ export function SecretsPage() {
       </Modal>
 
       <Modal
+        styles={operationModalStyles}
+        style={{ top: 32 }}
         footer={null}
-        open={Boolean(usageSecret)}
+        open={
+          Boolean(usageSecret) &&
+          !(secretsQuery.isEnabled !== false && queryAccessDenied(secretsQuery))
+        }
         title={`使用 ${usageSecret?.name ?? ''}`}
         width={520}
-        onCancel={() => setUsageSecret(null)}
+        onCancel={() => {
+          if (!operationBlocked) (() => setUsageSecret(null))()
+        }}
+        closable={!operationBlocked}
+        cancelButtonProps={{ disabled: operationBlocked }}
+        okButtonProps={{ disabled: operationBlocked }}
       >
+        {createMutation.feedback}
+        {generateMutation.feedback}
+        {updateMutation.feedback}
+        {disableMutation.feedback}
+        {rotateMutation.feedback}
+        {revokeMutation.feedback}
+
+        <ReadFeedback
+          canRead={referencesQuery.isEnabled}
+          query={referencesQuery}
+          label="引用关系"
+        />
         {usageSecret ? (
           <Space orientation="vertical" size={16} style={{ width: '100%' }}>
             <Space orientation="vertical" size={6} style={{ width: '100%' }}>
@@ -904,13 +1013,9 @@ export function SecretsPage() {
               <Text strong>实际 VM 引用</Text>
               {referencesQuery.isPending ? (
                 <ManagementState title="正在读取引用…" />
-              ) : referencesQuery.isError ? (
-                <ManagementState
-                  title="引用查询失败"
-                  actions={<Button onClick={() => void referencesQuery.refetch()}>重试</Button>}
-                />
-              ) : referencesQuery.data?.length ? (
-                referencesQuery.data.map((reference) => (
+              ) : referencesQuery.isError &&
+                !visibleReferencesQueryData ? null : visibleReferencesQueryData?.length ? (
+                visibleReferencesQueryData.map((reference) => (
                   <div key={`${reference.usage}/${reference.targetId}/${reference.version}`}>
                     <Text copyable>{reference.vmId || reference.targetId}</Text> · v
                     {reference.version} · {reference.usage} · {reference.status}
@@ -940,13 +1045,30 @@ export function SecretsPage() {
       </Modal>
 
       <Modal
+        styles={operationModalStyles}
+        style={{ top: 32 }}
         confirmLoading={rotateMutation.isPending}
         destroyOnHidden
-        open={Boolean(rotating)}
+        open={
+          Boolean(rotating) &&
+          !(secretsQuery.isEnabled !== false && queryAccessDenied(secretsQuery))
+        }
         title={`轮换 ${rotating?.name ?? ''}`}
-        onCancel={() => setRotating(null)}
+        onCancel={() => {
+          if (!operationBlocked) (() => setRotating(null))()
+        }}
         onOk={() => void rotateForm.submit()}
+        closable={!operationBlocked}
+        cancelButtonProps={{ disabled: operationBlocked }}
+        okButtonProps={{ disabled: operationBlocked }}
       >
+        {createMutation.feedback}
+        {generateMutation.feedback}
+        {updateMutation.feedback}
+        {disableMutation.feedback}
+        {rotateMutation.feedback}
+        {revokeMutation.feedback}
+
         <Form
           form={rotateForm}
           layout="vertical"
@@ -955,34 +1077,51 @@ export function SecretsPage() {
             rotateMutation.mutate(
               { secretId: rotating.id, input: toSecretValueInput(values) },
               {
-                onError: (error) => message.error(error.message),
                 onSuccess: () => {
-                  message.success('Secret 已轮换')
                   setRotating(null)
                 },
               },
             )
           }
+          disabled={operationBlocked}
         >
-          <SecretValueFields label="新值" source={rotateSource} kind={rotating?.kind} />
+          <SecretValueFields
+            blocked={operationBlocked}
+            label="新值"
+            source={rotateSource}
+            kind={rotating?.kind}
+          />
         </Form>
       </Modal>
 
       <Drawer
         destroyOnHidden
-        open={Boolean(versionSecret)}
+        open={
+          Boolean(versionSecret) &&
+          !(secretsQuery.isEnabled !== false && queryAccessDenied(secretsQuery))
+        }
         size="large"
         title={`${versionSecret?.name ?? ''} · Versions`}
-        onClose={() => setVersionSecret(null)}
+        onClose={() => {
+          if (!operationBlocked) (() => setVersionSecret(null))()
+        }}
       >
+        {createMutation.feedback}
+        {generateMutation.feedback}
+        {updateMutation.feedback}
+        {disableMutation.feedback}
+        {rotateMutation.feedback}
+        {revokeMutation.feedback}
+
+        <ReadFeedback query={versionsQuery} canRead={versionsQuery.isEnabled} label="版本记录" />
         {versionsQuery.isLoading ? (
           <ManagementState kind="loading" />
-        ) : versionsQuery.isError ? (
-          <ManagementState kind="error" title="版本加载失败" />
-        ) : (versionsQuery.data ?? []).length ? (
+        ) : versionsQuery.isError && !visibleVersionsQueryData ? null : (
+            visibleVersionsQueryData ?? []
+          ).length ? (
           <AdminTable
             columns={versionColumns}
-            dataSource={versionsQuery.data ?? []}
+            dataSource={visibleVersionsQueryData ?? []}
             loading={versionsQuery.isFetching}
             pagination={false}
             rowKey="version"

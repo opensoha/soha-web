@@ -1,8 +1,9 @@
-import { useEffect } from 'react'
+import { operationModalStyles } from '@/components/modal-styles'
 import { App, Collapse, Form, Input, Modal, Select } from 'antd'
+import type { ReactNode } from 'react'
+import { useEffect } from 'react'
 import { identityOutpostModeOptions } from '../options'
 import type { IdentityOutpost, IdentityOutpostInput, IdentityOutpostMode } from '../types'
-
 export interface IdentityOutpostFormValues {
   endpoint?: string
   forwardAuthUrl?: string
@@ -10,8 +11,9 @@ export interface IdentityOutpostFormValues {
   mode: IdentityOutpostMode
   name: string
 }
-
 interface IdentityOutpostFormModalProps {
+  feedback?: ReactNode
+  blocked?: boolean
   allowedModes?: IdentityOutpostMode[]
   editing: IdentityOutpost | null
   onCancel: () => void
@@ -19,7 +21,6 @@ interface IdentityOutpostFormModalProps {
   open: boolean
   submitting: boolean
 }
-
 function parseMetadata(value?: string) {
   const trimmed = String(value ?? '').trim()
   if (!trimmed) return {}
@@ -29,7 +30,6 @@ function parseMetadata(value?: string) {
   }
   return parsed as Record<string, unknown>
 }
-
 function formValues(outpost?: IdentityOutpost | null): IdentityOutpostFormValues {
   return {
     endpoint: outpost?.endpoint ?? '',
@@ -39,7 +39,6 @@ function formValues(outpost?: IdentityOutpost | null): IdentityOutpostFormValues
     name: outpost?.name ?? '',
   }
 }
-
 export function buildIdentityOutpostInput(values: IdentityOutpostFormValues): IdentityOutpostInput {
   return {
     endpoint: values.endpoint?.trim(),
@@ -50,8 +49,9 @@ export function buildIdentityOutpostInput(values: IdentityOutpostFormValues): Id
     status: 'offline',
   }
 }
-
 export function IdentityOutpostFormModal({
+  feedback,
+  blocked = false,
   allowedModes = ['embedded'],
   editing,
   onCancel,
@@ -62,11 +62,9 @@ export function IdentityOutpostFormModal({
   const { message } = App.useApp()
   const [form] = Form.useForm<IdentityOutpostFormValues>()
   const mode = Form.useWatch('mode', form)
-
   useEffect(() => {
     if (open) form.setFieldsValue(formValues(editing))
   }, [editing, form, open])
-
   const submit = async () => {
     const values = await form.validateFields()
     try {
@@ -75,7 +73,6 @@ export function IdentityOutpostFormModal({
       message.error(error instanceof Error ? error.message : 'metadata JSON 无效')
     }
   }
-
   return (
     <Modal
       confirmLoading={submitting}
@@ -86,8 +83,15 @@ export function IdentityOutpostFormModal({
       open={open}
       title={editing ? `编辑 ${editing.name}` : '新建 Outpost'}
       width={720}
+      style={{ top: 32 }}
+      styles={operationModalStyles}
+      closable={!blocked}
+      okButtonProps={{ disabled: blocked }}
+      cancelButtonProps={{ disabled: blocked }}
     >
-      <Form form={form} layout="vertical" preserve={false}>
+      {feedback}
+
+      <Form form={form} layout="vertical" preserve={false} disabled={blocked}>
         <Form.Item
           name="name"
           label="名称"

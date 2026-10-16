@@ -1,7 +1,3 @@
-import { useMemo, useState, type ReactNode } from 'react'
-import type { TableColumnsType } from 'antd'
-import { Button } from 'antd'
-import { ReloadOutlined } from '@ant-design/icons'
 import { AdminTable } from '@/components/admin-table'
 import {
   ManagementIconButton,
@@ -13,28 +9,38 @@ import {
   ManagementToolbarSearch,
 } from '@/components/management-list'
 import { useI18n } from '@/i18n'
-
-interface TablePaneProps<T extends { id: string }> {
+import { ReloadOutlined } from '@ant-design/icons'
+import type { TableColumnsType } from 'antd'
+import { Button } from 'antd'
+import { useMemo, useState, type ReactNode } from 'react'
+interface TablePaneProps<
+  T extends {
+    id: string
+  },
+> {
   columns: TableColumnsType<T>
   createAction?: ReactNode
   getSearchValues: (item: T) => unknown[]
   items?: T[]
   loading: boolean
-  error: boolean
+  error: boolean | Error | null
   errorDescription?: string
   onRefresh: () => void
   queryCard?: boolean
   refreshing: boolean
   searchPlaceholder: string
 }
-
-export function TablePane<T extends { id: string }>({
+export function TablePane<
+  T extends {
+    id: string
+  },
+>({
   columns,
   createAction,
   error,
   errorDescription,
   getSearchValues,
-  items = [],
+  items: sourceItems,
   loading,
   onRefresh,
   queryCard = false,
@@ -42,6 +48,7 @@ export function TablePane<T extends { id: string }>({
   searchPlaceholder,
 }: TablePaneProps<T>) {
   const { t } = useI18n()
+  const items = sourceItems ?? []
   const [search, setSearch] = useState('')
   const [draftSearch, setDraftSearch] = useState('')
   const filtered = useMemo(() => {
@@ -67,7 +74,6 @@ export function TablePane<T extends { id: string }>({
       />
     </ManagementTableToolbar>
   )
-
   return (
     <>
       {queryCard ? (
@@ -91,10 +97,13 @@ export function TablePane<T extends { id: string }>({
         </ManagementQueryPanel>
       ) : null}
       <AdminTable
+        error={error instanceof Error ? error : undefined}
+        hasReadData={sourceItems !== undefined}
+        onRetry={onRefresh}
         columns={columns}
         dataSource={filtered}
         empty={
-          error ? (
+          error === true ? (
             <ManagementState
               actions={
                 errorDescription ? (

@@ -1,8 +1,24 @@
-import { useMemo, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { AdminTable } from '@/components/admin-table'
+import {
+  ManagementIconButton,
+  ManagementTableToolbar,
+  ManagementToolbarSearch,
+} from '@/components/management-list'
+import { operationModalStyles } from '@/components/modal-styles'
+import { ReadFeedback } from '@/components/request-feedback'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { useI18n } from '@/i18n'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import { PlusOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons'
+import type {
+  NetworkRuntimeEnrollment,
+  NetworkRuntimeEnrollmentInput,
+  NetworkRuntimeEnrollmentSecret,
+} from '@opensoha/contracts/gen/ts/sohaapi'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TableColumnsType } from 'antd'
 import {
   Alert,
-  App,
   Button,
   Form,
   Input,
@@ -14,52 +30,45 @@ import {
   Tag,
   Typography,
 } from 'antd'
-import type { TableColumnsType } from 'antd'
-import { PlusOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons'
-import type {
-  NetworkRuntimeEnrollment,
-  NetworkRuntimeEnrollmentInput,
-  NetworkRuntimeEnrollmentSecret,
-} from '@opensoha/contracts/gen/ts/sohaapi'
-import { AdminTable } from '@/components/admin-table'
-import {
-  ManagementIconButton,
-  ManagementState,
-  ManagementTableToolbar,
-  ManagementToolbarSearch,
-} from '@/components/management-list'
-import { useI18n } from '@/i18n'
+import { useMemo, useState } from 'react'
 import { networkAccessMutations } from './mutations'
 import { networkAccessQueries } from './queries'
-
 interface NetworkEnrollmentPaneProps {
   canCreate: boolean
   canRevoke: boolean
   runtimeKind?: NetworkRuntimeEnrollmentInput['runtimeKind']
 }
-
 const LIST_FILTER = { limit: 200 } as const
-
 export function NetworkEnrollmentPane({
   canCreate,
   canRevoke,
   runtimeKind,
 }: NetworkEnrollmentPaneProps) {
-  const { message } = App.useApp()
   const { t } = useI18n()
   const queryClient = useQueryClient()
   const enrollments = useQuery(networkAccessQueries.enrollments(LIST_FILTER))
-  const createEnrollment = useMutation(networkAccessMutations.enrollments.create(queryClient))
-  const revokeEnrollment = useMutation(networkAccessMutations.enrollments.revoke(queryClient))
+  const visibleEnrollmentsData =
+    enrollments.isEnabled === false ? undefined : readableQueryData(enrollments)
+  const createEnrollment = useOperationMutation(
+    networkAccessMutations.enrollments.create(queryClient),
+    { label: ['创建 运行时登记', 'Create runtime enrollment'], target: (v) => v.deviceId },
+  )
+  const revokeEnrollment = useOperationMutation(
+    networkAccessMutations.enrollments.revoke(queryClient),
+    { label: ['撤销 运行时登记', 'Revoke runtime enrollment'], target: (v) => v },
+  )
+  const operationBlocked =
+    createEnrollment.blocked ||
+    revokeEnrollment.blocked ||
+    (enrollments.isEnabled !== false && queryAccessDenied(enrollments))
   const [createOpen, setCreateOpen] = useState(false)
   const [secret, setSecret] = useState<NetworkRuntimeEnrollmentSecret | null>(null)
   const [search, setSearch] = useState('')
   const [form] = Form.useForm<NetworkRuntimeEnrollmentInput>()
   const isRadius = runtimeKind === 'nas'
-
   const filtered = useMemo(() => {
     const keyword = search.trim().toLocaleLowerCase()
-    const scoped = (enrollments.data ?? []).filter(
+    const scoped = (visibleEnrollmentsData ?? []).filter(
       (item) => !runtimeKind || item.runtimeKind === runtimeKind,
     )
     if (!keyword) return scoped
@@ -68,19 +77,17 @@ export function NetworkEnrollmentPane({
         value.toLocaleLowerCase().includes(keyword),
       ),
     )
-  }, [enrollments.data, runtimeKind, search])
-
+  }, [visibleEnrollmentsData, runtimeKind, search])
   function openCreate() {
+    if (operationBlocked) return
     form.resetFields()
     form.setFieldsValue({ runtimeKind: runtimeKind ?? 'endpoint', ttlSeconds: 600 })
     setCreateOpen(true)
   }
-
   function closeCreate() {
     setCreateOpen(false)
     form.resetFields()
   }
-
   async function submitCreate() {
     const values = await form.validateFields()
     const result = await createEnrollment.mutateAsync({
@@ -93,12 +100,10 @@ export function NetworkEnrollmentPane({
     closeCreate()
     setSecret(result)
   }
-
   function closeSecret() {
     setSecret(null)
     createEnrollment.reset()
   }
-
   const columns: TableColumnsType<NetworkRuntimeEnrollment> = [
     { title: t('networkAccess.enrollment.runtimeId', '运行时 ID'), dataIndex: 'runtimeId' },
     {
@@ -132,14 +137,9 @@ export function NetworkEnrollmentPane({
               item.status === 'pending' ? (
                 <Popconfirm
                   title={t('networkAccess.enrollment.confirmRevoke', '确认吊销此注册令牌？')}
-                  onConfirm={() =>
-                    revokeEnrollment.mutate(item.id, {
-                      onSuccess: () =>
-                        void message.success(
-                          t('networkAccess.enrollment.revoked', '注册令牌已吊销'),
-                        ),
-                    })
-                  }
+                  onConfirm={() => revokeEnrollment.mutate(item.id)}
+                  okButtonProps={{ disabled: operationBlocked }}
+                  disabled={operationBlocked}
                 >
                   <ManagementIconButton
                     aria-label={t('networkAccess.enrollment.revoke', '吊销注册令牌')}
@@ -153,9 +153,21 @@ export function NetworkEnrollmentPane({
         ]
       : []),
   ]
-
   return (
     <>
+      {!(
+        (createOpen && !(enrollments.isEnabled !== false && queryAccessDenied(enrollments))) ||
+        (Boolean(secret) && !(enrollments.isEnabled !== false && queryAccessDenied(enrollments)))
+      ) && (
+        <>
+          {' '}
+          {createEnrollment.feedback}
+          {revokeEnrollment.feedback}{' '}
+        </>
+      )}
+
+      <ReadFeedback canRead={enrollments.isEnabled} query={enrollments} label="运行时登记" />
+
       {isRadius ? (
         <Alert
           showIcon
@@ -171,7 +183,7 @@ export function NetworkEnrollmentPane({
       <AdminTable
         columns={columns}
         dataSource={filtered}
-        empty={enrollments.isError ? <ManagementState compact kind="error" /> : undefined}
+        empty={enrollments.isError && !visibleEnrollmentsData ? null : undefined}
         loading={enrollments.isLoading}
         localSorting
         rowKey="id"
@@ -187,10 +199,18 @@ export function NetworkEnrollmentPane({
               icon={<ReloadOutlined />}
               loading={enrollments.isFetching}
               tooltip={t('networkAccess.refresh', '刷新')}
-              onClick={() => void enrollments.refetch()}
+              onClick={() =>
+                void (enrollments.isEnabled === false ? undefined : enrollments.refetch())
+              }
             />
             {canCreate ? (
-              <Button size="small" type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+              <Button
+                size="small"
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={openCreate}
+                disabled={operationBlocked}
+              >
                 {isRadius
                   ? t('networkAccess.radius.connect', '接入 RADIUS 服务')
                   : t('networkAccess.enrollment.create', '创建注册令牌')}
@@ -202,10 +222,12 @@ export function NetworkEnrollmentPane({
       />
 
       <Modal
+        styles={operationModalStyles}
+        style={{ top: 32 }}
         centered
         destroyOnHidden
         mask={{ closable: false }}
-        open={createOpen}
+        open={createOpen && !(enrollments.isEnabled !== false && queryAccessDenied(enrollments))}
         title={
           isRadius
             ? t('networkAccess.radius.connect', '接入 RADIUS 服务')
@@ -214,10 +236,18 @@ export function NetworkEnrollmentPane({
         confirmLoading={createEnrollment.isPending}
         okText={t('common.create', '创建')}
         cancelText={t('common.cancel', '取消')}
-        onCancel={closeCreate}
+        onCancel={() => {
+          if (!operationBlocked) closeCreate()
+        }}
         onOk={() => void submitCreate()}
+        closable={!operationBlocked}
+        cancelButtonProps={{ disabled: operationBlocked }}
+        okButtonProps={{ disabled: operationBlocked }}
       >
-        <Form form={form} layout="vertical">
+        {createEnrollment.feedback}
+        {revokeEnrollment.feedback}
+
+        <Form form={form} layout="vertical" disabled={operationBlocked}>
           <Form.Item
             name="runtimeId"
             label={t('networkAccess.enrollment.runtimeId', '运行时 ID')}
@@ -265,14 +295,25 @@ export function NetworkEnrollmentPane({
       </Modal>
 
       <Modal
+        styles={operationModalStyles}
+        style={{ top: 32 }}
         destroyOnHidden
-        cancelButtonProps={{ style: { display: 'none' } }}
-        open={Boolean(secret)}
+        cancelButtonProps={{ ...{ style: { display: 'none' } }, disabled: operationBlocked }}
+        open={
+          Boolean(secret) && !(enrollments.isEnabled !== false && queryAccessDenied(enrollments))
+        }
         title={t('networkAccess.enrollment.secretTitle', '一次性注册令牌')}
         okText={t('networkAccess.enrollment.saved', '我已保存')}
-        onCancel={closeSecret}
+        onCancel={() => {
+          if (!operationBlocked) closeSecret()
+        }}
         onOk={closeSecret}
+        closable={!operationBlocked}
+        okButtonProps={{ disabled: operationBlocked }}
       >
+        {createEnrollment.feedback}
+        {revokeEnrollment.feedback}
+
         <Space orientation="vertical" size={12} style={{ width: '100%' }}>
           <Alert
             showIcon

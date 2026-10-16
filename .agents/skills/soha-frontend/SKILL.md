@@ -44,7 +44,8 @@ description: Implement or review soha-web React and Ant Design UI, shared tables
 - Keep one app-level `ConfigProvider` in `src/main.tsx`; `src/theme/app-theme.ts` owns tokens.
   Shared components own reusable conventions. Explicitly scoped product pilots may compose their own layouts and select scene tokens from that same source.
 - Import generic reading/request feedback from `components/request-feedback` and cache/write
-  helpers from `utils/query-feedback`; domain adapters retain task receipts and evidence routes.
+  helpers from `utils/query-feedback`. Reuse `components/use-operation-mutation` for ordinary
+  request fences and receipts; domain adapters retain task receipts and evidence routes.
   Reuse shared error presentation ownership instead of adding a second notification policy.
 - Separate page composition, query behavior and table behavior. Reuse `AdminTable` over Ant Design
   `Table`; choose `ManagementDataPage` only when its management-list composition fits the task.

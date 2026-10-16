@@ -1,4 +1,21 @@
-import { useState } from 'react'
+import { AdminTable } from '@/components/admin-table'
+import { ManagementDataPage } from '@/components/management-data-page'
+import { ReadFeedback } from '@/components/request-feedback'
+import { buildCompactChartSpec, compactMetricColors } from '@/components/resource-metrics-panel'
+import { StatusTag } from '@/components/status-tag'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { useI18n } from '@/i18n'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import type {
+  NetworkVPNConnectionView,
+  NetworkVPNDecision,
+  NetworkVPNGatewayMetrics,
+  NetworkVPNPreviewInput,
+  NetworkVPNSeriesPoint,
+} from '@opensoha/contracts/gen/ts/sohaapi'
+import { useQuery } from '@tanstack/react-query'
+import { LineChart } from '@visactor/react-vchart'
 import {
   Alert,
   Button,
@@ -13,23 +30,8 @@ import {
   Timeline,
   Typography,
 } from 'antd'
-import { useMutation, useQuery } from '@tanstack/react-query'
-import { LineChart } from '@visactor/react-vchart'
-import type {
-  NetworkVPNDecision,
-  NetworkVPNPreviewInput,
-  NetworkVPNSeriesPoint,
-  NetworkVPNGatewayMetrics,
-  NetworkVPNConnectionView,
-} from '@opensoha/contracts/gen/ts/sohaapi'
-import { AdminTable } from '@/components/admin-table'
-import { ManagementDataPage } from '@/components/management-data-page'
-import { StatusTag } from '@/components/status-tag'
-import { buildCompactChartSpec, compactMetricColors } from '@/components/resource-metrics-panel'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
-import { useI18n } from '@/i18n'
+import { useState } from 'react'
 import { previewVPN, vpnDashboard, vpnDecision, vpnDocuments, vpnKeys } from './vpn-api'
-
 export default function VPNDashboardPage() {
   const { localeCode } = useI18n()
   const text = (zh: string, en: string) => (localeCode === 'zh_CN' ? zh : en)
@@ -48,18 +50,29 @@ export default function VPNDashboardPage() {
     enabled: can('network_access.vpn_dashboard.view'),
     retry: false,
   })
+  const visibleQueryData = query.isEnabled === false ? undefined : readableQueryData(query)
   const profiles = useQuery({
     queryKey: vpnKeys.documents('profiles'),
     queryFn: () => vpnDocuments('profiles'),
     enabled: can('network_access.vpn_profiles.view'),
   })
+  const visibleProfilesData = profiles.isEnabled === false ? undefined : readableQueryData(profiles)
   const decision = useQuery({
     queryKey: vpnKeys.decision(decisionID),
     queryFn: () => vpnDecision(decisionID),
     enabled: !!decisionID,
   })
-  const simulation = useMutation({ mutationFn: previewVPN })
-  const data = query.data
+  const visibleDecisionData = decision.isEnabled === false ? undefined : readableQueryData(decision)
+  const simulation = useOperationMutation(
+    { mutationFn: previewVPN },
+    {
+      label: ['VPN 选择预览', 'Preview network policy VPN decision'],
+      target: () => 'VPN选择预览',
+      readOnly: true,
+    },
+  )
+  const operationBlocked = query.isEnabled !== false && queryAccessDenied(query)
+  const data = visibleQueryData
   const n = (value: number | undefined, unit = '') =>
     value == null
       ? text('未采集', 'Not collected')
@@ -106,7 +119,7 @@ export default function VPNDashboardPage() {
   }
   const summary = (
     <>
-      {query.isError ? <Alert type="error" showIcon description={query.error.message} /> : null}
+      {query.isError && !visibleQueryData ? null : null}
       {data?.partial ? (
         <Alert
           type="warning"
@@ -287,7 +300,7 @@ export default function VPNDashboardPage() {
               {text('刷新', 'Refresh')}
             </Button>
             {can('network_access.vpn_selection_policies.preview') ? (
-              <Button onClick={() => setPreviewOpen(true)}>
+              <Button onClick={() => setPreviewOpen(true)} disabled={operationBlocked}>
                 {text('模拟选择', 'Simulate selection')}
               </Button>
             ) : null}
@@ -308,7 +321,7 @@ export default function VPNDashboardPage() {
           setFilter(next)
         },
         actions: (
-          <Button htmlType="submit" type="primary">
+          <Button htmlType="submit" type="primary" disabled={operationBlocked}>
             {text('查询', 'Query')}
           </Button>
         ),
@@ -326,7 +339,10 @@ export default function VPNDashboardPage() {
             <Form.Item name="profileId" label={text('方案', 'Profile')}>
               <Select
                 allowClear
-                options={profiles.data?.map((p) => ({ value: p.id, label: p.configuration.name }))}
+                options={visibleProfilesData?.map((p) => ({
+                  value: p.id,
+                  label: p.configuration.name,
+                }))}
               />
             </Form.Item>
             {(['siteId', 'gatewayId', 'providerCode', 'subjectId', 'teamId'] as const).map(
@@ -395,32 +411,51 @@ export default function VPNDashboardPage() {
         />
       }
     >
+      {!(
+        (!!decisionID && !(query.isEnabled !== false && queryAccessDenied(query))) ||
+        (previewOpen && !(query.isEnabled !== false && queryAccessDenied(query)))
+      ) && <> {simulation.feedback} </>}
+
+      <ReadFeedback canRead={query.isEnabled} query={query} label="当前记录" />
+      <ReadFeedback canRead={profiles.isEnabled} query={profiles} label="连接方案" />
+      <ReadFeedback canRead={decision.isEnabled} query={decision} label="策略决策" />
+
       <Drawer
-        open={!!decisionID}
-        onClose={() => setDecisionID('')}
+        open={!!decisionID && !(query.isEnabled !== false && queryAccessDenied(query))}
+        onClose={() => {
+          if (!operationBlocked) (() => setDecisionID(''))()
+        }}
         title={text('连接详情', 'Connection details')}
         size={760}
       >
-        {decision.data ? (
-          <VPNDecisionDetail decision={decision.data} />
-        ) : decision.isError ? (
-          <Alert type="error" description={decision.error.message} />
-        ) : null}
+        {simulation.feedback}
+
+        {visibleDecisionData ? (
+          <VPNDecisionDetail decision={visibleDecisionData} />
+        ) : decision.isError && !visibleDecisionData ? null : null}
       </Drawer>
       <Drawer
-        open={previewOpen}
-        onClose={() => setPreviewOpen(false)}
+        open={previewOpen && !(query.isEnabled !== false && queryAccessDenied(query))}
+        onClose={() => {
+          if (!operationBlocked) (() => setPreviewOpen(false))()
+        }}
         title={text('模拟选择（不创建连接）', 'Simulate selection (no connection created)')}
         size={760}
       >
+        {simulation.feedback}
+
         <Form<NetworkVPNPreviewInput>
           layout="vertical"
           initialValues={{ selection: 'auto' }}
           onFinish={(input) => simulation.mutate(input)}
+          disabled={operationBlocked}
         >
           <Form.Item name="profileId" label={text('方案', 'Profile')} rules={[{ required: true }]}>
             <Select
-              options={profiles.data?.map((p) => ({ value: p.id, label: p.configuration.name }))}
+              options={visibleProfilesData?.map((p) => ({
+                value: p.id,
+                label: p.configuration.name,
+              }))}
             />
           </Form.Item>
           <Form.Item
@@ -447,17 +482,21 @@ export default function VPNDashboardPage() {
           >
             <Input />
           </Form.Item>
-          <Button htmlType="submit" type="primary" loading={simulation.isPending}>
+          <Button
+            htmlType="submit"
+            type="primary"
+            loading={simulation.isPending}
+            disabled={operationBlocked}
+          >
             {text('模拟', 'Simulate')}
           </Button>
         </Form>
-        {simulation.isError ? <Alert type="error" description={simulation.error.message} /> : null}
+        {simulation.isError ? null : null}
         {simulation.data ? <VPNDecisionDetail decision={simulation.data} /> : null}
       </Drawer>
     </ManagementDataPage>
   )
 }
-
 function VPNDecisionDetail({ decision: d }: { decision: NetworkVPNDecision }) {
   const { localeCode } = useI18n()
   const text = (zh: string, en: string) => (localeCode === 'zh_CN' ? zh : en)

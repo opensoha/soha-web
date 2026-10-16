@@ -1,6 +1,8 @@
-import { useEffect } from 'react'
-import { Alert, App, Button, Collapse, Form, Input, Modal, Select, Switch } from 'antd'
+import { operationModalStyles } from '@/components/modal-styles'
 import { useI18n } from '@/i18n'
+import { Alert, App, Button, Collapse, Form, Input, Modal, Select, Switch } from 'antd'
+import type { ReactNode } from 'react'
+import { useEffect } from 'react'
 import {
   defaultProviderValues,
   defaultProxyHeaders,
@@ -9,13 +11,17 @@ import {
   providerTypeOptions,
   providerValuesFor,
   proxyModeOptions,
-  type ProxyMode,
   type ProviderFormValues,
+  type ProxyMode,
 } from '../provider-form-model'
 import type { IdentityProvider, IdentityProviderInput, IdentityRuntimeProviderType } from '../types'
-
 interface ProviderFormModalProps {
-  applicationOptions: Array<{ label: string; value: string }>
+  feedback?: ReactNode
+  blocked?: boolean
+  applicationOptions: Array<{
+    label: string
+    value: string
+  }>
   applicationsLoading: boolean
   editing: IdentityProvider | null
   onCancel: () => void
@@ -23,7 +29,10 @@ interface ProviderFormModalProps {
   onSubmit: (input: IdentityProviderInput) => void
   open: boolean
   outpostLoading: boolean
-  outpostOptions: Array<{ label: string; value: string }>
+  outpostOptions: Array<{
+    label: string
+    value: string
+  }>
   providerType: IdentityRuntimeProviderType
   samlAvailable: boolean
   samlUnavailableReason?: string
@@ -32,7 +41,6 @@ interface ProviderFormModalProps {
   lockedType?: IdentityRuntimeProviderType
   title?: string
 }
-
 function SAMLConfigFields() {
   return (
     <div className="soha-identity-provider-config-section">
@@ -69,7 +77,6 @@ function SAMLConfigFields() {
     </div>
   )
 }
-
 function ProxyConfigFields({
   outpostLoading,
   outpostOptions,
@@ -188,8 +195,9 @@ function ProxyConfigFields({
     </div>
   )
 }
-
 export function ProviderFormModal({
+  feedback,
+  blocked = false,
   applicationOptions,
   applicationsLoading,
   editing,
@@ -211,7 +219,6 @@ export function ProviderFormModal({
   const { localeCode } = useI18n()
   const zh = localeCode === 'zh_CN'
   const [form] = Form.useForm<ProviderFormValues>()
-
   useEffect(() => {
     if (!open) return
     const values = editing
@@ -224,7 +231,6 @@ export function ProviderFormModal({
     form.setFieldsValue(values)
     onProviderTypeChange(values.type)
   }, [editing, form, initialApplicationId, lockedType, onProviderTypeChange, open])
-
   const submit = (values: ProviderFormValues) => {
     try {
       onSubmit(providerInputFromValues(values))
@@ -232,7 +238,6 @@ export function ProviderFormModal({
       message.error(error instanceof Error ? error.message : String(error))
     }
   }
-
   return (
     <Modal
       destroyOnHidden
@@ -244,7 +249,14 @@ export function ProviderFormModal({
         (editing ? (zh ? '编辑 Provider' : 'Edit Provider') : zh ? '新建 Provider' : 'New Provider')
       }
       width={860}
+      style={{ top: 32 }}
+      styles={operationModalStyles}
+      closable={!blocked}
+      okButtonProps={{ disabled: blocked }}
+      cancelButtonProps={{ disabled: blocked }}
     >
+      {feedback}
+
       <Form
         form={form}
         className="soha-identity-provider-form"
@@ -254,6 +266,7 @@ export function ProviderFormModal({
         onValuesChange={(changedValues: Partial<ProviderFormValues>) => {
           if (changedValues.type) onProviderTypeChange(changedValues.type)
         }}
+        disabled={blocked}
       >
         <div className="soha-identity-provider-form-grid">
           <Form.Item
@@ -269,7 +282,7 @@ export function ProviderFormModal({
             rules={[{ required: true, message: '请选择应用' }]}
           >
             <Select
-              disabled={!editing && Boolean(initialApplicationId)}
+              disabled={blocked || (!editing && Boolean(initialApplicationId))}
               loading={applicationsLoading}
               options={applicationOptions}
               placeholder="选择下游应用"
@@ -278,7 +291,7 @@ export function ProviderFormModal({
           </Form.Item>
           <Form.Item label={zh ? '类型' : 'Type'} name="type">
             <Select
-              disabled={Boolean(editing) || Boolean(lockedType)}
+              disabled={blocked || Boolean(editing) || Boolean(lockedType)}
               options={providerTypeOptions.map((option) => ({
                 ...option,
                 disabled: option.value === 'saml' && !samlAvailable && editing?.type !== 'saml',
@@ -304,9 +317,11 @@ export function ProviderFormModal({
         />
 
         <div className="soha-identity-provider-form-actions">
-          <Button onClick={onCancel}>{zh ? '取消' : 'Cancel'}</Button>
+          <Button onClick={onCancel} disabled={blocked}>
+            {zh ? '取消' : 'Cancel'}
+          </Button>
           <Button
-            disabled={providerType === 'saml' && !samlAvailable}
+            disabled={blocked || (providerType === 'saml' && !samlAvailable)}
             htmlType="submit"
             loading={submitting}
             type="primary"
@@ -318,7 +333,6 @@ export function ProviderFormModal({
     </Modal>
   )
 }
-
 export function ProviderConfigFields({
   providerType,
   outpostLoading,
@@ -329,7 +343,9 @@ export function ProviderConfigFields({
 }: Pick<
   ProviderFormModalProps,
   'providerType' | 'outpostLoading' | 'outpostOptions' | 'samlAvailable' | 'samlUnavailableReason'
-> & { editing?: boolean }) {
+> & {
+  editing?: boolean
+}) {
   return (
     <>
       {providerType === 'proxy' ? (

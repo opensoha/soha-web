@@ -1,20 +1,9 @@
-import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  Alert,
-  App,
-  Button,
-  Descriptions,
-  Form,
-  Input,
-  InputNumber,
-  Modal,
-  Popconfirm,
-  Select,
-  Space,
-  Switch,
-} from 'antd'
-import type { TableColumnsType } from 'antd'
+import { ManagementIconButton } from '@/components/management-list'
+import { operationModalStyles } from '@/components/modal-styles'
+import { BooleanTag, StatusTag } from '@/components/status-tag'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { useI18n } from '@/i18n'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
 import {
   DeleteOutlined,
   EditOutlined,
@@ -34,13 +23,25 @@ import type {
   NetworkSiteProfileBinding,
   NetworkSiteProfileBindingInput,
 } from '@opensoha/contracts/gen/ts/sohaapi'
-import { ManagementIconButton } from '@/components/management-list'
-import { BooleanTag, StatusTag } from '@/components/status-tag'
-import { useI18n } from '@/i18n'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TableColumnsType } from 'antd'
+import {
+  Alert,
+  Button,
+  Descriptions,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Popconfirm,
+  Select,
+  Space,
+  Switch,
+} from 'antd'
+import { useState } from 'react'
 import { networkAccessMutations } from './mutations'
 import { networkAccessQueries } from './queries'
 import { TablePane } from './table-pane'
-
 const LIST_FILTER = { limit: 200 } as const
 const ACCESS_PROFILES: NetworkAccessProfile[] = [
   'onboarding',
@@ -49,7 +50,6 @@ const ACCESS_PROFILES: NetworkAccessProfile[] = [
   'quarantine',
   'deny',
 ]
-
 interface NASBindingValues {
   accessMedium: NetworkAccessMedium
   coaSupported: boolean
@@ -63,30 +63,42 @@ interface NASBindingValues {
   ssid?: string
   status: NetworkNASBindingStatus
 }
-
 interface NetworkNASBindingsPaneProps {
   canManage: boolean
   view?: 'network-device' | 'ssid' | 'user-admission'
 }
-
 export function NetworkNASBindingsPane({
   canManage,
   view = 'network-device',
 }: NetworkNASBindingsPaneProps) {
-  const { message } = App.useApp()
   const { t } = useI18n()
   const queryClient = useQueryClient()
   const query = useQuery(networkAccessQueries.nasBindings(LIST_FILTER))
-  const create = useMutation(networkAccessMutations.nasBindings.create(queryClient))
-  const update = useMutation(networkAccessMutations.nasBindings.update(queryClient))
-  const remove = useMutation(networkAccessMutations.nasBindings.remove(queryClient))
+  const visibleQueryData = query.isEnabled === false ? undefined : readableQueryData(query)
+  const create = useOperationMutation(networkAccessMutations.nasBindings.create(queryClient), {
+    label: ['创建 NAS绑定', 'Create NAS binding'],
+    target: (v) => v.nasId,
+  })
+  const update = useOperationMutation(networkAccessMutations.nasBindings.update(queryClient), {
+    label: ['保存 NAS绑定', 'Save NAS binding'],
+    target: (v) => v.bindingId,
+  })
+  const remove = useOperationMutation(networkAccessMutations.nasBindings.remove(queryClient), {
+    label: ['删除 NAS绑定', 'Delete NAS binding'],
+    target: (v) => v,
+  })
+  const operationBlocked =
+    create.blocked ||
+    update.blocked ||
+    remove.blocked ||
+    (query.isEnabled !== false && queryAccessDenied(query))
   const [editing, setEditing] = useState<NetworkNASBinding | null | undefined>(undefined)
   const [form] = Form.useForm<NASBindingValues>()
   const selectedMedium = Form.useWatch('accessMedium', form)
   const fixedMedium: NetworkAccessMedium | undefined = view === 'ssid' ? 'wifi' : undefined
   const items = fixedMedium
-    ? query.data?.filter((item) => item.accessMedium === fixedMedium)
-    : query.data
+    ? visibleQueryData?.filter((item) => item.accessMedium === fixedMedium)
+    : visibleQueryData
   const addLabel =
     view === 'user-admission'
       ? t('networkAccess.add.admission', '新增入网配置')
@@ -117,7 +129,6 @@ export function NetworkNASBindingsPane({
       : view === 'ssid'
         ? t('networkAccess.search.ssids', '搜索 SSID、无线设备、NAS、运行时或站点')
         : t('networkAccess.search.networkDevices', '搜索设备、SSID、NAS、运行时或站点')
-
   function openEditor(record: NetworkNASBinding | null) {
     setEditing(record)
     form.setFieldsValue(
@@ -134,12 +145,10 @@ export function NetworkNASBindingsPane({
       },
     )
   }
-
   function closeEditor() {
     setEditing(undefined)
     form.resetFields()
   }
-
   async function submit() {
     const values = await form.validateFields()
     const input: NetworkNASBindingInput = {
@@ -159,10 +168,8 @@ export function NetworkNASBindingsPane({
     }
     if (editing) await update.mutateAsync({ bindingId: editing.id, input })
     else await create.mutateAsync(input)
-    void message.success(t('networkAccess.saved', '已保存'))
     closeEditor()
   }
-
   const columns: TableColumnsType<NetworkNASBinding> = [
     { title: t('networkAccess.name', '名称'), dataIndex: 'name', width: 180 },
     {
@@ -227,14 +234,13 @@ export function NetworkNASBindingsPane({
                   icon={<EditOutlined />}
                   tooltip={t('common.edit', '编辑')}
                   onClick={() => openEditor(record)}
+                  disabled={operationBlocked}
                 />
                 <Popconfirm
                   title={confirmDeleteLabel}
-                  onConfirm={() =>
-                    remove.mutate(record.id, {
-                      onSuccess: () => void message.success(t('networkAccess.deleted', '已删除')),
-                    })
-                  }
+                  onConfirm={() => remove.mutate(record.id)}
+                  okButtonProps={{ disabled: operationBlocked }}
+                  disabled={operationBlocked}
                 >
                   <ManagementIconButton
                     aria-label={deleteLabel}
@@ -249,16 +255,24 @@ export function NetworkNASBindingsPane({
         ]
       : []),
   ]
-
   return (
     <>
+      {!(editing !== undefined && !(query.isEnabled !== false && queryAccessDenied(query))) && (
+        <>
+          {' '}
+          {create.feedback}
+          {update.feedback}
+          {remove.feedback}{' '}
+        </>
+      )}
+
       <TablePane
         columns={columns}
         items={items}
         loading={query.isLoading}
         refreshing={query.isFetching}
-        error={query.isError}
-        onRefresh={() => void query.refetch()}
+        error={query.isEnabled === false ? null : query.error}
+        onRefresh={() => void (query.isEnabled === false ? undefined : query.refetch())}
         searchPlaceholder={searchPlaceholder}
         getSearchValues={(item) => [
           item.name,
@@ -278,6 +292,7 @@ export function NetworkNASBindingsPane({
               type="primary"
               icon={<PlusOutlined />}
               onClick={() => openEditor(null)}
+              disabled={operationBlocked}
             >
               {addLabel}
             </Button>
@@ -285,18 +300,29 @@ export function NetworkNASBindingsPane({
         }
       />
       <Modal
+        styles={operationModalStyles}
+        style={{ top: 32 }}
         centered
         destroyOnHidden
         mask={{ closable: false }}
-        open={editing !== undefined}
+        open={editing !== undefined && !(query.isEnabled !== false && queryAccessDenied(query))}
         title={editing ? editLabel : addLabel}
         confirmLoading={create.isPending || update.isPending}
         okText={t('common.save', '保存')}
         cancelText={t('common.cancel', '取消')}
-        onCancel={closeEditor}
+        onCancel={() => {
+          if (!operationBlocked) closeEditor()
+        }}
         onOk={() => void submit()}
+        closable={!operationBlocked}
+        cancelButtonProps={{ disabled: operationBlocked }}
+        okButtonProps={{ disabled: operationBlocked }}
       >
-        <Form form={form} layout="vertical">
+        {create.feedback}
+        {update.feedback}
+        {remove.feedback}
+
+        <Form form={form} layout="vertical" disabled={operationBlocked}>
           {[
             ['name', t('networkAccess.name', '名称')],
             ['nasId', 'NAS ID'],
@@ -324,7 +350,7 @@ export function NetworkNASBindingsPane({
             rules={[{ required: true }]}
           >
             <Select
-              disabled={Boolean(fixedMedium)}
+              disabled={operationBlocked || Boolean(fixedMedium)}
               options={[
                 { value: 'wifi', label: 'Wi-Fi' },
                 { value: 'wired', label: t('networkAccess.wired', '有线') },
@@ -385,7 +411,6 @@ export function NetworkNASBindingsPane({
     </>
   )
 }
-
 interface SiteProfileValues {
   accessProfile: NetworkAccessProfile
   filterId?: string
@@ -393,30 +418,40 @@ interface SiteProfileValues {
   siteId: string
   vlanId?: number
 }
-
 export function NetworkSiteProfileBindingsPane({ canManage }: { canManage: boolean }) {
-  const { message } = App.useApp()
   const { t } = useI18n()
   const queryClient = useQueryClient()
   const query = useQuery(networkAccessQueries.siteProfileBindings(LIST_FILTER))
-  const create = useMutation(networkAccessMutations.siteProfileBindings.create(queryClient))
-  const update = useMutation(networkAccessMutations.siteProfileBindings.update(queryClient))
-  const remove = useMutation(networkAccessMutations.siteProfileBindings.remove(queryClient))
+  const visibleQueryData = query.isEnabled === false ? undefined : readableQueryData(query)
+  const create = useOperationMutation(
+    networkAccessMutations.siteProfileBindings.create(queryClient),
+    { label: ['创建 站点绑定', 'Create site binding'], target: (v) => v.siteId },
+  )
+  const update = useOperationMutation(
+    networkAccessMutations.siteProfileBindings.update(queryClient),
+    { label: ['保存 站点绑定', 'Save site binding'], target: (v) => v.bindingId },
+  )
+  const remove = useOperationMutation(
+    networkAccessMutations.siteProfileBindings.remove(queryClient),
+    { label: ['删除 站点绑定', 'Delete site binding'], target: (v) => v },
+  )
+  const operationBlocked =
+    create.blocked ||
+    update.blocked ||
+    remove.blocked ||
+    (query.isEnabled !== false && queryAccessDenied(query))
   const [editing, setEditing] = useState<NetworkSiteProfileBinding | null | undefined>(undefined)
   const [form] = Form.useForm<SiteProfileValues>()
-
   function openEditor(record: NetworkSiteProfileBinding | null) {
     setEditing(record)
     form.setFieldsValue(
       record ?? { siteId: '', accessProfile: 'restricted', sessionTimeoutSeconds: 900 },
     )
   }
-
   function closeEditor() {
     setEditing(undefined)
     form.resetFields()
   }
-
   async function submit() {
     const values = await form.validateFields()
     const input: NetworkSiteProfileBindingInput = {
@@ -428,10 +463,8 @@ export function NetworkSiteProfileBindingsPane({ canManage }: { canManage: boole
     }
     if (editing) await update.mutateAsync({ bindingId: editing.id, input })
     else await create.mutateAsync(input)
-    void message.success(t('networkAccess.saved', '已保存'))
     closeEditor()
   }
-
   const columns: TableColumnsType<NetworkSiteProfileBinding> = [
     { title: t('networkAccess.siteId', '站点 ID'), dataIndex: 'siteId', width: 200 },
     {
@@ -464,14 +497,13 @@ export function NetworkSiteProfileBindingsPane({ canManage }: { canManage: boole
                   icon={<EditOutlined />}
                   tooltip={t('common.edit', '编辑')}
                   onClick={() => openEditor(record)}
+                  disabled={operationBlocked}
                 />
                 <Popconfirm
                   title={t('networkAccess.confirmDelete.siteProfile', '确认删除接入等级？')}
-                  onConfirm={() =>
-                    remove.mutate(record.id, {
-                      onSuccess: () => void message.success(t('networkAccess.deleted', '已删除')),
-                    })
-                  }
+                  onConfirm={() => remove.mutate(record.id)}
+                  okButtonProps={{ disabled: operationBlocked }}
+                  disabled={operationBlocked}
                 >
                   <ManagementIconButton
                     aria-label={t('networkAccess.delete.siteProfile', '删除接入等级')}
@@ -486,16 +518,24 @@ export function NetworkSiteProfileBindingsPane({ canManage }: { canManage: boole
         ]
       : []),
   ]
-
   return (
     <>
+      {!(editing !== undefined && !(query.isEnabled !== false && queryAccessDenied(query))) && (
+        <>
+          {' '}
+          {create.feedback}
+          {update.feedback}
+          {remove.feedback}{' '}
+        </>
+      )}
+
       <TablePane
         columns={columns}
-        items={query.data}
+        items={visibleQueryData}
         loading={query.isLoading}
         refreshing={query.isFetching}
-        error={query.isError}
-        onRefresh={() => void query.refetch()}
+        error={query.isEnabled === false ? null : query.error}
+        onRefresh={() => void (query.isEnabled === false ? undefined : query.refetch())}
         searchPlaceholder={t('networkAccess.search.siteProfiles', '搜索站点、等级或 Filter-Id')}
         getSearchValues={(item) => [item.siteId, item.accessProfile, item.filterId, item.vlanId]}
         createAction={
@@ -505,6 +545,7 @@ export function NetworkSiteProfileBindingsPane({ canManage }: { canManage: boole
               type="primary"
               icon={<PlusOutlined />}
               onClick={() => openEditor(null)}
+              disabled={operationBlocked}
             >
               {t('networkAccess.add.siteProfile', '新增接入等级')}
             </Button>
@@ -512,10 +553,12 @@ export function NetworkSiteProfileBindingsPane({ canManage }: { canManage: boole
         }
       />
       <Modal
+        styles={operationModalStyles}
+        style={{ top: 32 }}
         centered
         destroyOnHidden
         mask={{ closable: false }}
-        open={editing !== undefined}
+        open={editing !== undefined && !(query.isEnabled !== false && queryAccessDenied(query))}
         title={
           editing
             ? t('networkAccess.edit.siteProfile', '编辑接入等级')
@@ -524,10 +567,19 @@ export function NetworkSiteProfileBindingsPane({ canManage }: { canManage: boole
         confirmLoading={create.isPending || update.isPending}
         okText={t('common.save', '保存')}
         cancelText={t('common.cancel', '取消')}
-        onCancel={closeEditor}
+        onCancel={() => {
+          if (!operationBlocked) closeEditor()
+        }}
         onOk={() => void submit()}
+        closable={!operationBlocked}
+        cancelButtonProps={{ disabled: operationBlocked }}
+        okButtonProps={{ disabled: operationBlocked }}
       >
-        <Form form={form} layout="vertical">
+        {create.feedback}
+        {update.feedback}
+        {remove.feedback}
+
+        <Form form={form} layout="vertical" disabled={operationBlocked}>
           <Form.Item
             name="siteId"
             label={t('networkAccess.siteId', '站点 ID')}
@@ -566,36 +618,45 @@ export function NetworkSiteProfileBindingsPane({ canManage }: { canManage: boole
     </>
   )
 }
-
 interface SessionActionValues {
   action: NetworkSessionAction
   reasonCode: string
   targetAccessProfile: NetworkAccessProfile
 }
-
 export function NetworkSessionsPane({ canManage }: { canManage: boolean }) {
-  const { message } = App.useApp()
   const { t } = useI18n()
   const queryClient = useQueryClient()
   const query = useQuery(networkAccessQueries.sessions(LIST_FILTER))
-  const planAction = useMutation(networkAccessMutations.sessions.plan())
-  const executeAction = useMutation(networkAccessMutations.sessions.execute(queryClient))
+  const visibleQueryData = query.isEnabled === false ? undefined : readableQueryData(query)
+  const planAction = useOperationMutation(networkAccessMutations.sessions.plan(), {
+    label: ['会话操作预检', 'Plan session action session'],
+    target: (v) => v.sessionId,
+    readOnly: true,
+  })
+  const executeAction = useOperationMutation(networkAccessMutations.sessions.execute(queryClient), {
+    label: ['执行会话命令', 'Execute session command session'],
+    target: (v) => v.sessionId,
+    receipt: (command) => ({
+      message: '会话命令已返回：' + command.status,
+      evidence: '命令 ID：' + command.id + '；实际接入状态以会话记录为准。',
+    }),
+  })
+  const operationBlocked =
+    executeAction.blocked || (query.isEnabled !== false && queryAccessDenied(query))
   const [session, setSession] = useState<NetworkSession | null>(null)
   const [plan, setPlan] = useState<NetworkSessionActionPlan | null>(null)
   const [form] = Form.useForm<SessionActionValues>()
-
   function openAction(record: NetworkSession) {
+    if (operationBlocked) return
     setSession(record)
     setPlan(null)
     form.setFieldsValue({ action: 'coa', reasonCode: '', targetAccessProfile: undefined })
   }
-
   function closeAction() {
     setSession(null)
     setPlan(null)
     form.resetFields()
   }
-
   async function submitAction() {
     if (!session) return
     if (!plan) {
@@ -607,7 +668,7 @@ export function NetworkSessionsPane({ canManage }: { canManage: boolean }) {
       setPlan(next)
       return
     }
-    const command = await executeAction.mutateAsync({
+    await executeAction.mutateAsync({
       sessionId: session.id,
       input: {
         action: plan.requestedAction,
@@ -616,15 +677,8 @@ export function NetworkSessionsPane({ canManage }: { canManage: boolean }) {
         planHash: plan.planHash,
       },
     })
-    void message.success(
-      t('networkAccess.sessionActionQueued', '命令已入队：{status}').replace(
-        '{status}',
-        command.status,
-      ),
-    )
     closeAction()
   }
-
   const columns: TableColumnsType<NetworkSession> = [
     { title: t('networkAccess.subjectId', '用户 ID'), dataIndex: 'subjectId', width: 190 },
     { title: t('networkAccess.deviceId', '设备 ID'), dataIndex: 'deviceId', width: 190 },
@@ -668,16 +722,23 @@ export function NetworkSessionsPane({ canManage }: { canManage: boolean }) {
         ]
       : []),
   ]
-
   return (
     <>
+      {!(Boolean(session) && !(query.isEnabled !== false && queryAccessDenied(query))) && (
+        <>
+          {' '}
+          {planAction.feedback}
+          {executeAction.feedback}{' '}
+        </>
+      )}
+
       <TablePane
         columns={columns}
-        items={query.data}
+        items={visibleQueryData}
         loading={query.isLoading}
         refreshing={query.isFetching}
-        error={query.isError}
-        onRefresh={() => void query.refetch()}
+        error={query.isEnabled === false ? null : query.error}
+        onRefresh={() => void (query.isEnabled === false ? undefined : query.refetch())}
         searchPlaceholder={t('networkAccess.search.sessions', '搜索用户、设备、站点或 NAS')}
         getSearchValues={(item) => [
           item.subjectId,
@@ -691,24 +752,33 @@ export function NetworkSessionsPane({ canManage }: { canManage: boolean }) {
         ]}
       />
       <Modal
+        styles={operationModalStyles}
+        style={{ top: 32 }}
         centered
         destroyOnHidden
         mask={{ closable: false }}
         width={640}
-        open={Boolean(session)}
+        open={Boolean(session) && !(query.isEnabled !== false && queryAccessDenied(query))}
         title={t('networkAccess.sessionAction', '调整会话访问')}
         confirmLoading={planAction.isPending || executeAction.isPending}
-        okButtonProps={{ danger: Boolean(plan?.willDisconnect) }}
+        okButtonProps={{ ...{ danger: Boolean(plan?.willDisconnect) }, disabled: operationBlocked }}
         okText={
           plan
             ? t('networkAccess.sessionActionExecute', '确认执行')
             : t('networkAccess.sessionActionPlan', '生成计划')
         }
         cancelText={t('common.cancel', '取消')}
-        onCancel={closeAction}
+        onCancel={() => {
+          if (!operationBlocked) closeAction()
+        }}
         onOk={() => void submitAction()}
+        closable={!operationBlocked}
+        cancelButtonProps={{ disabled: operationBlocked }}
       >
-        <Form form={form} layout="vertical" disabled={Boolean(plan)}>
+        {planAction.feedback}
+        {executeAction.feedback}
+
+        <Form form={form} layout="vertical" disabled={operationBlocked || Boolean(plan)}>
           <Form.Item
             name="action"
             label={t('networkAccess.requestedAction', '请求动作')}

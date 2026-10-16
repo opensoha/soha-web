@@ -1,13 +1,14 @@
-import { Form, Input, InputNumber, Select, Switch } from 'antd'
-import { useQuery } from '@tanstack/react-query'
+import { ReadFeedback } from '@/components/request-feedback'
 import { useI18n } from '@/i18n'
-import { networkAccessQueries } from './queries'
-import { vpnDocuments, vpnKeys } from './vpn-api'
+import { readableQueryData } from '@/utils/query-feedback'
 import type {
   NetworkVPNProfileConfig,
   NetworkVPNSelectionPolicyConfig,
 } from '@opensoha/contracts/gen/ts/sohaapi'
-
+import { useQuery } from '@tanstack/react-query'
+import { Form, Input, InputNumber, Select, Switch } from 'antd'
+import { networkAccessQueries } from './queries'
+import { vpnDocuments, vpnKeys } from './vpn-api'
 export const vpnPolicyDefaults: NetworkVPNSelectionPolicyConfig = {
   name: '',
   strategy: 'latency',
@@ -35,37 +36,50 @@ export const vpnProfileDefaults: NetworkVPNProfileConfig = {
   enabled: false,
   assignments: { userIds: [], teamIds: [], deviceIds: [] },
 }
-
 export function VPNProfileFields({ can }: { can: (key: string) => boolean }) {
   const { localeCode } = useI18n()
   const text = (zh: string, en: string) => (localeCode === 'zh_CN' ? zh : en)
   const sites = useQuery(
     networkAccessQueries.sites({ limit: 200 }, can('network_access.sites.view')),
   )
+  const visibleSitesData = sites.isEnabled === false ? undefined : readableQueryData(sites)
   const spaces = useQuery(
     networkAccessQueries.spaces({ limit: 200 }, can('network_access.spaces.view')),
   )
+  const visibleSpacesData = spaces.isEnabled === false ? undefined : readableQueryData(spaces)
   const gateways = useQuery(
     networkAccessQueries.gateways({ limit: 200 }, can('network_access.gateways.view')),
   )
+  const visibleGatewaysData = gateways.isEnabled === false ? undefined : readableQueryData(gateways)
   const resources = useQuery(
     networkAccessQueries.resources({ limit: 200 }, can('network_access.resources.view')),
   )
+  const visibleResourcesData =
+    resources.isEnabled === false ? undefined : readableQueryData(resources)
   const devices = useQuery(
     networkAccessQueries.devices({ limit: 200 }, can('network_access.endpoint_devices.view')),
   )
+  const visibleDevicesData = devices.isEnabled === false ? undefined : readableQueryData(devices)
   const policies = useQuery({
     queryKey: vpnKeys.documents('selection-policies'),
     queryFn: () => vpnDocuments('selection-policies'),
     enabled: can('network_access.vpn_selection_policies.view'),
   })
+  const visiblePoliciesData = policies.isEnabled === false ? undefined : readableQueryData(policies)
   return (
     <>
+      <ReadFeedback canRead={sites.isEnabled} query={sites} label="站点" />
+      <ReadFeedback canRead={spaces.isEnabled} query={spaces} label="网络空间" />
+      <ReadFeedback canRead={gateways.isEnabled} query={gateways} label="网关" />
+      <ReadFeedback canRead={resources.isEnabled} query={resources} label="网络资源" />
+      <ReadFeedback canRead={devices.isEnabled} query={devices} label="设备" />
+      <ReadFeedback canRead={policies.isEnabled} query={policies} label="策略" />
+
       <Form.Item name="siteId" label={text('目标站点', 'Target site')} rules={[{ required: true }]}>
         <Select
           showSearch
           optionFilterProp="label"
-          options={sites.data?.map((s) => ({ value: s.id, label: s.name }))}
+          options={visibleSitesData?.map((s) => ({ value: s.id, label: s.name }))}
         />
       </Form.Item>
       <Form.Item
@@ -76,7 +90,7 @@ export function VPNProfileFields({ can }: { can: (key: string) => boolean }) {
         <Select
           showSearch
           optionFilterProp="label"
-          options={spaces.data?.map((s) => ({ value: s.id, label: s.name }))}
+          options={visibleSpacesData?.map((s) => ({ value: s.id, label: s.name }))}
         />
       </Form.Item>
       <Form.Item name="mode" label={text('授权模式', 'Access mode')} rules={[{ required: true }]}>
@@ -94,7 +108,7 @@ export function VPNProfileFields({ can }: { can: (key: string) => boolean }) {
           mode="multiple"
           showSearch
           optionFilterProp="label"
-          options={resources.data?.map((r) => ({ value: r.id, label: r.name }))}
+          options={visibleResourcesData?.map((r) => ({ value: r.id, label: r.name }))}
         />
       </Form.Item>
       <Form.Item
@@ -106,7 +120,7 @@ export function VPNProfileFields({ can }: { can: (key: string) => boolean }) {
           mode="multiple"
           showSearch
           optionFilterProp="label"
-          options={gateways.data?.map((g) => ({ value: g.id, label: g.name }))}
+          options={visibleGatewaysData?.map((g) => ({ value: g.id, label: g.name }))}
         />
       </Form.Item>
       <Form.Item
@@ -115,7 +129,7 @@ export function VPNProfileFields({ can }: { can: (key: string) => boolean }) {
         rules={[{ required: true }]}
       >
         <Select
-          options={policies.data?.map((p) => ({ value: p.id, label: p.configuration.name }))}
+          options={visiblePoliciesData?.map((p) => ({ value: p.id, label: p.configuration.name }))}
         />
       </Form.Item>
       <Form.Item name={['assignments', 'userIds']} label={text('分配用户 ID', 'Assigned user IDs')}>
@@ -135,7 +149,7 @@ export function VPNProfileFields({ can }: { can: (key: string) => boolean }) {
           mode="multiple"
           showSearch
           optionFilterProp="label"
-          options={devices.data?.map((d) => ({ value: d.id, label: d.name || d.id }))}
+          options={visibleDevicesData?.map((d) => ({ value: d.id, label: d.name || d.id }))}
         />
       </Form.Item>
       <Form.Item
@@ -151,7 +165,6 @@ export function VPNProfileFields({ can }: { can: (key: string) => boolean }) {
     </>
   )
 }
-
 export function VPNPolicyFields() {
   const { localeCode } = useI18n()
   const text = (zh: string, en: string) => (localeCode === 'zh_CN' ? zh : en)
@@ -253,7 +266,6 @@ export function VPNPolicyFields() {
     </>
   )
 }
-
 export function VPNNameField() {
   const { t } = useI18n()
   return (

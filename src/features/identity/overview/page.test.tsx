@@ -1,13 +1,13 @@
 /** @vitest-environment jsdom */
 
+import type { SystemIntegrationCategory } from '@/features/settings'
+import type { AuditLog, OnlineUser } from '@/features/system'
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AuditLog, OnlineUser } from '@/features/system'
-import type { SystemIntegrationCategory } from '@/features/settings'
-import type { IdentityApplication } from '../shared/types'
 import type { IdentityOutpost } from '../outposts'
 import type { IdentityProvider } from '../providers'
+import type { IdentityApplication } from '../shared/types'
 import { IdentityOverviewPage } from './page'
 import { useIdentityOverviewData } from './use-overview-data'
 
@@ -277,6 +277,28 @@ beforeAll(() => {
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(useIdentityOverviewData).mockReturnValue({
+    reads: Object.fromEntries(
+      [
+        'applications',
+        'providers',
+        'outposts',
+        'sessions',
+        'audits',
+        'softwareStorage',
+        'storageIntegrations',
+        'runtime',
+      ].map((key) => [
+        key,
+        {
+          data: [],
+          error: null,
+          isEnabled: true,
+          isError: false,
+          isFetching: false,
+          refetch: vi.fn(),
+        },
+      ]),
+    ) as unknown as ReturnType<typeof useIdentityOverviewData>['reads'],
     applications,
     providers,
     outposts,
@@ -433,6 +455,28 @@ describe('IdentityOverviewPage', () => {
 
   it('preserves permission states without disabling card-level route links', async () => {
     vi.mocked(useIdentityOverviewData).mockReturnValue({
+      reads: Object.fromEntries(
+        [
+          'applications',
+          'providers',
+          'outposts',
+          'sessions',
+          'audits',
+          'softwareStorage',
+          'storageIntegrations',
+          'runtime',
+        ].map((key) => [
+          key,
+          {
+            data: [],
+            error: null,
+            isEnabled: true,
+            isError: false,
+            isFetching: false,
+            refetch: vi.fn(),
+          },
+        ]),
+      ) as unknown as ReturnType<typeof useIdentityOverviewData>['reads'],
       applications: [],
       providers: [],
       outposts: [],
@@ -471,6 +515,28 @@ describe('IdentityOverviewPage', () => {
 
   it('keeps the authorized empty audit state distinct from no permission', async () => {
     vi.mocked(useIdentityOverviewData).mockReturnValue({
+      reads: Object.fromEntries(
+        [
+          'applications',
+          'providers',
+          'outposts',
+          'sessions',
+          'audits',
+          'softwareStorage',
+          'storageIntegrations',
+          'runtime',
+        ].map((key) => [
+          key,
+          {
+            data: [],
+            error: null,
+            isEnabled: true,
+            isError: false,
+            isFetching: false,
+            refetch: vi.fn(),
+          },
+        ]),
+      ) as unknown as ReturnType<typeof useIdentityOverviewData>['reads'],
       applications,
       providers,
       outposts,

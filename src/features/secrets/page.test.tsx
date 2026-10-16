@@ -1,8 +1,9 @@
+import { ReadFeedback } from '@/components/request-feedback'
 /** @vitest-environment jsdom */
 
-import { act } from 'react'
-import { App as AntdApp } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { App as AntdApp } from 'antd'
+import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SecretsPage } from './page'
@@ -29,6 +30,9 @@ vi.mock('@/components/admin-table', () => ({
     dataSource,
     empty,
     headerExtra,
+    error,
+    hasReadData,
+    onRetry,
   }: {
     columns: Array<{
       key?: React.Key
@@ -37,11 +41,24 @@ vi.mock('@/components/admin-table', () => ({
     dataSource: unknown[]
     empty?: React.ReactNode
     headerExtra?: React.ReactNode
+    error?: Error | null
+    hasReadData?: boolean
+    onRetry?: () => void
   }) => {
     const actions = columns.find((column) => column.key === 'actions')
     return (
       <div data-testid="admin-table">
         {headerExtra}
+        <ReadFeedback
+          label="列表"
+          query={{
+            data: hasReadData ? dataSource : undefined,
+            error: error ?? null,
+            isError: Boolean(error),
+            isFetching: false,
+            refetch: onRetry,
+          }}
+        />
         {dataSource.length
           ? dataSource.map((record, index) => (
               <div key={index}>
@@ -83,6 +100,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  apiGet.mockReset()
 })
 
 afterEach(async () => {
@@ -128,7 +146,7 @@ describe('SecretsPage', () => {
     apiGet.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({ items: [] })
     const container = await renderPage()
 
-    expect(container.textContent).toContain('Secret 加载失败')
+    expect(container.textContent).toContain('列表读取失败')
     expect(container.textContent).not.toContain('暂无 Secret')
 
     const retry = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(
@@ -139,7 +157,7 @@ describe('SecretsPage', () => {
 
     expect(apiGet).toHaveBeenCalledTimes(2)
     expect(container.textContent).toContain('暂无 Secret')
-    expect(container.textContent).not.toContain('Secret 加载失败')
+    expect(container.textContent).not.toContain('列表读取失败')
   })
 
   it('aligns Vault locator fields with the contract and rejects fractional versions', async () => {

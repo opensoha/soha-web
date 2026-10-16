@@ -1,23 +1,25 @@
-import { LineChart } from '@visactor/react-vchart'
-import { useQuery } from '@tanstack/react-query'
-import { Alert, Button, Card, Typography } from 'antd'
-import { ReloadOutlined } from '@ant-design/icons'
-import { buildCompactChartSpec, compactMetricColors } from '@/components/resource-metrics-panel'
-import { formatBytes } from '@/components/resource-metrics-format'
 import { ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
+import { formatBytes } from '@/components/resource-metrics-format'
+import { buildCompactChartSpec, compactMetricColors } from '@/components/resource-metrics-panel'
 import { useI18n } from '@/i18n'
 import { resolveThemeColorReference } from '@/theme/app-theme'
+import { readableQueryData } from '@/utils/query-feedback'
 import { formatDateTime } from '@/utils/time'
+import { ReloadOutlined } from '@ant-design/icons'
+import { useQuery } from '@tanstack/react-query'
+import { LineChart } from '@visactor/react-vchart'
+import { Alert, Button, Card, Typography } from 'antd'
 import { ProxyInstanceHeader, useProxyContext } from './context'
 import { proxyQueries } from './queries'
 import './styles.css'
-
 export default function ProxyOverviewPage() {
   const { localeCode, t } = useI18n()
   const context = useProxyContext('network_access.proxy_instances.view')
   const selected = context.selected
   const traffic = useQuery(proxyQueries.traffic(selected?.id, context.allowed))
-  const samples = traffic.data?.samples ?? []
+  const visibleTrafficData = traffic.isEnabled === false ? undefined : readableQueryData(traffic)
+  const samples = visibleTrafficData?.samples ?? []
   const latest = samples[samples.length - 1]
   const points = samples.map((sample) => ({
     timestamp: sample.observedAt,
@@ -70,9 +72,11 @@ export default function ProxyOverviewPage() {
       />
     )
   }
-  const unavailable = !traffic.data && traffic.isError
+  const unavailable = !visibleTrafficData && traffic.isError
   return (
     <main className="soha-server-proxy-page">
+      <ReadFeedback canRead={traffic.isEnabled} query={traffic} label="流量采样" />
+
       <ProxyInstanceHeader
         instances={context.instances.data ?? []}
         selected={selected}
@@ -86,12 +90,12 @@ export default function ProxyOverviewPage() {
         <Button
           icon={<ReloadOutlined />}
           loading={traffic.isFetching}
-          onClick={() => void traffic.refetch()}
+          onClick={() => void (traffic.isEnabled === false ? undefined : traffic.refetch())}
         >
           {t('networkAccess.refresh', '刷新')}
         </Button>
       </div>
-      {traffic.isError && traffic.data ? (
+      {traffic.isError && visibleTrafficData ? (
         <Alert
           type="warning"
           showIcon
@@ -108,7 +112,7 @@ export default function ProxyOverviewPage() {
         />
       ) : traffic.isLoading ? (
         <ManagementState kind="loading" />
-      ) : !traffic.data?.supported ? (
+      ) : !visibleTrafficData?.supported ? (
         <ManagementState
           kind="empty"
           description={t(

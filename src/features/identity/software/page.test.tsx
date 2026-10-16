@@ -1,8 +1,8 @@
 /** @vitest-environment jsdom */
 
-import { act, type ReactNode } from 'react'
-import { App as AntdApp } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { App as AntdApp } from 'antd'
+import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SoftwareLibraryPage } from './page'
@@ -456,7 +456,7 @@ describe('SoftwareLibraryPage', () => {
 
     const container = await renderPage()
     await openObjectStorageDrawer(container)
-    expect(document.body.textContent).toContain('对象存储配置加载失败')
+    expect(document.body.textContent).toContain('对象存储读取失败')
     expect(document.body.textContent).not.toContain('配置对象存储')
   })
 

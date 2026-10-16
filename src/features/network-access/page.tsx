@@ -1,21 +1,12 @@
-import { useState, type ReactNode } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useLocation, useSearchParams } from 'react-router-dom'
-import {
-  App,
-  Button,
-  Form,
-  Input,
-  InputNumber,
-  Modal,
-  Popconfirm,
-  Select,
-  Space,
-  Switch,
-  Tag,
-  Tabs,
-} from 'antd'
-import type { TableColumnsType } from 'antd'
+import { ManagementDataPage } from '@/components/management-data-page'
+import { ManagementIconButton, ManagementState } from '@/components/management-list'
+import { operationModalStyles } from '@/components/modal-styles'
+import { ReadFeedback } from '@/components/request-feedback'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { useI18n } from '@/i18n'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import { formatDateTime } from '@/utils/time'
 import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons'
 import type {
   EndpointDevice,
@@ -40,20 +31,38 @@ import type {
   NetworkSpaceInput,
   NetworkSpaceStatus,
 } from '@opensoha/contracts/gen/ts/sohaapi'
-import { ManagementDataPage } from '@/components/management-data-page'
-import { ManagementIconButton, ManagementState } from '@/components/management-list'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
-import { useI18n } from '@/i18n'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TableColumnsType } from 'antd'
+import {
+  Button,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Popconfirm,
+  Select,
+  Space,
+  Switch,
+  Tabs,
+  Tag,
+} from 'antd'
+import { useEffect, useState, type ReactNode } from 'react'
+import { useLocation, useSearchParams } from 'react-router-dom'
+import { NetworkAccessGrantPane } from './access-grant-pane'
+import {
+  EndpointDeviceDetailDrawer,
+  endpointDeviceTypeLabel,
+  endpointOwnershipLabel,
+} from './device-detail-drawer'
+import { NetworkEnrollmentPane } from './enrollment-pane'
+import { NetworkMihomoPane } from './mihomo-pane'
 import { networkAccessMutations } from './mutations'
 import {
   NetworkNASBindingsPane,
   NetworkSessionsPane,
   NetworkSiteProfileBindingsPane,
 } from './nac-pane'
-import { NetworkEnrollmentPane } from './enrollment-pane'
-import { NetworkAccessGrantPane } from './access-grant-pane'
 import { NetworkPolicyPane } from './policy-pane'
-import { NetworkMihomoPane } from './mihomo-pane'
 import { networkAccessQueries } from './queries'
 import { TablePane } from './table-pane'
 import {
@@ -61,28 +70,35 @@ import {
   NetworkProxyOverviewPane,
   NetworkTelemetryPane,
 } from './telemetry-pane'
-import {
-  EndpointDeviceDetailDrawer,
-  endpointDeviceTypeLabel,
-  endpointOwnershipLabel,
-} from './device-detail-drawer'
-import { formatDateTime } from '@/utils/time'
-
 type Editor =
-  | { kind: 'device'; record: EndpointDevice }
-  | { kind: 'site'; record?: NetworkSite }
-  | { kind: 'space'; record?: NetworkSpace }
-  | { kind: 'resource'; record?: NetworkResource }
-  | { kind: 'gateway'; record?: NetworkGateway }
-
+  | {
+      kind: 'device'
+      record: EndpointDevice
+    }
+  | {
+      kind: 'site'
+      record?: NetworkSite
+    }
+  | {
+      kind: 'space'
+      record?: NetworkSpace
+    }
+  | {
+      kind: 'resource'
+      record?: NetworkResource
+    }
+  | {
+      kind: 'gateway'
+      record?: NetworkGateway
+    }
 interface EditorValues {
- region?: string
- providerCode?: string
- providerName?: string
- selectionPriority?: number
- acceptNewConnections?: boolean
- maxSessions?: number
- probeURL?: string
+  region?: string
+  providerCode?: string
+  providerName?: string
+  selectionPriority?: number
+  acceptNewConnections?: boolean
+  maxSessions?: number
+  probeURL?: string
   administrativeStatus?: NetworkGatewayAdministrativeStatus
   advertisedCidrsText?: string
   cidrsText?: string
@@ -111,14 +127,11 @@ interface EditorValues {
   status?: EndpointDeviceStatus | NetworkSiteStatus | NetworkSpaceStatus
   target?: string
 }
-
 interface NetworkAccessSection {
   children: ReactNode
   key: string
 }
-
 const LIST_FILTER = { limit: 200 } as const
-
 function statusColor(status: string) {
   if (['active', 'online', 'compliant'].includes(status)) return 'green'
   if (['pending', 'unknown', 'degraded'].includes(status)) return 'orange'
@@ -126,24 +139,19 @@ function statusColor(status: string) {
     return 'red'
   return 'default'
 }
-
 function statusTag(status?: string) {
   return status ? <Tag color={statusColor(status)}>{status}</Tag> : '-'
 }
-
 function parseTextList(value?: string) {
   return String(value ?? '')
     .split(/[\s,]+/)
     .map((item) => item.trim())
     .filter(Boolean)
 }
-
 function parsePorts(value?: string) {
   return parseTextList(value).map(Number)
 }
-
 export function NetworkAccessPage() {
-  const { message } = App.useApp()
   const { localeCode, t } = useI18n()
   const { pathname } = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -151,7 +159,6 @@ export function NetworkAccessPage() {
   const permissionQuery = usePermissionSnapshot()
   const snapshot = permissionQuery.data?.data
   const can = (key: string) => hasPermission(snapshot, key)
-
   const canViewDevices = can('network_access.endpoint_devices.view')
   const canUpdateDevices = can('network_access.endpoint_devices.update')
   const canViewSites = can('network_access.sites.view')
@@ -195,31 +202,108 @@ export function NetworkAccessPage() {
     canViewEnrollments ||
     canViewAccessGrants ||
     canPreviewPolicy
-
   const devices = useQuery(networkAccessQueries.devices(LIST_FILTER, canViewDevices))
+  const visibleDevicesData = devices.isEnabled === false ? undefined : readableQueryData(devices)
   const sites = useQuery(networkAccessQueries.sites(LIST_FILTER, canViewSites))
+  const visibleSitesData = sites.isEnabled === false ? undefined : readableQueryData(sites)
   const spaces = useQuery(networkAccessQueries.spaces(LIST_FILTER, canViewSpaces))
+  const visibleSpacesData = spaces.isEnabled === false ? undefined : readableQueryData(spaces)
   const resources = useQuery(networkAccessQueries.resources(LIST_FILTER, canViewResources))
+  const visibleResourcesData =
+    resources.isEnabled === false ? undefined : readableQueryData(resources)
   const gateways = useQuery(networkAccessQueries.gateways(LIST_FILTER, canViewGateways))
-
-  const deviceUpdate = useMutation(networkAccessMutations.devices.update(queryClient))
-  const siteCreate = useMutation(networkAccessMutations.sites.create(queryClient))
-  const siteUpdate = useMutation(networkAccessMutations.sites.update(queryClient))
-  const siteDelete = useMutation(networkAccessMutations.sites.remove(queryClient))
-  const spaceCreate = useMutation(networkAccessMutations.spaces.create(queryClient))
-  const spaceUpdate = useMutation(networkAccessMutations.spaces.update(queryClient))
-  const spaceDelete = useMutation(networkAccessMutations.spaces.remove(queryClient))
-  const resourceCreate = useMutation(networkAccessMutations.resources.create(queryClient))
-  const resourceUpdate = useMutation(networkAccessMutations.resources.update(queryClient))
-  const resourceDelete = useMutation(networkAccessMutations.resources.remove(queryClient))
-  const gatewayCreate = useMutation(networkAccessMutations.gateways.create(queryClient))
-  const gatewayUpdate = useMutation(networkAccessMutations.gateways.update(queryClient))
-
+  const visibleGatewaysData = gateways.isEnabled === false ? undefined : readableQueryData(gateways)
+  const deviceUpdate = useOperationMutation(networkAccessMutations.devices.update(queryClient), {
+    label: ['保存 设备', 'Save device'],
+    target: (v) => v.deviceId,
+  })
+  const siteCreate = useOperationMutation(networkAccessMutations.sites.create(queryClient), {
+    label: ['创建 站点', 'Create site'],
+    target: (v) => v.name,
+  })
+  const siteUpdate = useOperationMutation(networkAccessMutations.sites.update(queryClient), {
+    label: ['保存 站点', 'Save site'],
+    target: (v) => v.siteId,
+  })
+  const siteDelete = useOperationMutation(networkAccessMutations.sites.remove(queryClient), {
+    label: ['删除 站点', 'Delete site'],
+    target: (v) => v,
+  })
+  const spaceCreate = useOperationMutation(networkAccessMutations.spaces.create(queryClient), {
+    label: ['创建 网络空间', 'Create space'],
+    target: (v) => v.name,
+  })
+  const spaceUpdate = useOperationMutation(networkAccessMutations.spaces.update(queryClient), {
+    label: ['保存 网络空间', 'Save space'],
+    target: (v) => v.spaceId,
+  })
+  const spaceDelete = useOperationMutation(networkAccessMutations.spaces.remove(queryClient), {
+    label: ['删除 网络空间', 'Delete space'],
+    target: (v) => v,
+  })
+  const resourceCreate = useOperationMutation(
+    networkAccessMutations.resources.create(queryClient),
+    { label: ['创建 网络资源', 'Create resource'], target: (v) => v.name },
+  )
+  const resourceUpdate = useOperationMutation(
+    networkAccessMutations.resources.update(queryClient),
+    { label: ['保存 网络资源', 'Save resource'], target: (v) => v.resourceId },
+  )
+  const resourceDelete = useOperationMutation(
+    networkAccessMutations.resources.remove(queryClient),
+    { label: ['删除 网络资源', 'Delete resource'], target: (v) => v },
+  )
+  const gatewayCreate = useOperationMutation(networkAccessMutations.gateways.create(queryClient), {
+    label: ['创建 网关', 'Create gateway'],
+    target: (v) => v.name,
+  })
+  const gatewayUpdate = useOperationMutation(networkAccessMutations.gateways.update(queryClient), {
+    label: ['保存 网关', 'Save gateway'],
+    target: (v) => v.gatewayId,
+  })
+  const activeRead:
+    | {
+        error: Error | null
+      }
+    | undefined = (
+    { devices, sites, spaces, resources, gateways } as Record<
+      string,
+      {
+        error: Error | null
+      }
+    >
+  )[pathname.split('/').pop() ?? '']
+  const operationBlocked =
+    deviceUpdate.blocked ||
+    siteCreate.blocked ||
+    siteUpdate.blocked ||
+    siteDelete.blocked ||
+    spaceCreate.blocked ||
+    spaceUpdate.blocked ||
+    spaceDelete.blocked ||
+    resourceCreate.blocked ||
+    resourceUpdate.blocked ||
+    resourceDelete.blocked ||
+    gatewayCreate.blocked ||
+    gatewayUpdate.blocked ||
+    Boolean(activeRead && queryAccessDenied(activeRead))
   const [editor, setEditor] = useState<Editor | null>(null)
   const [deviceDetail, setDeviceDetail] = useState<EndpointDevice | null>(null)
   const [editorForm] = Form.useForm<EditorValues>()
-
+  const editorRead = editor
+    ? { device: devices, site: sites, space: spaces, resource: resources, gateway: gateways }[
+        editor.kind
+      ]
+    : undefined
+  useEffect(() => {
+    if (editorRead && queryAccessDenied(editorRead)) {
+      setEditor(null)
+      editorForm.resetFields()
+    }
+    if (queryAccessDenied(devices)) setDeviceDetail(null)
+  }, [editorRead?.error, devices.error, editorForm])
   function openEditor(next: Editor) {
+    if (operationBlocked) return
     editorForm.resetFields()
     setEditor(next)
     if (next.kind === 'device') {
@@ -250,7 +334,13 @@ export function NetworkAccessPage() {
         next.record
           ? {
               name: next.record.name,
- region: next.record.region, providerCode: next.record.providerCode, providerName: next.record.providerName, selectionPriority: next.record.selectionPriority ?? 100, acceptNewConnections: next.record.acceptNewConnections ?? true, maxSessions: next.record.maxSessions ?? 0, probeURL: next.record.probeURL,
+              region: next.record.region,
+              providerCode: next.record.providerCode,
+              providerName: next.record.providerName,
+              selectionPriority: next.record.selectionPriority ?? 100,
+              acceptNewConnections: next.record.acceptNewConnections ?? true,
+              maxSessions: next.record.maxSessions ?? 0,
+              probeURL: next.record.probeURL,
               runtimeId: next.record.runtimeId,
               siteId: next.record.siteId,
               administrativeStatus: next.record.administrativeStatus,
@@ -266,7 +356,9 @@ export function NetworkAccessPage() {
             }
           : {
               name: '',
- selectionPriority: 100, acceptNewConnections: true, maxSessions: 0,
+              selectionPriority: 100,
+              acceptNewConnections: true,
+              maxSessions: 0,
               administrativeStatus: 'active',
               advertisedCidrsText: '',
               dnsServersText: '',
@@ -291,12 +383,10 @@ export function NetworkAccessPage() {
           },
     )
   }
-
   function closeEditor() {
     setEditor(null)
     editorForm.resetFields()
   }
-
   async function submitEditor() {
     if (!editor) return
     const values = await editorForm.validateFields()
@@ -344,7 +434,13 @@ export function NetworkAccessPage() {
       else await resourceCreate.mutateAsync(input)
     } else {
       const input: NetworkGatewayInput = {
- region: values.region?.trim() || "", providerCode: values.providerCode?.trim() || "", providerName: values.providerName?.trim() || "", selectionPriority: values.selectionPriority ?? 100, acceptNewConnections: values.acceptNewConnections ?? true, maxSessions: values.maxSessions ?? 0, probeURL: values.probeURL?.trim() || "",
+        region: values.region?.trim() || '',
+        providerCode: values.providerCode?.trim() || '',
+        providerName: values.providerName?.trim() || '',
+        selectionPriority: values.selectionPriority ?? 100,
+        acceptNewConnections: values.acceptNewConnections ?? true,
+        maxSessions: values.maxSessions ?? 0,
+        probeURL: values.probeURL?.trim() || '',
         runtimeId: values.runtimeId!.trim(),
         siteId: values.siteId!.trim(),
         name: values.name.trim(),
@@ -364,10 +460,8 @@ export function NetworkAccessPage() {
       if (editor.record) await gatewayUpdate.mutateAsync({ gatewayId: editor.record.id, input })
       else await gatewayCreate.mutateAsync(input)
     }
-    void message.success(t('networkAccess.saved', '已保存'))
     closeEditor()
   }
-
   function editorTitle() {
     if (!editor) return ''
     if (editor.kind === 'device') return t('networkAccess.edit.device', '编辑设备')
@@ -382,7 +476,6 @@ export function NetworkAccessPage() {
     if (editor.kind === 'gateway') return t('networkAccess.add.gateway', '新增网关')
     return t('networkAccess.add.resource', '新增资源')
   }
-
   const deviceColumns: TableColumnsType<EndpointDevice> = [
     { title: t('networkAccess.name', '名称'), dataIndex: 'name', width: 180 },
     {
@@ -434,13 +527,13 @@ export function NetworkAccessPage() {
               icon={<EditOutlined />}
               tooltip={t('common.edit', '编辑')}
               onClick={() => openEditor({ kind: 'device', record })}
+              disabled={operationBlocked}
             />
           ) : null}
         </Space>
       ),
     },
   ]
-
   const siteColumns: TableColumnsType<NetworkSite> = [
     { title: t('networkAccess.name', '名称'), dataIndex: 'name', width: 180 },
     {
@@ -472,16 +565,15 @@ export function NetworkAccessPage() {
                     icon={<EditOutlined />}
                     tooltip={t('common.edit', '编辑')}
                     onClick={() => openEditor({ kind: 'site', record })}
+                    disabled={operationBlocked}
                   />
                 ) : null}
                 {canDeleteSites ? (
                   <Popconfirm
                     title={t('networkAccess.confirmDelete.site', '确认删除站点？')}
-                    onConfirm={() =>
-                      siteDelete.mutate(record.id, {
-                        onSuccess: () => void message.success(t('networkAccess.deleted', '已删除')),
-                      })
-                    }
+                    onConfirm={() => siteDelete.mutate(record.id)}
+                    okButtonProps={{ disabled: operationBlocked }}
+                    disabled={operationBlocked}
                   >
                     <ManagementIconButton
                       aria-label={t('networkAccess.delete.site', '删除站点')}
@@ -497,7 +589,6 @@ export function NetworkAccessPage() {
         ]
       : []),
   ]
-
   const spaceColumns: TableColumnsType<NetworkSpace> = [
     { title: t('networkAccess.name', '名称'), dataIndex: 'name', width: 180 },
     { title: t('networkAccess.siteId', '站点 ID'), dataIndex: 'siteId', width: 220 },
@@ -520,16 +611,15 @@ export function NetworkAccessPage() {
                     icon={<EditOutlined />}
                     tooltip={t('common.edit', '编辑')}
                     onClick={() => openEditor({ kind: 'space', record })}
+                    disabled={operationBlocked}
                   />
                 ) : null}
                 {canDeleteSpaces ? (
                   <Popconfirm
                     title={t('networkAccess.confirmDelete.space', '确认删除网络空间？')}
-                    onConfirm={() =>
-                      spaceDelete.mutate(record.id, {
-                        onSuccess: () => void message.success(t('networkAccess.deleted', '已删除')),
-                      })
-                    }
+                    onConfirm={() => spaceDelete.mutate(record.id)}
+                    okButtonProps={{ disabled: operationBlocked }}
+                    disabled={operationBlocked}
                   >
                     <ManagementIconButton
                       aria-label={t('networkAccess.delete.space', '删除网络空间')}
@@ -545,7 +635,6 @@ export function NetworkAccessPage() {
         ]
       : []),
   ]
-
   const resourceColumns: TableColumnsType<NetworkResource> = [
     { title: t('networkAccess.name', '名称'), dataIndex: 'name', width: 160 },
     { title: t('networkAccess.target', '目标'), dataIndex: 'target', width: 220 },
@@ -578,16 +667,15 @@ export function NetworkAccessPage() {
                     icon={<EditOutlined />}
                     tooltip={t('common.edit', '编辑')}
                     onClick={() => openEditor({ kind: 'resource', record })}
+                    disabled={operationBlocked}
                   />
                 ) : null}
                 {canDeleteResources ? (
                   <Popconfirm
                     title={t('networkAccess.confirmDelete.resource', '确认删除资源？')}
-                    onConfirm={() =>
-                      resourceDelete.mutate(record.id, {
-                        onSuccess: () => void message.success(t('networkAccess.deleted', '已删除')),
-                      })
-                    }
+                    onConfirm={() => resourceDelete.mutate(record.id)}
+                    okButtonProps={{ disabled: operationBlocked }}
+                    disabled={operationBlocked}
                   >
                     <ManagementIconButton
                       aria-label={t('networkAccess.delete.resource', '删除资源')}
@@ -603,13 +691,20 @@ export function NetworkAccessPage() {
         ]
       : []),
   ]
-
   const gatewayColumns: TableColumnsType<NetworkGateway> = [
-    {title: t('networkAccess.gateway.provider','供应商'), dataIndex:'providerName'},
-    {title: t('networkAccess.gateway.region','地区'), dataIndex:'region'},
-    {title: t('networkAccess.gateway.priority','优先级'), dataIndex:'selectionPriority'},
-    {title: t('networkAccess.gateway.accepting','接受新连接'), dataIndex:'acceptNewConnections', render:(value:boolean)=>statusTag(value?'enabled':'disabled')},
-    {title: t('networkAccess.gateway.maxSessions','会话上限'), dataIndex:'maxSessions',render:(value:number)=>value||t('networkAccess.gateway.unlimited','不限')},
+    { title: t('networkAccess.gateway.provider', '供应商'), dataIndex: 'providerName' },
+    { title: t('networkAccess.gateway.region', '地区'), dataIndex: 'region' },
+    { title: t('networkAccess.gateway.priority', '优先级'), dataIndex: 'selectionPriority' },
+    {
+      title: t('networkAccess.gateway.accepting', '接受新连接'),
+      dataIndex: 'acceptNewConnections',
+      render: (value: boolean) => statusTag(value ? 'enabled' : 'disabled'),
+    },
+    {
+      title: t('networkAccess.gateway.maxSessions', '会话上限'),
+      dataIndex: 'maxSessions',
+      render: (value: number) => value || t('networkAccess.gateway.unlimited', '不限'),
+    },
     { title: t('networkAccess.name', '名称'), dataIndex: 'name', width: 180 },
     { title: t('networkAccess.siteId', '站点 ID'), dataIndex: 'siteId', width: 220 },
     {
@@ -663,13 +758,13 @@ export function NetworkAccessPage() {
                 icon={<EditOutlined />}
                 tooltip={t('common.edit', '编辑')}
                 onClick={() => openEditor({ kind: 'gateway', record })}
+                disabled={operationBlocked}
               />
             ),
           },
         ]
       : []),
   ]
-
   if (!hasAnyView) {
     return (
       <div className="soha-page">
@@ -680,7 +775,6 @@ export function NetworkAccessPage() {
       </div>
     )
   }
-
   const admissionSettingsTabs = [
     canViewEnrollments
       ? {
@@ -709,20 +803,22 @@ export function NetworkAccessPage() {
           children: <NetworkNASBindingsPane canManage={canUpdateSites} />,
         }
       : null,
-  ].filter(Boolean) as Array<{ children: ReactNode; key: string; label: string }>
+  ].filter(Boolean) as Array<{
+    children: ReactNode
+    key: string
+    label: string
+  }>
   const requestedAdmissionSettingsTab = searchParams.get('tab')
   const activeAdmissionSettingsTab = admissionSettingsTabs.some(
     (item) => item.key === requestedAdmissionSettingsTab,
   )
     ? requestedAdmissionSettingsTab!
     : admissionSettingsTabs[0]?.key
-
   function setAdmissionSettingsTab(key: string) {
     const next = new URLSearchParams(searchParams)
     next.set('tab', key)
     setSearchParams(next)
   }
-
   const sections = [
     canViewDevices
       ? {
@@ -730,11 +826,11 @@ export function NetworkAccessPage() {
           children: (
             <TablePane
               columns={deviceColumns}
-              items={devices.data}
+              items={visibleDevicesData}
               loading={devices.isLoading}
               refreshing={devices.isFetching}
-              error={devices.isError}
-              onRefresh={() => void devices.refetch()}
+              error={devices.isEnabled === false ? null : devices.error}
+              onRefresh={() => void (devices.isEnabled === false ? undefined : devices.refetch())}
               searchPlaceholder={t(
                 'networkAccess.search.devices',
                 '搜索终端、用户、系统或网络地址',
@@ -770,11 +866,11 @@ export function NetworkAccessPage() {
           children: (
             <TablePane
               columns={siteColumns}
-              items={sites.data}
+              items={visibleSitesData}
               loading={sites.isLoading}
               refreshing={sites.isFetching}
-              error={sites.isError}
-              onRefresh={() => void sites.refetch()}
+              error={sites.isEnabled === false ? null : sites.error}
+              onRefresh={() => void (sites.isEnabled === false ? undefined : sites.refetch())}
               searchPlaceholder={t('networkAccess.search.sites', '搜索站点、位置或说明')}
               getSearchValues={(item) => [item.name, item.location, item.description, item.status]}
               createAction={
@@ -784,6 +880,7 @@ export function NetworkAccessPage() {
                     type="primary"
                     icon={<PlusOutlined />}
                     onClick={() => openEditor({ kind: 'site' })}
+                    disabled={operationBlocked}
                   >
                     {t('networkAccess.add.site', '新增站点')}
                   </Button>
@@ -834,11 +931,11 @@ export function NetworkAccessPage() {
           children: (
             <TablePane
               columns={spaceColumns}
-              items={spaces.data}
+              items={visibleSpacesData}
               loading={spaces.isLoading}
               refreshing={spaces.isFetching}
-              error={spaces.isError}
-              onRefresh={() => void spaces.refetch()}
+              error={spaces.isEnabled === false ? null : spaces.error}
+              onRefresh={() => void (spaces.isEnabled === false ? undefined : spaces.refetch())}
               searchPlaceholder={t('networkAccess.search.spaces', '搜索网络空间、站点或 CIDR')}
               getSearchValues={(item) => [item.name, item.siteId, ...item.cidrs, item.status]}
               createAction={
@@ -848,6 +945,7 @@ export function NetworkAccessPage() {
                     type="primary"
                     icon={<PlusOutlined />}
                     onClick={() => openEditor({ kind: 'space' })}
+                    disabled={operationBlocked}
                   >
                     {t('networkAccess.add.space', '新增网络空间')}
                   </Button>
@@ -863,11 +961,13 @@ export function NetworkAccessPage() {
           children: (
             <TablePane
               columns={resourceColumns}
-              items={resources.data}
+              items={visibleResourcesData}
               loading={resources.isLoading}
               refreshing={resources.isFetching}
-              error={resources.isError}
-              onRefresh={() => void resources.refetch()}
+              error={resources.isEnabled === false ? null : resources.error}
+              onRefresh={() =>
+                void (resources.isEnabled === false ? undefined : resources.refetch())
+              }
               searchPlaceholder={t('networkAccess.search.resources', '搜索资源、目标或路径')}
               getSearchValues={(item) => [
                 item.name,
@@ -883,6 +983,7 @@ export function NetworkAccessPage() {
                     type="primary"
                     icon={<PlusOutlined />}
                     onClick={() => openEditor({ kind: 'resource' })}
+                    disabled={operationBlocked}
                   >
                     {t('networkAccess.add.resource', '新增资源')}
                   </Button>
@@ -898,11 +999,11 @@ export function NetworkAccessPage() {
           children: (
             <TablePane
               columns={gatewayColumns}
-              items={gateways.data}
+              items={visibleGatewaysData}
               loading={gateways.isLoading}
               refreshing={gateways.isFetching}
-              error={gateways.isError}
-              onRefresh={() => void gateways.refetch()}
+              error={gateways.isEnabled === false ? null : gateways.error}
+              onRefresh={() => void (gateways.isEnabled === false ? undefined : gateways.refetch())}
               searchPlaceholder={t('networkAccess.search.gateways', '搜索网关、站点或能力')}
               getSearchValues={(item) => [
                 item.name,
@@ -920,6 +1021,7 @@ export function NetworkAccessPage() {
                     type="primary"
                     icon={<PlusOutlined />}
                     onClick={() => openEditor({ kind: 'gateway' })}
+                    disabled={operationBlocked}
                   >
                     {t('networkAccess.add.gateway', '新增网关')}
                   </Button>
@@ -1001,7 +1103,6 @@ export function NetworkAccessPage() {
   ].filter(Boolean) as NetworkAccessSection[]
   const activeSectionKey = pathname.slice(pathname.lastIndexOf('/') + 1)
   const activeSection = sections.find((section) => section.key === activeSectionKey) ?? sections[0]
-
   const saving =
     deviceUpdate.isPending ||
     siteCreate.isPending ||
@@ -1012,23 +1113,70 @@ export function NetworkAccessPage() {
     resourceUpdate.isPending ||
     gatewayCreate.isPending ||
     gatewayUpdate.isPending
-
   return (
     <ManagementDataPage tableNode={activeSection?.children}>
-      <EndpointDeviceDetailDrawer device={deviceDetail} onClose={() => setDeviceDetail(null)} />
+      {!(Boolean(editor) && !(activeRead && queryAccessDenied(activeRead))) && (
+        <>
+          {' '}
+          {deviceUpdate.feedback}
+          {siteCreate.feedback}
+          {siteUpdate.feedback}
+          {siteDelete.feedback}
+          {spaceCreate.feedback}
+          {spaceUpdate.feedback}
+          {spaceDelete.feedback}
+          {resourceCreate.feedback}
+          {resourceUpdate.feedback}
+          {resourceDelete.feedback}
+          {gatewayCreate.feedback}
+          {gatewayUpdate.feedback}{' '}
+        </>
+      )}
+
+      <EndpointDeviceDetailDrawer
+        device={deviceDetail}
+        onClose={() => {
+          if (!operationBlocked) (() => setDeviceDetail(null))()
+        }}
+      />
       <Modal
+        styles={operationModalStyles}
+        style={{ top: 32 }}
         centered
         destroyOnHidden
         mask={{ closable: false }}
-        open={Boolean(editor)}
+        open={Boolean(editor) && !(activeRead && queryAccessDenied(activeRead))}
         title={editorTitle()}
         confirmLoading={saving}
         okText={t('common.save', '保存')}
         cancelText={t('common.cancel', '取消')}
-        onCancel={closeEditor}
+        onCancel={() => {
+          if (!operationBlocked) closeEditor()
+        }}
         onOk={() => void submitEditor()}
+        closable={!operationBlocked}
+        cancelButtonProps={{ disabled: operationBlocked }}
+        okButtonProps={{ disabled: operationBlocked }}
       >
-        <Form form={editorForm} layout="vertical">
+        {deviceUpdate.feedback}
+        {siteCreate.feedback}
+        {siteUpdate.feedback}
+        {siteDelete.feedback}
+        {spaceCreate.feedback}
+        {spaceUpdate.feedback}
+        {spaceDelete.feedback}
+        {resourceCreate.feedback}
+        {resourceUpdate.feedback}
+        {resourceDelete.feedback}
+        {gatewayCreate.feedback}
+        {gatewayUpdate.feedback}
+
+        <ReadFeedback canRead={devices.isEnabled} query={devices} label="设备" />
+        <ReadFeedback canRead={sites.isEnabled} query={sites} label="站点" />
+        <ReadFeedback canRead={spaces.isEnabled} query={spaces} label="网络空间" />
+        <ReadFeedback canRead={resources.isEnabled} query={resources} label="网络资源" />
+        <ReadFeedback canRead={gateways.isEnabled} query={gateways} label="网关" />
+        <Form form={editorForm} layout="vertical" disabled={operationBlocked}>
           <Form.Item
             name="name"
             label={t('networkAccess.name', '名称')}
@@ -1261,13 +1409,46 @@ export function NetworkAccessPage() {
           ) : null}
           {editor?.kind === 'gateway' ? (
             <>
- <Form.Item name="region" label={t("networkAccess.gateway.region","地区")}><Input maxLength={128}/></Form.Item>
- <Form.Item name="providerCode" label={t("networkAccess.gateway.providerCode","供应商编码")}><Input maxLength={64}/></Form.Item>
- <Form.Item name="providerName" label={t("networkAccess.gateway.providerName","供应商名称")}><Input maxLength={128}/></Form.Item>
- <Form.Item name="probeURL" label={t("networkAccess.gateway.probeURL","HTTPS 探测地址")}><Input maxLength={2048}/></Form.Item>
- <Form.Item name="selectionPriority" label={t('networkAccess.gateway.priority','优先级（越小越优先）')}><InputNumber min={0} max={10000} precision={0}/></Form.Item>
- <Form.Item name="maxSessions" label={t('networkAccess.gateway.maxSessions','会话上限（0 表示不限）')}><InputNumber min={0} max={1000000} precision={0}/></Form.Item>
- <Form.Item name="acceptNewConnections" label={t('networkAccess.gateway.accepting','接受新连接')} valuePropName="checked"><Switch/></Form.Item>
+              <Form.Item name="region" label={t('networkAccess.gateway.region', '地区')}>
+                <Input maxLength={128} />
+              </Form.Item>
+              <Form.Item
+                name="providerCode"
+                label={t('networkAccess.gateway.providerCode', '供应商编码')}
+              >
+                <Input maxLength={64} />
+              </Form.Item>
+              <Form.Item
+                name="providerName"
+                label={t('networkAccess.gateway.providerName', '供应商名称')}
+              >
+                <Input maxLength={128} />
+              </Form.Item>
+              <Form.Item
+                name="probeURL"
+                label={t('networkAccess.gateway.probeURL', 'HTTPS 探测地址')}
+              >
+                <Input maxLength={2048} />
+              </Form.Item>
+              <Form.Item
+                name="selectionPriority"
+                label={t('networkAccess.gateway.priority', '优先级（越小越优先）')}
+              >
+                <InputNumber min={0} max={10000} precision={0} />
+              </Form.Item>
+              <Form.Item
+                name="maxSessions"
+                label={t('networkAccess.gateway.maxSessions', '会话上限（0 表示不限）')}
+              >
+                <InputNumber min={0} max={1000000} precision={0} />
+              </Form.Item>
+              <Form.Item
+                name="acceptNewConnections"
+                label={t('networkAccess.gateway.accepting', '接受新连接')}
+                valuePropName="checked"
+              >
+                <Switch />
+              </Form.Item>
               <Form.Item
                 name="runtimeId"
                 label={t('networkAccess.runtimeId', '运行时 ID')}
@@ -1330,7 +1511,7 @@ export function NetworkAccessPage() {
                 <Select
                   allowClear
                   showSearch={{ optionFilterProp: 'label' }}
-                  options={(gateways.data ?? [])
+                  options={(visibleGatewaysData ?? [])
                     .filter((gateway) => gateway.id !== editor.record?.id && !gateway.hubGatewayId)
                     .map((gateway) => ({
                       value: gateway.id,
@@ -1371,5 +1552,4 @@ export function NetworkAccessPage() {
     </ManagementDataPage>
   )
 }
-
 export default NetworkAccessPage

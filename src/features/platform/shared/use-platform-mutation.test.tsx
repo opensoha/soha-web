@@ -1,9 +1,10 @@
+import { useOperationMutation } from '@/components/use-operation-mutation'
 /** @vitest-environment jsdom */
+import { ApiError } from '@/services/api-error'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ApiError } from '@/services/api-error'
 import {
   platformBatchUnknown,
   platformResourceTarget,
@@ -58,7 +59,10 @@ const apiError = (status: number) =>
     requestId: 'request-a',
   })
 
-describe('Platform operation continuity', () => {
+describe.each([
+  ['Platform', usePlatformMutation],
+  ['Shared scenes', useOperationMutation],
+] as const)('%s operation continuity', (_, useSceneMutation) => {
   it('fences same-tick duplicates and keeps an uncertain original request locked after reset', async () => {
     let reject!: (error: Error) => void
     const write = vi.fn(
@@ -68,7 +72,7 @@ describe('Platform operation continuity', () => {
         }),
     )
     const read = await mount(() =>
-      usePlatformMutation(
+      useSceneMutation(
         { mutationFn: write },
         { label: ['更新', 'Update'], target: platformResourceTarget },
       ),
@@ -95,7 +99,7 @@ describe('Platform operation continuity', () => {
     const write = vi.fn().mockRejectedValueOnce(apiError(409)).mockResolvedValueOnce('saved')
     const invalidated = vi.fn()
     const read = await mount(() =>
-      usePlatformMutation(
+      useSceneMutation(
         { mutationFn: write, onSuccess: invalidated },
         { label: ['更新', 'Update'], target: platformResourceTarget },
       ),
@@ -120,7 +124,7 @@ describe('Platform operation continuity', () => {
       .mockRejectedValueOnce(apiError(503))
       .mockResolvedValueOnce({ ready: true })
     const read = await mount(() =>
-      usePlatformMutation(
+      useSceneMutation(
         { mutationFn: preflight },
         { label: ['预检', 'Preflight'], target: platformResourceTarget, readOnly: true },
       ),
@@ -144,7 +148,7 @@ describe('Platform operation continuity', () => {
     ]
     const write = vi.fn().mockResolvedValue(results)
     const read = await mount(() =>
-      usePlatformMutation(
+      useSceneMutation(
         { mutationFn: write },
         {
           label: ['批量删除', 'Delete batch'],

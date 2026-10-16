@@ -16,7 +16,7 @@ export const proxyQueries = {
       queryKey: proxyKeys.list(filters),
       queryFn: () => listInstances(filters),
       enabled,
-      refetchInterval: 15_000,
+      refetchInterval: (query) => (query.state.error ? false : 15_000),
       retry: false,
     }),
   traffic: (id: string | undefined, enabled = true) =>
@@ -24,7 +24,7 @@ export const proxyQueries = {
       queryKey: proxyKeys.traffic(id ?? ''),
       queryFn: () => getTraffic(id!),
       enabled: enabled && Boolean(id),
-      refetchInterval: 15_000,
+      refetchInterval: (query) => (query.state.error ? false : 15_000),
       retry: false,
     }),
   connections: (id: string | undefined, enabled = true) =>
@@ -32,7 +32,7 @@ export const proxyQueries = {
       queryKey: proxyKeys.connections(id ?? ''),
       queryFn: () => getConnections(id!),
       enabled: enabled && Boolean(id),
-      refetchInterval: 10_000,
+      refetchInterval: (query) => (query.state.error ? false : 10_000),
       retry: false,
     }),
 }

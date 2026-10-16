@@ -1,8 +1,24 @@
-import { useMemo, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { AdminTable } from '@/components/admin-table'
+import {
+  ManagementIconButton,
+  ManagementTableToolbar,
+  ManagementToolbarSearch,
+} from '@/components/management-list'
+import { operationModalStyles } from '@/components/modal-styles'
+import { ReadFeedback } from '@/components/request-feedback'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { useI18n } from '@/i18n'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import { PlusOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons'
+import type {
+  NetworkAccessGrant,
+  NetworkAccessGrantInput,
+  NetworkAccessGrantSecret,
+} from '@opensoha/contracts/gen/ts/sohaapi'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TableColumnsType } from 'antd'
 import {
   Alert,
-  App,
   Button,
   Form,
   Input,
@@ -14,57 +30,49 @@ import {
   Tag,
   Typography,
 } from 'antd'
-import type { TableColumnsType } from 'antd'
-import { PlusOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons'
-import type {
-  NetworkAccessGrant,
-  NetworkAccessGrantInput,
-  NetworkAccessGrantSecret,
-} from '@opensoha/contracts/gen/ts/sohaapi'
-import { AdminTable } from '@/components/admin-table'
-import {
-  ManagementIconButton,
-  ManagementState,
-  ManagementTableToolbar,
-  ManagementToolbarSearch,
-} from '@/components/management-list'
-import { useI18n } from '@/i18n'
+import { useMemo, useState } from 'react'
 import { networkAccessMutations } from './mutations'
 import { networkAccessQueries } from './queries'
-
 interface NetworkAccessGrantPaneProps {
   canCreate: boolean
   canRevoke: boolean
 }
-
 type GrantFormValues = Omit<NetworkAccessGrantInput, 'resourceIds'> & {
   resourceIdsText: string
 }
-
 const LIST_FILTER = { limit: 200 } as const
-
 export function NetworkAccessGrantPane({ canCreate, canRevoke }: NetworkAccessGrantPaneProps) {
-  const { message } = App.useApp()
   const { t } = useI18n()
   const queryClient = useQueryClient()
   const grants = useQuery(networkAccessQueries.accessGrants(LIST_FILTER))
-  const createGrant = useMutation({
-    ...networkAccessMutations.accessGrants.create(queryClient),
-    onError: (error) => void message.error(error.message),
-  })
-  const revokeGrant = useMutation({
-    ...networkAccessMutations.accessGrants.revoke(queryClient),
-    onError: (error) => void message.error(error.message),
-  })
+  const visibleGrantsData = grants.isEnabled === false ? undefined : readableQueryData(grants)
+  const createGrant = useOperationMutation(
+    {
+      ...networkAccessMutations.accessGrants.create(queryClient),
+    },
+    {
+      label: ['创建 访问授权', 'Create access grant'],
+      target: (v) => [v.siteId, v.deviceId].filter(Boolean).join(' / '),
+    },
+  )
+  const revokeGrant = useOperationMutation(
+    {
+      ...networkAccessMutations.accessGrants.revoke(queryClient),
+    },
+    { label: ['撤销 访问授权', 'Revoke access grant'], target: (v) => v },
+  )
+  const operationBlocked =
+    createGrant.blocked ||
+    revokeGrant.blocked ||
+    (grants.isEnabled !== false && queryAccessDenied(grants))
   const [createOpen, setCreateOpen] = useState(false)
   const [secret, setSecret] = useState<NetworkAccessGrantSecret | null>(null)
   const [search, setSearch] = useState('')
   const [form] = Form.useForm<GrantFormValues>()
-
   const filtered = useMemo(() => {
     const keyword = search.trim().toLocaleLowerCase()
-    if (!keyword) return grants.data ?? []
-    return (grants.data ?? []).filter((item) =>
+    if (!keyword) return visibleGrantsData ?? []
+    return (visibleGrantsData ?? []).filter((item) =>
       [
         item.id,
         item.subjectId,
@@ -76,19 +84,17 @@ export function NetworkAccessGrantPane({ canCreate, canRevoke }: NetworkAccessGr
         ...item.resourceIds,
       ].some((value) => value.toLocaleLowerCase().includes(keyword)),
     )
-  }, [grants.data, search])
-
+  }, [visibleGrantsData, search])
   function openCreate() {
+    if (operationBlocked) return
     form.resetFields()
     form.setFieldsValue({ mode: 'internal_ztna', ttlSeconds: 300 })
     setCreateOpen(true)
   }
-
   function closeCreate() {
     setCreateOpen(false)
     form.resetFields()
   }
-
   async function submitCreate() {
     const values = await form.validateFields()
     const resourceIds = [...new Set(values.resourceIdsText.split(/[\s,]+/).filter(Boolean))].sort()
@@ -103,12 +109,10 @@ export function NetworkAccessGrantPane({ canCreate, canRevoke }: NetworkAccessGr
     closeCreate()
     setSecret(result)
   }
-
   function closeSecret() {
     setSecret(null)
     createGrant.reset()
   }
-
   const columns: TableColumnsType<NetworkAccessGrant> = [
     { title: t('networkAccess.grant.subjectId', '主体 ID'), dataIndex: 'subjectId' },
     { title: t('networkAccess.grant.deviceId', '设备 ID'), dataIndex: 'deviceId' },
@@ -147,12 +151,9 @@ export function NetworkAccessGrantPane({ canCreate, canRevoke }: NetworkAccessGr
               item.status === 'issued' ? (
                 <Popconfirm
                   title={t('networkAccess.grant.confirmRevoke', '确认吊销此访问授权？')}
-                  onConfirm={() =>
-                    revokeGrant.mutate(item.id, {
-                      onSuccess: () =>
-                        void message.success(t('networkAccess.grant.revoked', '访问授权已吊销')),
-                    })
-                  }
+                  onConfirm={() => revokeGrant.mutate(item.id)}
+                  okButtonProps={{ disabled: operationBlocked }}
+                  disabled={operationBlocked}
                 >
                   <ManagementIconButton
                     aria-label={t('networkAccess.grant.revoke', '吊销访问授权')}
@@ -166,13 +167,25 @@ export function NetworkAccessGrantPane({ canCreate, canRevoke }: NetworkAccessGr
         ]
       : []),
   ]
-
   return (
     <>
+      {!(
+        (createOpen && !(grants.isEnabled !== false && queryAccessDenied(grants))) ||
+        (Boolean(secret) && !(grants.isEnabled !== false && queryAccessDenied(grants)))
+      ) && (
+        <>
+          {' '}
+          {createGrant.feedback}
+          {revokeGrant.feedback}{' '}
+        </>
+      )}
+
+      <ReadFeedback canRead={grants.isEnabled} query={grants} label="访问授权" />
+
       <AdminTable
         columns={columns}
         dataSource={filtered}
-        empty={grants.isError ? <ManagementState compact kind="error" /> : undefined}
+        empty={grants.isError && !visibleGrantsData ? null : undefined}
         loading={grants.isLoading}
         localSorting
         rowKey="id"
@@ -188,10 +201,16 @@ export function NetworkAccessGrantPane({ canCreate, canRevoke }: NetworkAccessGr
               icon={<ReloadOutlined />}
               loading={grants.isFetching}
               tooltip={t('networkAccess.refresh', '刷新')}
-              onClick={() => void grants.refetch()}
+              onClick={() => void (grants.isEnabled === false ? undefined : grants.refetch())}
             />
             {canCreate ? (
-              <Button size="small" type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+              <Button
+                size="small"
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={openCreate}
+                disabled={operationBlocked}
+              >
                 {t('networkAccess.grant.create', '创建访问授权')}
               </Button>
             ) : null}
@@ -201,24 +220,34 @@ export function NetworkAccessGrantPane({ canCreate, canRevoke }: NetworkAccessGr
       />
 
       <Modal
+        styles={operationModalStyles}
+        style={{ top: 32 }}
         centered
         destroyOnHidden
         mask={{ closable: false }}
-        open={createOpen}
+        open={createOpen && !(grants.isEnabled !== false && queryAccessDenied(grants))}
         title={t('networkAccess.grant.create', '创建访问授权')}
         confirmLoading={createGrant.isPending}
         okText={t('common.create', '创建')}
         cancelText={t('common.cancel', '取消')}
-        onCancel={closeCreate}
+        onCancel={() => {
+          if (!operationBlocked) closeCreate()
+        }}
         onOk={() => void submitCreate().catch(() => undefined)}
+        closable={!operationBlocked}
+        cancelButtonProps={{ disabled: operationBlocked }}
+        okButtonProps={{ disabled: operationBlocked }}
       >
+        {createGrant.feedback}
+        {revokeGrant.feedback}
+
         <Alert
           showIcon
           type="info"
           title={t('networkAccess.grant.mfaRequired', '创建前需要近期完成 MFA 验证')}
           style={{ marginBottom: 16 }}
         />
-        <Form form={form} layout="vertical">
+        <Form form={form} layout="vertical" disabled={operationBlocked}>
           <Form.Item
             name="deviceId"
             label={t('networkAccess.grant.deviceId', '设备 ID')}
@@ -280,14 +309,23 @@ export function NetworkAccessGrantPane({ canCreate, canRevoke }: NetworkAccessGr
       </Modal>
 
       <Modal
+        styles={operationModalStyles}
+        style={{ top: 32 }}
         destroyOnHidden
-        cancelButtonProps={{ style: { display: 'none' } }}
-        open={Boolean(secret)}
+        cancelButtonProps={{ ...{ style: { display: 'none' } }, disabled: operationBlocked }}
+        open={Boolean(secret) && !(grants.isEnabled !== false && queryAccessDenied(grants))}
         title={t('networkAccess.grant.secretTitle', '一次性访问授权')}
         okText={t('networkAccess.grant.saved', '我已保存')}
-        onCancel={closeSecret}
+        onCancel={() => {
+          if (!operationBlocked) closeSecret()
+        }}
         onOk={closeSecret}
+        closable={!operationBlocked}
+        okButtonProps={{ disabled: operationBlocked }}
       >
+        {createGrant.feedback}
+        {revokeGrant.feedback}
+
         <Space orientation="vertical" size={12} style={{ width: '100%' }}>
           <Alert
             showIcon

@@ -1,14 +1,4 @@
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { Button, Card, Space, Statistic, Typography } from 'antd'
-import type { TableColumnsType } from 'antd'
-import { ApiOutlined, DownloadOutlined, ReloadOutlined, UploadOutlined } from '@ant-design/icons'
-import type {
-  NetworkProxyFlowSummary,
-  NetworkTelemetryProducer,
-} from '@opensoha/contracts/gen/ts/sohaapi'
 import { AdminTable } from '@/components/admin-table'
-import { formatBytes } from '@/components/resource-metrics-format'
 import {
   ManagementIconButton,
   ManagementKeywordField,
@@ -18,17 +8,26 @@ import {
   ManagementTableToolbar,
   useManagementTextFilter,
 } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
+import { formatBytes } from '@/components/resource-metrics-format'
 import { useI18n } from '@/i18n'
+import { readableQueryData } from '@/utils/query-feedback'
 import { formatDateTime } from '@/utils/time'
-import { networkAccessQueries } from './queries'
+import { ApiOutlined, DownloadOutlined, ReloadOutlined, UploadOutlined } from '@ant-design/icons'
+import type {
+  NetworkProxyFlowSummary,
+  NetworkTelemetryProducer,
+} from '@opensoha/contracts/gen/ts/sohaapi'
+import { useQuery } from '@tanstack/react-query'
+import type { TableColumnsType } from 'antd'
+import { Button, Card, Space, Statistic, Typography } from 'antd'
+import { useState } from 'react'
 import './proxy.css'
-
+import { networkAccessQueries } from './queries'
 const FILTER = { limit: 100 } as const
-
 interface NetworkTelemetryPaneProps {
   proxyOnly?: boolean
 }
-
 interface ProxyConnectionRow extends NetworkProxyFlowSummary {
   deviceId: string
   deviceName: string
@@ -36,17 +35,17 @@ interface ProxyConnectionRow extends NetworkProxyFlowSummary {
   ownerUserId: string
   profileName: string
 }
-
 export function NetworkProxyOverviewPane() {
   return <NetworkTelemetryPane proxyOnly />
 }
-
 export function NetworkTelemetryPane({ proxyOnly = false }: NetworkTelemetryPaneProps = {}) {
   const { t } = useI18n()
   const [flowDraft, setFlowDraft] = useState('')
   const [flowKeyword, setFlowKeyword] = useState('')
   const telemetry = useQuery(networkAccessQueries.telemetrySummary(FILTER))
-  const summary = telemetry.data
+  const visibleTelemetryData =
+    telemetry.isEnabled === false ? undefined : readableQueryData(telemetry)
+  const summary = visibleTelemetryData
   const visibleFlows = useManagementTextFilter(summary?.proxyFlows ?? [], flowKeyword, (flow) => [
     flow.producerId,
     flow.profileId,
@@ -85,7 +84,6 @@ export function NetworkTelemetryPane({ proxyOnly = false }: NetworkTelemetryPane
       helper: `${t('networkAccess.telemetry.proxyFlows', '代理流量组')} ${summary?.proxyFlowCount ?? 0}`,
     },
   ]
-
   const producerColumns: TableColumnsType<NetworkTelemetryProducer> = [
     { title: t('networkAccess.telemetry.producerId', '生产者 ID'), dataIndex: 'producerId' },
     {
@@ -139,7 +137,6 @@ export function NetworkTelemetryPane({ proxyOnly = false }: NetworkTelemetryPane
       render: formatDateTime,
     },
   ]
-
   if (!proxyOnly && telemetry.isError && !summary)
     return (
       <div className="soha-proxy-error-state">
@@ -154,12 +151,14 @@ export function NetworkTelemetryPane({ proxyOnly = false }: NetworkTelemetryPane
               : undefined
           }
         />
-        <Button icon={<ReloadOutlined />} onClick={() => void telemetry.refetch()}>
+        <Button
+          icon={<ReloadOutlined />}
+          onClick={() => void (telemetry.isEnabled === false ? undefined : telemetry.refetch())}
+        >
           {t('networkAccess.refresh', '刷新')}
         </Button>
       </div>
     )
-
   if (proxyOnly) {
     const unavailable = telemetry.isError && !summary
     const transfer = (summary?.uploadBytes ?? 0) + (summary?.downloadBytes ?? 0)
@@ -175,16 +174,7 @@ export function NetworkTelemetryPane({ proxyOnly = false }: NetworkTelemetryPane
             </div>
           </div>
         ) : null}
-        {telemetry.isError && summary ? (
-          <ManagementState
-            compact
-            kind="error"
-            description={t(
-              'networkAccess.proxyOverview.stale',
-              '刷新失败，以下显示的是上次获取的数据。',
-            )}
-          />
-        ) : null}
+        {telemetry.isError && summary ? null : null}
         {!unavailable ? (
           <div className="soha-proxy-traffic-summary">
             <div className="soha-proxy-traffic-main">
@@ -263,13 +253,17 @@ export function NetworkTelemetryPane({ proxyOnly = false }: NetworkTelemetryPane
               icon={<ReloadOutlined />}
               loading={telemetry.isFetching}
               tooltip={t('networkAccess.refresh', '刷新')}
-              onClick={() => void telemetry.refetch()}
+              onClick={() => void (telemetry.isEnabled === false ? undefined : telemetry.refetch())}
             />
           </div>
           {unavailable ? (
             <ManagementState
               actions={
-                <Button onClick={() => void telemetry.refetch()}>
+                <Button
+                  onClick={() =>
+                    void (telemetry.isEnabled === false ? undefined : telemetry.refetch())
+                  }
+                >
                   {t('networkAccess.refresh', '刷新')}
                 </Button>
               }
@@ -332,9 +326,10 @@ export function NetworkTelemetryPane({ proxyOnly = false }: NetworkTelemetryPane
       </div>
     )
   }
-
   return (
     <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+      <ReadFeedback canRead={telemetry.isEnabled} query={telemetry} label="遥测" />
+
       <ManagementTableToolbar>
         <Typography.Text type="secondary">{window}</Typography.Text>
         <ManagementIconButton
@@ -342,7 +337,7 @@ export function NetworkTelemetryPane({ proxyOnly = false }: NetworkTelemetryPane
           icon={<ReloadOutlined />}
           loading={telemetry.isFetching}
           tooltip={t('networkAccess.refresh', '刷新')}
-          onClick={() => void telemetry.refetch()}
+          onClick={() => void (telemetry.isEnabled === false ? undefined : telemetry.refetch())}
         />
       </ManagementTableToolbar>
       <div className="soha-overview-metric-grid">
@@ -376,7 +371,6 @@ export function NetworkTelemetryPane({ proxyOnly = false }: NetworkTelemetryPane
     </Space>
   )
 }
-
 export function NetworkProxyConnectionsPane({
   canViewDevices,
   canViewProfiles,
@@ -389,12 +383,15 @@ export function NetworkProxyConnectionsPane({
   const [search, setSearch] = useState('')
   const enabled = canViewDevices && canViewProfiles
   const telemetry = useQuery(networkAccessQueries.telemetrySummary(FILTER, enabled))
+  const visibleTelemetryData =
+    telemetry.isEnabled === false ? undefined : readableQueryData(telemetry)
   const profiles = useQuery(networkAccessQueries.mihomoProfiles({ limit: 200 }, enabled))
+  const visibleProfilesData = profiles.isEnabled === false ? undefined : readableQueryData(profiles)
   const devices = useQuery(networkAccessQueries.devices({ limit: 200 }, enabled))
-
-  const profilesById = new Map((profiles.data ?? []).map((item) => [item.id, item]))
-  const devicesById = new Map((devices.data ?? []).map((item) => [item.id, item]))
-  const rows: ProxyConnectionRow[] = (telemetry.data?.proxyFlows ?? []).map((flow) => {
+  const visibleDevicesData = devices.isEnabled === false ? undefined : readableQueryData(devices)
+  const profilesById = new Map((visibleProfilesData ?? []).map((item) => [item.id, item]))
+  const devicesById = new Map((visibleDevicesData ?? []).map((item) => [item.id, item]))
+  const rows: ProxyConnectionRow[] = (visibleTelemetryData?.proxyFlows ?? []).map((flow) => {
     const profile = profilesById.get(flow.profileId)
     const device = profile ? devicesById.get(profile.deviceId) : undefined
     return {
@@ -415,7 +412,6 @@ export function NetworkProxyConnectionsPane({
     item.selectedProxy,
     item.producerId,
   ])
-
   if (!enabled) {
     return (
       <ManagementState
@@ -427,11 +423,14 @@ export function NetworkProxyConnectionsPane({
       />
     )
   }
-
-  const unavailable = (telemetry.isError || profiles.isError || devices.isError) && !telemetry.data
-
+  const unavailable =
+    (telemetry.isError || profiles.isError || devices.isError) && !visibleTelemetryData
   return (
     <div className="soha-proxy-page">
+      <ReadFeedback canRead={telemetry.isEnabled} query={telemetry} label="遥测" />
+      <ReadFeedback canRead={profiles.isEnabled} query={profiles} label="连接方案" />
+      <ReadFeedback canRead={devices.isEnabled} query={devices} label="设备" />
+
       <h1 className="soha-proxy-sr-only">
         {t('networkAccess.proxyConnections.title', '用户连接')}
       </h1>
@@ -440,14 +439,14 @@ export function NetworkProxyConnectionsPane({
           <div>
             <strong>{t('networkAccess.proxyConnections.summaryTitle', '终端代理连接汇总')}</strong>
             <Typography.Text type="secondary">
-              {telemetry.data
-                ? `${formatDateTime(telemetry.data.from)} — ${formatDateTime(telemetry.data.to)}`
+              {visibleTelemetryData
+                ? `${formatDateTime(visibleTelemetryData.from)} — ${formatDateTime(visibleTelemetryData.to)}`
                 : t('networkAccess.telemetry.lastHour', '最近 1 小时')}
             </Typography.Text>
           </div>
           <div className="soha-proxy-connection-count">
             <span>{t('networkAccess.proxyConnections.sampled', '采样连接数')}</span>
-            <strong>{telemetry.data?.activeConnections ?? '—'}</strong>
+            <strong>{visibleTelemetryData?.activeConnections ?? '—'}</strong>
           </div>
         </div>
       ) : null}
@@ -459,16 +458,7 @@ export function NetworkProxyConnectionsPane({
           )}
         </Typography.Text>
       ) : null}
-      {!unavailable && (telemetry.isError || profiles.isError || devices.isError) ? (
-        <ManagementState
-          compact
-          kind="error"
-          description={t(
-            'networkAccess.proxyConnections.stale',
-            '部分数据刷新失败，用户或终端信息可能不完整。',
-          )}
-        />
-      ) : null}
+      {!unavailable && (telemetry.isError || profiles.isError || devices.isError) ? null : null}
       {!unavailable ? (
         <ManagementQueryPanel
           actions={
@@ -498,7 +488,7 @@ export function NetworkProxyConnectionsPane({
             <h2 id="proxy-connections-heading">
               {t('networkAccess.proxyConnections.groups', '连接采样组')}
             </h2>
-            {!unavailable && telemetry.data ? (
+            {!unavailable && visibleTelemetryData ? (
               <Typography.Text type="secondary">
                 {t('networkAccess.proxyConnections.groupCount', '当前返回 {count} 组').replace(
                   '{count}',
@@ -513,9 +503,9 @@ export function NetworkProxyConnectionsPane({
             loading={telemetry.isFetching || profiles.isFetching || devices.isFetching}
             tooltip={t('networkAccess.refresh', '刷新')}
             onClick={() => {
-              void telemetry.refetch()
-              void profiles.refetch()
-              void devices.refetch()
+              void (telemetry.isEnabled === false ? undefined : telemetry.refetch())
+              void (profiles.isEnabled === false ? undefined : profiles.refetch())
+              void (devices.isEnabled === false ? undefined : devices.refetch())
             }}
           />
         </div>
@@ -524,9 +514,9 @@ export function NetworkProxyConnectionsPane({
             actions={
               <Button
                 onClick={() => {
-                  void telemetry.refetch()
-                  void profiles.refetch()
-                  void devices.refetch()
+                  void (telemetry.isEnabled === false ? undefined : telemetry.refetch())
+                  void (profiles.isEnabled === false ? undefined : profiles.refetch())
+                  void (devices.isEnabled === false ? undefined : devices.refetch())
                 }}
               >
                 {t('networkAccess.refresh', '刷新')}

@@ -1,3 +1,4 @@
+import type { ModalProps } from 'antd'
 import type { CSSProperties } from 'react'
 
 export const viewportModalStyle: CSSProperties = {
@@ -26,4 +27,10 @@ export const visuallyHiddenModalTitleStyle: CSSProperties = {
   clip: 'rect(0, 0, 0, 0)',
   whiteSpace: 'nowrap',
   border: 0,
+}
+
+export const operationModalStyles: ModalProps['styles'] = {
+  container: { display: 'flex', flexDirection: 'column', maxHeight: 'calc(100dvh - 64px)' },
+  body: { minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain' },
+  footer: { flexShrink: 0 },
 }

@@ -1,8 +1,31 @@
-import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { AdminTable } from '@/components/admin-table'
 import {
-  App,
+  ManagementKeywordField,
+  ManagementQueryActions,
+  ManagementQueryField,
+  ManagementQueryPanel,
+  ManagementState,
+} from '@/components/management-list'
+import { operationModalStyles } from '@/components/modal-styles'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { useI18n } from '@/i18n'
+import { ApiError } from '@/services/api-error'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import { formatDateTime } from '@/utils/time'
+import { PlusOutlined } from '@ant-design/icons'
+import type {
+  NetworkProxyConfigurationInput,
+  NetworkProxyEngine,
+  NetworkProxyInstance,
+  NetworkProxyInstanceInput,
+  NetworkRuntimeEnrollmentSecret,
+} from '@opensoha/contracts/gen/ts/sohaapi'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TableColumnsType } from 'antd'
+import {
   Alert,
+  App,
   Button,
   Form,
   Input,
@@ -13,33 +36,12 @@ import {
   Tag,
   Typography,
 } from 'antd'
-import type { TableColumnsType } from 'antd'
-import { PlusOutlined } from '@ant-design/icons'
-import type {
-  NetworkProxyConfigurationInput,
-  NetworkProxyEngine,
-  NetworkProxyInstance,
-  NetworkProxyInstanceInput,
-  NetworkRuntimeEnrollmentSecret,
-} from '@opensoha/contracts/gen/ts/sohaapi'
-import { AdminTable } from '@/components/admin-table'
-import {
-  ManagementKeywordField,
-  ManagementQueryActions,
-  ManagementQueryField,
-  ManagementQueryPanel,
-  ManagementState,
-} from '@/components/management-list'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
-import { useI18n } from '@/i18n'
-import { formatDateTime } from '@/utils/time'
+import { useState } from 'react'
 import { networkAccessKeys } from '../keys'
 import { createEnrollment, createInstance, updateConfiguration } from './api'
 import { proxyKeys, proxyQueries } from './queries'
 import './styles.css'
-
 const engines: NetworkProxyEngine[] = ['mihomo', 'sing-box', 'v2ray']
-
 export default function ProxyInstancesPage() {
   const { t } = useI18n()
   const { message } = App.useApp()
@@ -55,52 +57,64 @@ export default function ProxyInstancesPage() {
   const [draftEngine, setDraftEngine] = useState<NetworkProxyEngine | undefined>()
   const [engine, setEngine] = useState<NetworkProxyEngine | undefined>()
   const instances = useQuery(proxyQueries.instances({ search: keyword, engine }, canView))
+  const visibleInstancesData =
+    instances.isEnabled === false ? undefined : readableQueryData(instances)
   const [createOpen, setCreateOpen] = useState(false)
   const [configurationTarget, setConfigurationTarget] = useState<NetworkProxyInstance>()
   const [secret, setSecret] = useState<NetworkRuntimeEnrollmentSecret>()
   const [createForm] = Form.useForm<NetworkProxyInstanceInput>()
   const [configurationForm] = Form.useForm<NetworkProxyConfigurationInput>()
   const refresh = () => void queryClient.invalidateQueries({ queryKey: proxyKeys.all })
-  const create = useMutation({
-    mutationFn: createInstance,
-    onSuccess: () => {
-      message.success(t('networkAccess.proxyRuntime.created', '代理实例已创建。'))
-      setCreateOpen(false)
-      createForm.resetFields()
-      refresh()
+  const create = useOperationMutation(
+    {
+      mutationFn: createInstance,
+      onSuccess: () => {
+        setCreateOpen(false)
+        createForm.resetFields()
+        refresh()
+      },
     },
-    onError: () =>
-      message.error(
-        t('networkAccess.proxyRuntime.createError', '创建失败，请检查 ID 是否已存在。'),
-      ),
-  })
-  const configure = useMutation({
-    mutationFn: ({ id, input }: { id: string; input: NetworkProxyConfigurationInput }) =>
-      updateConfiguration(id, input),
-    onSuccess: () => {
-      message.success(
-        t('networkAccess.proxyRuntime.configurationSaved', '期望配置已保存，等待运行时应用。'),
-      )
-      setConfigurationTarget(undefined)
-      configurationForm.resetFields()
-      refresh()
+    { label: ['创建 代理实例', 'Create proxy instance'], target: (v) => v.name },
+  )
+  const configure = useOperationMutation(
+    {
+      mutationFn: ({ id, input }: { id: string; input: NetworkProxyConfigurationInput }) =>
+        updateConfiguration(id, input),
+      onSuccess: () => {
+        setConfigurationTarget(undefined)
+        configurationForm.resetFields()
+        refresh()
+      },
+      onError: (error) => {
+        if (error instanceof ApiError && error.status === 409)
+          message.info('配置版本冲突，请关闭并重新打开配置，加载最新版本后提交。')
+        refresh()
+      },
     },
-    onError: () => {
-      message.error(
-        t('networkAccess.proxyRuntime.configurationError', '配置保存失败，请刷新实例版本后重试。'),
-      )
-      refresh()
+    {
+      label: ['保存 代理实例', 'Save proxy instance'],
+      target: (v) => v.id,
+      receipt: (data) => ({
+        message: '期望配置已保存，等待运行时应用',
+        evidence: `期望版本 r${data.desiredRevision} / 观测版本 r${data.observedRevision}；以运行时观测结果为准。`,
+      }),
     },
-  })
-  const enroll = useMutation({
-    mutationFn: createEnrollment,
-    onSuccess: (value) => {
-      setSecret(value)
-      void queryClient.invalidateQueries({ queryKey: networkAccessKeys.enrollments.all })
+  )
+  const enroll = useOperationMutation(
+    {
+      mutationFn: createEnrollment,
+      onSuccess: (value) => {
+        setSecret(value)
+        void queryClient.invalidateQueries({ queryKey: networkAccessKeys.enrollments.all })
+      },
     },
-    onError: () =>
-      message.error(t('networkAccess.proxyRuntime.enrollmentError', '登记令牌创建失败。')),
-  })
+    { label: ['创建 代理实例', 'Create proxy instance'], target: (v) => v },
+  )
+  const operationBlocked =
+    create.blocked ||
+    configure.blocked ||
+    enroll.blocked ||
+    (instances.isEnabled !== false && queryAccessDenied(instances))
   const columns: TableColumnsType<NetworkProxyInstance> = [
     { title: t('networkAccess.proxyRuntime.name', '名称'), dataIndex: 'name', ellipsis: true },
     { title: t('networkAccess.proxyRuntime.id', '实例 ID'), dataIndex: 'id', ellipsis: true },
@@ -179,6 +193,7 @@ export default function ProxyInstancesPage() {
               size="small"
               loading={enroll.isPending && enroll.variables === item.id}
               onClick={() => enroll.mutate(item.id)}
+              disabled={operationBlocked}
             >
               {t('networkAccess.proxyRuntime.enroll', '登记令牌')}
             </Button>
@@ -191,6 +206,20 @@ export default function ProxyInstancesPage() {
     return <ManagementState kind={permissions.isLoading ? 'loading' : 'no-permission'} />
   return (
     <main className="soha-server-proxy-page">
+      {!(
+        (createOpen && !(instances.isEnabled !== false && queryAccessDenied(instances))) ||
+        (Boolean(configurationTarget) &&
+          !(instances.isEnabled !== false && queryAccessDenied(instances))) ||
+        (Boolean(secret) && !(instances.isEnabled !== false && queryAccessDenied(instances)))
+      ) && (
+        <>
+          {' '}
+          {create.feedback}
+          {configure.feedback}
+          {enroll.feedback}{' '}
+        </>
+      )}
+
       <h1 className="soha-server-proxy-list-title">
         {t('networkAccess.proxyRuntime.instances', '代理实例')}
       </h1>
@@ -233,7 +262,7 @@ export default function ProxyInstancesPage() {
           />
         </ManagementQueryField>
       </ManagementQueryPanel>
-      {instances.data?.length === 200 ? (
+      {visibleInstancesData?.length === 200 ? (
         <Typography.Text type="secondary">
           {t(
             'networkAccess.proxyRuntime.resultLimit',
@@ -244,18 +273,23 @@ export default function ProxyInstancesPage() {
       <AdminTable
         columns={columns}
         scroll={{ x: 1160 }}
-        dataSource={instances.data ?? []}
+        dataSource={visibleInstancesData ?? []}
         rowKey="id"
         loading={instances.isLoading}
         refreshing={instances.isFetching}
         error={instances.error ?? undefined}
-        hasReadData={instances.data !== undefined}
-        onRefresh={() => void instances.refetch()}
+        hasReadData={visibleInstancesData !== undefined}
+        onRefresh={() => void (instances.isEnabled === false ? undefined : instances.refetch())}
         localSorting
         pagination={{ pageSize: 15, showSizeChanger: false }}
         toolbarExtra={
           canCreate ? (
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => setCreateOpen(true)}
+              disabled={operationBlocked}
+            >
               {t('networkAccess.proxyRuntime.add', '新增实例')}
             </Button>
           ) : null
@@ -263,14 +297,25 @@ export default function ProxyInstancesPage() {
         empty={t('networkAccess.proxyRuntime.noInstances', '尚无代理实例。请先创建并登记运行时。')}
       />
       <Modal
+        styles={operationModalStyles}
+        style={{ top: 32 }}
         title={t('networkAccess.proxyRuntime.add', '新增实例')}
-        open={createOpen}
+        open={createOpen && !(instances.isEnabled !== false && queryAccessDenied(instances))}
         destroyOnHidden
         confirmLoading={create.isPending}
-        onCancel={() => setCreateOpen(false)}
+        onCancel={() => {
+          if (!operationBlocked) (() => setCreateOpen(false))()
+        }}
         onOk={() => void createForm.validateFields().then((values) => create.mutate(values))}
+        closable={!operationBlocked}
+        cancelButtonProps={{ disabled: operationBlocked }}
+        okButtonProps={{ disabled: operationBlocked }}
       >
-        <Form form={createForm} layout="vertical">
+        {create.feedback}
+        {configure.feedback}
+        {enroll.feedback}
+
+        <Form form={createForm} layout="vertical" disabled={operationBlocked}>
           <Form.Item
             name="id"
             label={t('networkAccess.proxyRuntime.id', '实例 ID')}
@@ -298,23 +343,37 @@ export default function ProxyInstancesPage() {
         </Form>
       </Modal>
       <Modal
+        styles={operationModalStyles}
+        style={{ top: 32 }}
         title={
           configurationTarget
             ? `${t('networkAccess.proxyRuntime.configure', '配置')} · ${configurationTarget.name}`
             : ''
         }
-        open={Boolean(configurationTarget)}
+        open={
+          Boolean(configurationTarget) &&
+          !(instances.isEnabled !== false && queryAccessDenied(instances))
+        }
         destroyOnHidden
         width={760}
         confirmLoading={configure.isPending}
-        onCancel={() => setConfigurationTarget(undefined)}
+        onCancel={() => {
+          if (!operationBlocked) (() => setConfigurationTarget(undefined))()
+        }}
         onOk={() => {
           if (!configurationTarget) return
           void configurationForm
             .validateFields()
             .then((input) => configure.mutate({ id: configurationTarget.id, input }))
         }}
+        closable={!operationBlocked}
+        cancelButtonProps={{ disabled: operationBlocked }}
+        okButtonProps={{ disabled: operationBlocked }}
       >
+        {create.feedback}
+        {configure.feedback}
+        {enroll.feedback}
+
         <Alert
           type="info"
           showIcon
@@ -323,7 +382,12 @@ export default function ProxyInstancesPage() {
             '配置内容只写且不回显。请粘贴完整引擎配置；运行时会在本机注入 loopback controller 与密钥。',
           )}
         />
-        <Form form={configurationForm} layout="vertical" className="soha-server-proxy-config-form">
+        <Form
+          form={configurationForm}
+          layout="vertical"
+          className="soha-server-proxy-config-form"
+          disabled={operationBlocked}
+        >
           <Form.Item name="expectedRevision" hidden>
             <Input />
           </Form.Item>
@@ -344,14 +408,24 @@ export default function ProxyInstancesPage() {
         </Form>
       </Modal>
       <Modal
+        styles={operationModalStyles}
+        style={{ top: 32 }}
         title={t('networkAccess.proxyRuntime.enrollmentSecret', '一次性登记信息')}
-        open={Boolean(secret)}
+        open={Boolean(secret) && !(instances.isEnabled !== false && queryAccessDenied(instances))}
         destroyOnHidden
-        cancelButtonProps={{ style: { display: 'none' } }}
+        cancelButtonProps={{ ...{ style: { display: 'none' } }, disabled: operationBlocked }}
         okText={t('networkAccess.proxyRuntime.saved', '我已保存')}
-        onCancel={() => setSecret(undefined)}
+        onCancel={() => {
+          if (!operationBlocked) (() => setSecret(undefined))()
+        }}
         onOk={() => setSecret(undefined)}
+        closable={!operationBlocked}
+        okButtonProps={{ disabled: operationBlocked }}
       >
+        {create.feedback}
+        {configure.feedback}
+        {enroll.feedback}
+
         <Alert
           type="warning"
           showIcon

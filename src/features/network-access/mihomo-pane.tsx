@@ -1,7 +1,21 @@
-import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { ManagementIconButton } from '@/components/management-list'
+import { StatusTag } from '@/components/status-tag'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { useI18n } from '@/i18n'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
+import type {
+  NetworkMihomoDNSMode,
+  NetworkMihomoManualProtocol,
+  NetworkMihomoMode,
+  NetworkMihomoProfile,
+  NetworkMihomoProfileInput,
+  NetworkMihomoProfileStatus,
+  NetworkMihomoSourceType,
+} from '@opensoha/contracts/gen/ts/sohaapi'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TableColumnsType } from 'antd'
 import {
-  App,
   Button,
   Divider,
   Form,
@@ -14,31 +28,16 @@ import {
   Space,
   Switch,
 } from 'antd'
-import type { TableColumnsType } from 'antd'
-import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
-import type {
-  NetworkMihomoDNSMode,
-  NetworkMihomoManualProtocol,
-  NetworkMihomoMode,
-  NetworkMihomoProfile,
-  NetworkMihomoProfileInput,
-  NetworkMihomoProfileStatus,
-  NetworkMihomoSourceType,
-} from '@opensoha/contracts/gen/ts/sohaapi'
-import { ManagementIconButton } from '@/components/management-list'
-import { StatusTag } from '@/components/status-tag'
-import { useI18n } from '@/i18n'
+import { useState } from 'react'
 import { networkAccessMutations } from './mutations'
+import './proxy.css'
 import { networkAccessQueries } from './queries'
 import { TablePane } from './table-pane'
-import './proxy.css'
-
 interface NetworkMihomoPaneProps {
   canCreate: boolean
   canDelete: boolean
   canUpdate: boolean
 }
-
 interface MihomoFormValues {
   bypassCidrsText?: string
   bypassHostsText?: string
@@ -61,30 +60,40 @@ interface MihomoFormValues {
   status: NetworkMihomoProfileStatus
   subscriptionUrl?: string
 }
-
 const LIST_FILTER = { limit: 200 } as const
-
 const modeLabel = (mode: NetworkMihomoMode) => (mode === 'managed_follow' ? '跟随模式' : 'App 自选')
-
 function textList(value?: string) {
   return String(value ?? '')
     .split(/[\s,]+/)
     .map((item) => item.trim())
     .filter(Boolean)
 }
-
 export function NetworkMihomoPane({ canCreate, canDelete, canUpdate }: NetworkMihomoPaneProps) {
-  const { message } = App.useApp()
   const { t } = useI18n()
   const queryClient = useQueryClient()
   const profiles = useQuery(networkAccessQueries.mihomoProfiles(LIST_FILTER))
-  const createProfile = useMutation(networkAccessMutations.mihomoProfiles.create(queryClient))
-  const updateProfile = useMutation(networkAccessMutations.mihomoProfiles.update(queryClient))
-  const deleteProfile = useMutation(networkAccessMutations.mihomoProfiles.remove(queryClient))
+  const visibleProfilesData = profiles.isEnabled === false ? undefined : readableQueryData(profiles)
+  const createProfile = useOperationMutation(
+    networkAccessMutations.mihomoProfiles.create(queryClient),
+    { label: ['创建 代理隧道', 'Create proxy profile'], target: (v) => v.name },
+  )
+  const updateProfile = useOperationMutation(
+    networkAccessMutations.mihomoProfiles.update(queryClient),
+    { label: ['保存 代理隧道', 'Save proxy profile'], target: (v) => v.profileId },
+  )
+  const deleteProfile = useOperationMutation(
+    networkAccessMutations.mihomoProfiles.remove(queryClient),
+    { label: ['删除 代理隧道', 'Delete proxy profile'], target: (v) => v },
+  )
+  const operationBlocked =
+    createProfile.blocked ||
+    updateProfile.blocked ||
+    deleteProfile.blocked ||
+    (profiles.isEnabled !== false && queryAccessDenied(profiles))
   const [editor, setEditor] = useState<NetworkMihomoProfile | 'create' | null>(null)
   const [form] = Form.useForm<MihomoFormValues>()
-
   function openCreate() {
+    if (operationBlocked) return
     form.resetFields()
     form.setFieldsValue({
       mode: 'managed_follow',
@@ -101,8 +110,8 @@ export function NetworkMihomoPane({ canCreate, canDelete, canUpdate }: NetworkMi
     })
     setEditor('create')
   }
-
   function openEdit(profile: NetworkMihomoProfile) {
+    if (operationBlocked) return
     form.resetFields()
     form.setFieldsValue({
       ...profile,
@@ -118,12 +127,10 @@ export function NetworkMihomoPane({ canCreate, canDelete, canUpdate }: NetworkMi
     })
     setEditor(profile)
   }
-
   function closeEditor() {
     setEditor(null)
     form.resetFields()
   }
-
   function validateManualRequired(value: unknown) {
     const manualValues = form.getFieldsValue([
       'manualProtocol',
@@ -139,7 +146,6 @@ export function NetworkMihomoPane({ canCreate, canDelete, canUpdate }: NetworkMi
       ? Promise.resolve()
       : Promise.reject(new Error(t('networkAccess.form.required', '必填项')))
   }
-
   async function submit() {
     const values = await form.validateFields()
     const subscriptionUrl = values.subscriptionUrl?.trim()
@@ -191,9 +197,7 @@ export function NetworkMihomoPane({ canCreate, canDelete, canUpdate }: NetworkMi
     if (editor === 'create') await createProfile.mutateAsync(input)
     else if (editor) await updateProfile.mutateAsync({ profileId: editor.id, input })
     closeEditor()
-    void message.success(t('networkAccess.saved', '已保存'))
   }
-
   const columns: TableColumnsType<NetworkMihomoProfile> = [
     { title: t('networkAccess.name', '名称'), dataIndex: 'name' },
     {
@@ -256,16 +260,15 @@ export function NetworkMihomoPane({ canCreate, canDelete, canUpdate }: NetworkMi
                     icon={<EditOutlined />}
                     tooltip={t('networkAccess.mihomo.edit', '编辑 mihomo 配置')}
                     onClick={() => openEdit(profile)}
+                    disabled={operationBlocked}
                   />
                 ) : null}
                 {canDelete ? (
                   <Popconfirm
                     title={t('networkAccess.mihomo.confirmDelete', '确认删除此 mihomo 配置？')}
-                    onConfirm={() =>
-                      deleteProfile.mutate(profile.id, {
-                        onSuccess: () => void message.success(t('networkAccess.deleted', '已删除')),
-                      })
-                    }
+                    onConfirm={() => deleteProfile.mutate(profile.id)}
+                    okButtonProps={{ disabled: operationBlocked }}
+                    disabled={operationBlocked}
                   >
                     <ManagementIconButton
                       aria-label={t('networkAccess.mihomo.delete', '删除 mihomo 配置')}
@@ -281,17 +284,25 @@ export function NetworkMihomoPane({ canCreate, canDelete, canUpdate }: NetworkMi
         ]
       : []),
   ]
-
   return (
     <div className="soha-proxy-page">
+      {!(editor !== null && !(profiles.isEnabled !== false && queryAccessDenied(profiles))) && (
+        <>
+          {' '}
+          {createProfile.feedback}
+          {updateProfile.feedback}
+          {deleteProfile.feedback}{' '}
+        </>
+      )}
+
       <h1 className="soha-proxy-sr-only">{t('networkAccess.mihomo.pageTitle', '代理隧道')}</h1>
       <TablePane
         columns={columns}
-        items={profiles.data}
+        items={visibleProfilesData}
         loading={profiles.isLoading}
         refreshing={profiles.isFetching}
-        error={profiles.isError}
-        onRefresh={() => void profiles.refetch()}
+        error={profiles.isEnabled === false ? null : profiles.error}
+        onRefresh={() => void (profiles.isEnabled === false ? undefined : profiles.refetch())}
         queryCard
         searchPlaceholder={t('networkAccess.mihomo.search', '搜索名称、设备或节点')}
         getSearchValues={(item) => [
@@ -304,7 +315,13 @@ export function NetworkMihomoPane({ canCreate, canDelete, canUpdate }: NetworkMi
         ]}
         createAction={
           canCreate ? (
-            <Button size="small" type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+            <Button
+              size="small"
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={openCreate}
+              disabled={operationBlocked}
+            >
               {t('networkAccess.mihomo.create', '新增代理隧道')}
             </Button>
           ) : null
@@ -316,7 +333,7 @@ export function NetworkMihomoPane({ canCreate, canDelete, canUpdate }: NetworkMi
         styles={{ body: { maxHeight: 'calc(100vh - 190px)', overflowY: 'auto' } }}
         destroyOnHidden
         mask={{ closable: false }}
-        open={editor !== null}
+        open={editor !== null && !(profiles.isEnabled !== false && queryAccessDenied(profiles))}
         title={
           editor === 'create'
             ? t('networkAccess.mihomo.create', '新增代理隧道')
@@ -325,10 +342,19 @@ export function NetworkMihomoPane({ canCreate, canDelete, canUpdate }: NetworkMi
         confirmLoading={createProfile.isPending || updateProfile.isPending}
         okText={t('common.save', '保存')}
         cancelText={t('common.cancel', '取消')}
-        onCancel={closeEditor}
+        onCancel={() => {
+          if (!operationBlocked) closeEditor()
+        }}
         onOk={() => void submit()}
+        closable={!operationBlocked}
+        cancelButtonProps={{ disabled: operationBlocked }}
+        okButtonProps={{ disabled: operationBlocked }}
       >
-        <Form form={form} layout="vertical">
+        {createProfile.feedback}
+        {updateProfile.feedback}
+        {deleteProfile.feedback}
+
+        <Form form={form} layout="vertical" disabled={operationBlocked}>
           <Divider titlePlacement="start" plain>
             {t('networkAccess.mihomo.basic', '基本配置')}
           </Divider>
@@ -381,6 +407,7 @@ export function NetworkMihomoPane({ canCreate, canDelete, canUpdate }: NetworkMi
                 <>
                   <Form.Item name="sourceType" rules={[{ required: true }]}>
                     <Segmented
+                      disabled={operationBlocked}
                       block
                       options={[
                         {
@@ -595,7 +622,7 @@ export function NetworkMihomoPane({ canCreate, canDelete, canUpdate }: NetworkMi
                 label={t('networkAccess.mihomo.failClosed', '故障时阻断')}
                 valuePropName="checked"
               >
-                <Switch disabled={getFieldValue('mode') === 'managed_follow'} />
+                <Switch disabled={operationBlocked || getFieldValue('mode') === 'managed_follow'} />
               </Form.Item>
             )}
           </Form.Item>

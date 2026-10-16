@@ -1,6 +1,31 @@
-import { useEffect, useState } from 'react'
+import { scrollableModalBodyStyle, viewportModalStyle } from '@/components/modal-styles'
+import { ReadFeedback } from '@/components/request-feedback'
+import { StatusTag } from '@/components/status-tag'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import {
-  App,
+  createS3StorageIntegration,
+  inferS3StoragePreset,
+  s3StorageFormValues,
+  systemIntegrationMutations,
+  systemIntegrationQueries,
+  updateS3StorageIntegration,
+  type S3StorageFormValues,
+  type S3StoragePreset,
+  type SystemIntegration,
+  type SystemIntegrationCategory,
+} from '@/features/settings'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import {
+  DeleteOutlined,
+  EditOutlined,
+  HddOutlined,
+  PlusOutlined,
+  QuestionCircleOutlined,
+  ThunderboltOutlined,
+} from '@ant-design/icons'
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
   Badge,
   Button,
   Descriptions,
@@ -16,45 +41,21 @@ import {
   Tooltip,
   Typography,
 } from 'antd'
-import {
-  DeleteOutlined,
-  EditOutlined,
-  HddOutlined,
-  PlusOutlined,
-  QuestionCircleOutlined,
-  ThunderboltOutlined,
-} from '@ant-design/icons'
-import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ManagementState } from '@/components/management-list'
-import { scrollableModalBodyStyle, viewportModalStyle } from '@/components/modal-styles'
-import { StatusTag } from '@/components/status-tag'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
-import {
-  createS3StorageIntegration,
-  inferS3StoragePreset,
-  s3StorageFormValues,
-  systemIntegrationMutations,
-  systemIntegrationQueries,
-  updateS3StorageIntegration,
-  type S3StorageFormValues,
-  type S3StoragePreset,
-  type SystemIntegration,
-  type SystemIntegrationCategory,
-} from '@/features/settings'
+import { useEffect, useState } from 'react'
 import { softwarePackageQueries } from '../queries'
 import type { SoftwareStorage } from '../types'
-
 const { Text } = Typography
 type StorageHealthStatus = 'unknown' | 'healthy' | 'degraded' | 'unhealthy'
-
-const presetOptions: Array<{ label: string; value: S3StoragePreset }> = [
+const presetOptions: Array<{
+  label: string
+  value: S3StoragePreset
+}> = [
   { label: 'Amazon S3', value: 'aws' },
   { label: 'MinIO', value: 'minio' },
   { label: '阿里云 OSS（S3 兼容）', value: 'oss' },
   { label: '腾讯云 COS（S3 兼容）', value: 'cos' },
   { label: '其他 S3 兼容存储', value: 'custom' },
 ]
-
 const endpointPlaceholders: Record<S3StoragePreset, string> = {
   aws: 'AWS S3 可留空',
   minio: 'https://minio.example.com',
@@ -62,9 +63,7 @@ const endpointPlaceholders: Record<S3StoragePreset, string> = {
   cos: 'https://cos.ap-shanghai.myqcloud.com',
   custom: 'https://s3.example.com',
 }
-
 export function ObjectStorageConfig({ storage }: { storage?: SoftwareStorage }) {
-  const { message } = App.useApp()
   const queryClient = useQueryClient()
   const [form] = Form.useForm<S3StorageFormValues>()
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -84,7 +83,9 @@ export function ObjectStorageConfig({ storage }: { storage?: SoftwareStorage }) 
       canView,
     ),
   )
-  const integrations = integrationsQuery.data ?? []
+  const visibleIntegrationsQueryData =
+    integrationsQuery.isEnabled === false ? undefined : readableQueryData(integrationsQuery)
+  const integrations = visibleIntegrationsQueryData ?? []
   const enabledIntegrations = integrations.filter((item) => item.enabled)
   const healthyIntegrations = enabledIntegrations.filter((item) => item.healthStatus === 'healthy')
   const integrationStorageQueries = useQueries({
@@ -94,57 +95,76 @@ export function ObjectStorageConfig({ storage }: { storage?: SoftwareStorage }) 
     })),
   })
   const integrationStorage = new Map(
-    integrations.map((item, index) => [item.id, integrationStorageQueries[index]?.data]),
+    integrations.map((item, index) => [
+      item.id,
+      integrationStorageQueries[index]?.isEnabled === false
+        ? undefined
+        : readableQueryData(integrationStorageQueries[index]),
+    ]),
   )
-  const createMutation = useMutation(systemIntegrationMutations.create(queryClient))
-  const updateMutation = useMutation(systemIntegrationMutations.update(queryClient))
-  const removeMutation = useMutation(systemIntegrationMutations.remove(queryClient))
-  const testMutation = useMutation(systemIntegrationMutations.test(queryClient))
+  const createMutation = useOperationMutation(systemIntegrationMutations.create(queryClient), {
+    label: ['创建 对象存储', 'Create object storage'],
+    target: (v) => v.name,
+  })
+  const updateMutation = useOperationMutation(systemIntegrationMutations.update(queryClient), {
+    label: ['保存 对象存储', 'Save object storage'],
+    target: (v) => v.id,
+  })
+  const removeMutation = useOperationMutation(systemIntegrationMutations.remove(queryClient), {
+    label: ['删除 对象存储', 'Delete object storage'],
+    target: (v) => v,
+  })
+  const testMutation = useOperationMutation(systemIntegrationMutations.test(queryClient), {
+    label: ['测试对象存储', 'Test object storage'],
+    target: (v) => v,
+    readOnly: true,
+    resultError: (result) =>
+      result.status === 'succeeded'
+        ? undefined
+        : new Error('对象存储连接测试失败；配置未因此变更。'),
+    receipt: () => ({ message: '对象存储连接测试成功', evidence: '此结果仅反映本次连接测试。' }),
+  })
+  const operationBlocked =
+    createMutation.blocked ||
+    updateMutation.blocked ||
+    removeMutation.blocked ||
+    testMutation.blocked ||
+    (integrationsQuery.isEnabled !== false && queryAccessDenied(integrationsQuery))
   const saving = createMutation.isPending || updateMutation.isPending
-
   useEffect(() => {
     if (modalOpen) {
       form.resetFields()
       form.setFieldsValue(s3StorageFormValues(editing ?? undefined))
     }
   }, [editing, form, modalOpen])
-
   const closeModal = () => {
     setModalOpen(false)
     setEditing(null)
   }
-
-  const finishSave = (saved: SystemIntegration, testAfterSave: boolean, updated: boolean) => {
+  const finishSave = (saved: SystemIntegration, testAfterSave: boolean) => {
     if (!testAfterSave) {
-      void message.success(updated ? '对象存储配置已更新' : '对象存储已添加')
       closeModal()
       return
     }
     testMutation.mutate(saved.id, {
-      onSuccess: (result) => {
-        void message[result.status === 'succeeded' ? 'success' : 'error'](
-          result.status === 'succeeded' ? '对象存储已保存，连接成功' : '对象存储已保存，但连接失败',
-        )
+      onSuccess: () => {
         setTestingAfterSave(false)
         closeModal()
       },
-      onError: (error) => {
-        void message.error(`对象存储已保存，但连接测试失败：${error.message}`)
+      onError: () => {
         setTestingAfterSave(false)
         closeModal()
       },
     })
   }
-
   const save = (values: S3StorageFormValues, testAfterSave = false) => {
     if (editing) {
       if (!canUpdate) return
       updateMutation.mutate(
         { id: editing.id, values: updateS3StorageIntegration(editing, values) },
         {
-          onSuccess: (saved) => finishSave(saved, testAfterSave, true),
-          onError: (error) => {
-            void message.error(error.message)
+          onSuccess: (saved) => finishSave(saved, testAfterSave),
+          onError: () => {
             setTestingAfterSave(false)
           },
         },
@@ -153,43 +173,58 @@ export function ObjectStorageConfig({ storage }: { storage?: SoftwareStorage }) 
     }
     if (!canCreate) return
     createMutation.mutate(createS3StorageIntegration(values), {
-      onSuccess: (saved) => finishSave(saved, testAfterSave, false),
-      onError: (error) => {
-        void message.error(error.message)
+      onSuccess: (saved) => finishSave(saved, testAfterSave),
+      onError: () => {
         setTestingAfterSave(false)
       },
     })
   }
-
   const testConnection = (integration: SystemIntegration) => {
-    testMutation.mutate(integration.id, {
-      onSuccess: (result) =>
-        void message[result.status === 'succeeded' ? 'success' : 'error'](
-          result.status === 'succeeded'
-            ? `${integration.name} 连接正常`
-            : `${integration.name} 连接失败`,
-        ),
-      onError: (error) => void message.error(error.message),
-    })
+    testMutation.mutate(integration.id)
   }
-
   if (!canView) return null
-
   return (
     <>
+      {!(
+        (drawerOpen &&
+          !(integrationsQuery.isEnabled !== false && queryAccessDenied(integrationsQuery))) ||
+        (modalOpen &&
+          !(integrationsQuery.isEnabled !== false && queryAccessDenied(integrationsQuery)))
+      ) && (
+        <>
+          {' '}
+          {createMutation.feedback}
+          {updateMutation.feedback}
+          {removeMutation.feedback}
+          {testMutation.feedback}{' '}
+        </>
+      )}
+
+      <ReadFeedback
+        canRead={
+          integrationsQuery.isEnabled && (!drawerOpen || queryAccessDenied(integrationsQuery))
+        }
+        query={integrationsQuery}
+        label="身份数据"
+      />
+
       <Button
         autoInsertSpace={false}
         icon={<HddOutlined />}
         loading={integrationsQuery.isLoading}
         size="small"
         onClick={() => setDrawerOpen(true)}
+        disabled={operationBlocked}
       >
         对象存储
       </Button>
       <Drawer
         destroyOnHidden
         loading={integrationsQuery.isLoading}
-        open={drawerOpen}
+        open={
+          drawerOpen &&
+          !(integrationsQuery.isEnabled !== false && queryAccessDenied(integrationsQuery))
+        }
         size={900}
         title={
           <Space size={8}>
@@ -202,7 +237,7 @@ export function ObjectStorageConfig({ storage }: { storage?: SoftwareStorage }) 
         }
         extra={
           <Button
-            disabled={!canCreate || integrationsQuery.isError}
+            disabled={operationBlocked || !canCreate || integrationsQuery.isError}
             icon={<PlusOutlined />}
             onClick={() => {
               setEditing(null)
@@ -212,21 +247,21 @@ export function ObjectStorageConfig({ storage }: { storage?: SoftwareStorage }) 
             新增存储
           </Button>
         }
-        onClose={() => setDrawerOpen(false)}
+        onClose={() => {
+          if (!operationBlocked) (() => setDrawerOpen(false))()
+        }}
       >
-        {integrationsQuery.isError ? (
-          <ManagementState
-            bordered={false}
-            compact
-            kind="error"
-            title="对象存储配置加载失败"
-            actions={
-              <Button size="small" onClick={() => void integrationsQuery.refetch()}>
-                重试
-              </Button>
-            }
-          />
-        ) : (
+        <ReadFeedback
+          canRead={integrationsQuery.isEnabled && !modalOpen}
+          query={integrationsQuery}
+          label="对象存储"
+        />
+        {createMutation.feedback}
+        {updateMutation.feedback}
+        {removeMutation.feedback}
+        {testMutation.feedback}
+
+        {integrationsQuery.isError && !visibleIntegrationsQueryData ? null : (
           <div className="soha-software-object-storage-config">
             <Descriptions
               column={{ xs: 2, sm: 4 }}
@@ -316,7 +351,7 @@ export function ObjectStorageConfig({ storage }: { storage?: SoftwareStorage }) 
                     <Space size={0}>
                       <Button
                         aria-label={`测试 ${item.name} 连接`}
-                        disabled={!canTest || !item.enabled}
+                        disabled={operationBlocked || !canTest || !item.enabled}
                         icon={<ThunderboltOutlined />}
                         loading={testMutation.isPending && testMutation.variables === item.id}
                         size="small"
@@ -325,7 +360,7 @@ export function ObjectStorageConfig({ storage }: { storage?: SoftwareStorage }) 
                       />
                       <Button
                         aria-label={`编辑 ${item.name}`}
-                        disabled={!canUpdate}
+                        disabled={operationBlocked || !canUpdate}
                         icon={<EditOutlined />}
                         size="small"
                         type="text"
@@ -336,16 +371,14 @@ export function ObjectStorageConfig({ storage }: { storage?: SoftwareStorage }) 
                       />
                       <Popconfirm
                         cancelText="取消"
-                        disabled={!canDelete}
-                        okButtonProps={{ danger: true, loading: removeMutation.isPending }}
+                        disabled={operationBlocked || !canDelete}
+                        okButtonProps={{
+                          ...{ danger: true, loading: removeMutation.isPending },
+                          disabled: operationBlocked,
+                        }}
                         okText="删除"
                         title={`删除对象存储 ${item.name}？`}
-                        onConfirm={() =>
-                          removeMutation.mutate(item.id, {
-                            onSuccess: () => void message.success('对象存储已删除'),
-                            onError: (error) => void message.error(error.message),
-                          })
-                        }
+                        onConfirm={() => removeMutation.mutate(item.id)}
                       >
                         <Button
                           aria-label={`删除 ${item.name}`}
@@ -372,11 +405,14 @@ export function ObjectStorageConfig({ storage }: { storage?: SoftwareStorage }) 
       </Drawer>
 
       <Modal
-        closable={!saving && !testMutation.isPending}
+        closable={!operationBlocked}
         destroyOnHidden
         forceRender
         mask={{ closable: false }}
-        open={modalOpen}
+        open={
+          modalOpen &&
+          !(integrationsQuery.isEnabled !== false && queryAccessDenied(integrationsQuery))
+        }
         style={viewportModalStyle}
         styles={{ body: scrollableModalBodyStyle }}
         width={760}
@@ -402,7 +438,7 @@ export function ObjectStorageConfig({ storage }: { storage?: SoftwareStorage }) 
               取消
             </Button>
             <Button
-              disabled={!canTest || saving}
+              disabled={operationBlocked || !canTest || saving}
               icon={<ThunderboltOutlined />}
               loading={testingAfterSave || testMutation.isPending}
               onClick={() => {
@@ -425,13 +461,28 @@ export function ObjectStorageConfig({ storage }: { storage?: SoftwareStorage }) 
             </Button>
           </Space>
         }
-        onCancel={closeModal}
+        onCancel={() => {
+          if (!operationBlocked) closeModal()
+        }}
+        cancelButtonProps={{ disabled: operationBlocked }}
+        okButtonProps={{ disabled: operationBlocked }}
       >
+        <ReadFeedback
+          canRead={integrationsQuery.isEnabled}
+          query={integrationsQuery}
+          label="对象存储"
+        />
+        {createMutation.feedback}
+        {updateMutation.feedback}
+        {removeMutation.feedback}
+        {testMutation.feedback}
+
         <Form
           form={form}
           initialValues={s3StorageFormValues(editing ?? undefined)}
           layout="vertical"
           onFinish={(values) => save(values)}
+          disabled={operationBlocked}
         >
           <Text className="soha-software-config-section-title" strong>
             连接信息
@@ -439,7 +490,7 @@ export function ObjectStorageConfig({ storage }: { storage?: SoftwareStorage }) 
           <div className="soha-software-form-grid">
             <Form.Item name="preset" label="存储服务" rules={[{ required: true }]}>
               <Select
-                disabled={Boolean(editing)}
+                disabled={operationBlocked || Boolean(editing)}
                 options={presetOptions}
                 onChange={(value: S3StoragePreset) =>
                   form.setFieldValue('pathStyle', !['aws', 'oss', 'cos'].includes(value))
@@ -450,7 +501,7 @@ export function ObjectStorageConfig({ storage }: { storage?: SoftwareStorage }) 
               <Input maxLength={200} />
             </Form.Item>
             <Form.Item name="region" label="Region" rules={[{ required: true }]}>
-              <Input disabled={Boolean(editing)} maxLength={128} />
+              <Input disabled={operationBlocked || Boolean(editing)} maxLength={128} />
             </Form.Item>
             <Form.Item
               name="endpoint"
@@ -464,13 +515,20 @@ export function ObjectStorageConfig({ storage }: { storage?: SoftwareStorage }) 
               }
               rules={[{ type: 'url', warningOnly: true }]}
             >
-              <Input disabled={Boolean(editing)} placeholder={endpointPlaceholders[preset]} />
+              <Input
+                disabled={operationBlocked || Boolean(editing)}
+                placeholder={endpointPlaceholders[preset]}
+              />
             </Form.Item>
             <Form.Item name="bucket" label="Bucket" rules={[{ required: true }]}>
-              <Input disabled={Boolean(editing)} maxLength={255} />
+              <Input disabled={operationBlocked || Boolean(editing)} maxLength={255} />
             </Form.Item>
             <Form.Item name="prefix" label="对象前缀">
-              <Input disabled={Boolean(editing)} maxLength={512} placeholder="可选" />
+              <Input
+                disabled={operationBlocked || Boolean(editing)}
+                maxLength={512}
+                placeholder="可选"
+              />
             </Form.Item>
           </div>
           <Text className="soha-software-config-section-title" strong>
@@ -478,13 +536,13 @@ export function ObjectStorageConfig({ storage }: { storage?: SoftwareStorage }) 
           </Text>
           <div className="soha-software-switch-grid">
             <Form.Item name="pathStyle" label="Path-style" valuePropName="checked">
-              <Switch disabled={Boolean(editing)} />
+              <Switch disabled={operationBlocked || Boolean(editing)} />
             </Form.Item>
             <Form.Item name="insecure" label="允许 HTTP（仅内网开发）" valuePropName="checked">
-              <Switch disabled={Boolean(editing)} />
+              <Switch disabled={operationBlocked || Boolean(editing)} />
             </Form.Item>
             <Form.Item name="allowPrivate" label="允许私网 Endpoint" valuePropName="checked">
-              <Switch disabled={Boolean(editing)} />
+              <Switch disabled={operationBlocked || Boolean(editing)} />
             </Form.Item>
             <Form.Item name="enabled" label="启用" valuePropName="checked">
               <Switch />
@@ -518,7 +576,6 @@ export function ObjectStorageConfig({ storage }: { storage?: SoftwareStorage }) 
     </>
   )
 }
-
 function StorageHealthIndicator({
   enabled,
   status,
@@ -550,7 +607,6 @@ function StorageHealthIndicator({
     </Tooltip>
   )
 }
-
 function aggregateHealthStatus(items: SystemIntegration[]): StorageHealthStatus {
   if (items.some((item) => storageHealthStatus(item) === 'unhealthy')) return 'unhealthy'
   if (items.some((item) => storageHealthStatus(item) === 'degraded')) return 'degraded'
@@ -559,15 +615,12 @@ function aggregateHealthStatus(items: SystemIntegration[]): StorageHealthStatus 
   }
   return 'unknown'
 }
-
 function storageHealthStatus(item: SystemIntegration): StorageHealthStatus {
   return item.healthStatus as StorageHealthStatus
 }
-
 function presetLabel(preset: S3StoragePreset) {
   return presetOptions.find((option) => option.value === preset)?.label ?? 'S3 兼容存储'
 }
-
 function formatBytes(value: number) {
   const units = ['B', 'KiB', 'MiB', 'GiB']
   let size = value
@@ -578,7 +631,6 @@ function formatBytes(value: number) {
   }
   return `${size >= 10 || index === 0 ? size.toFixed(0) : size.toFixed(1)} ${units[index]}`
 }
-
 function configurationValue(item: SystemIntegration | undefined, key: string) {
   return item?.configuration.find((field) => field.key === key)?.value ?? ''
 }

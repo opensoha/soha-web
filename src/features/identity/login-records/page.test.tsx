@@ -1,8 +1,10 @@
-import type { ReactNode } from 'react'
 import type { AdminTableProps } from '@/components/admin-table'
+import { ReadFeedback } from '@/components/request-feedback'
+import type { AuditLog } from '@/features/system'
+import { ApiError } from '@/services/api-error'
+import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, expect, it, vi } from 'vitest'
-import type { AuditLog } from '@/features/system'
 import { IdentityLoginRecordsPage } from './page'
 
 const state = vi.hoisted(() => ({
@@ -15,6 +17,18 @@ vi.mock('@/components/management-data-page', () => ({
   ManagementDataPage: ({ table, tableNode }: { table?: AdminTableProps; tableNode?: ReactNode }) =>
     tableNode ?? (
       <div>
+        {table ? (
+          <ReadFeedback
+            label="登录记录"
+            query={{
+              data: table.hasReadData ? table.dataSource : undefined,
+              error: table.error ?? null,
+              isError: Boolean(table.error),
+              isFetching: false,
+              refetch: table.onRetry,
+            }}
+          />
+        ) : null}
         {table?.dataSource.map((record, index) => (
           <div key={record.id}>
             {table.columns.map((column) => (
@@ -120,10 +134,17 @@ it('falls back to application IDs when the audit reader cannot view applications
   expect(state.enabled).toEqual([true, false])
 })
 
-it('shows a load failure instead of presenting stale cached rows as current results', () => {
+it('labels stale cached audit rows and keeps them readable after a transient failure', () => {
   state.error = new Error('audit unavailable')
   const html = renderToStaticMarkup(<IdentityLoginRecordsPage />)
-  expect(html).toContain('登录记录加载失败')
+  expect(html).toContain('未更新，正在展示上次读取结果')
   expect(html.replace(/\s/g, '')).toContain('重试')
+  expect(html).toContain('Alice')
+})
+
+it('removes cached audit records after a real permission refusal', () => {
+  state.error = new ApiError(403, 'audit denied', { method: 'GET', path: '/audit-logs' })
+  const html = renderToStaticMarkup(<IdentityLoginRecordsPage />)
+  expect(html).toContain('无访问权限')
   expect(html).not.toContain('Alice')
 })

@@ -1,4 +1,15 @@
-import { Button, Card, Space, Typography } from 'antd'
+import { ManagementState } from '@/components/management-list'
+import {
+  OverviewChip,
+  OverviewMetricCard,
+  OverviewSectionBar,
+  type OverviewChipItem,
+  type OverviewMetricItem,
+} from '@/components/overview-visuals'
+import { ReadFeedback } from '@/components/request-feedback'
+import { StatusTag } from '@/components/status-tag'
+import { readableQueryData } from '@/utils/query-feedback'
+import { formatDateTime } from '@/utils/time'
 import {
   ApiOutlined,
   AppstoreOutlined,
@@ -12,35 +23,27 @@ import {
   SafetyCertificateOutlined,
   UserSwitchOutlined,
 } from '@ant-design/icons'
+import { Button, Card, Space, Typography } from 'antd'
 import { useNavigate } from 'react-router-dom'
-import { ManagementState } from '@/components/management-list'
-import { StatusTag } from '@/components/status-tag'
-import {
-  OverviewChip,
-  OverviewMetricCard,
-  OverviewSectionBar,
-  type OverviewChipItem,
-  type OverviewMetricItem,
-} from '@/components/overview-visuals'
-import { formatDateTime } from '@/utils/time'
-import { useIdentityOverviewData } from './use-overview-data'
 import './styles.css'
-
+import { useIdentityOverviewData } from './use-overview-data'
 const { Text } = Typography
-
 function resultTag(result?: string) {
   const value = result || '-'
   return <StatusTag value={value} />
 }
-
-function latestUpdated(items: Array<{ updatedAt?: string; createdAt?: string }>) {
+function latestUpdated(
+  items: Array<{
+    updatedAt?: string
+    createdAt?: string
+  }>,
+) {
   const latest = items
     .map((item) => new Date(item.updatedAt || item.createdAt || '').getTime())
     .filter((value) => Number.isFinite(value))
     .sort((left, right) => right - left)[0]
   return latest ? new Date(latest).toISOString() : ''
 }
-
 function formatStorageBytes(value: number) {
   const units = ['B', 'KiB', 'MiB', 'GiB']
   let size = value
@@ -51,10 +54,13 @@ function formatStorageBytes(value: number) {
   }
   return `${size >= 10 || index === 0 ? size.toFixed(0) : size.toFixed(1)} ${units[index]}`
 }
-
+function available(query: { data?: unknown; error: Error | null; isEnabled: boolean }) {
+  return query.isEnabled && readableQueryData(query) !== undefined
+}
 export function IdentityOverviewPage() {
   const navigate = useNavigate()
   const {
+    reads,
     applications,
     providers,
     outposts,
@@ -91,7 +97,7 @@ export function IdentityOverviewPage() {
   ]
   const overviewStats = [
     {
-      key: 'applications',
+      key: 'applications' as const,
       label: '应用目录',
       value: applications.length,
       helper: `${enabledApplications.length} 个已启用 / 最近更新 ${formatDateTime(latestUpdated(applications))}`,
@@ -100,7 +106,7 @@ export function IdentityOverviewPage() {
       tone: enabledApplications.length > 0 ? 'success' : 'default',
     },
     {
-      key: 'providers',
+      key: 'providers' as const,
       label: 'Provider',
       value: providers.length,
       helper: `${enabledProviders.length} 个已启用 / ${oidcProviders.length} OIDC / ${proxyProviders.length} Proxy / ${samlProviders.length} SAML`,
@@ -109,7 +115,7 @@ export function IdentityOverviewPage() {
       tone: enabledProviders.length > 0 ? 'success' : 'default',
     },
     {
-      key: 'outposts',
+      key: 'outposts' as const,
       label: 'Outpost',
       value: outposts.length,
       helper: `${onlineOutposts.length} 个在线 / ${
@@ -127,7 +133,7 @@ export function IdentityOverviewPage() {
       tone: onlineOutposts.length > 0 ? 'success' : 'default',
     },
     {
-      key: 'sessions',
+      key: 'sessions' as const,
       label: '活跃会话',
       value: sessions.length,
       helper: '来自统一登录源与 Provider Portal',
@@ -135,7 +141,11 @@ export function IdentityOverviewPage() {
       loading: loading.sessions,
       tone: sessions.length > 0 ? 'success' : 'default',
     },
-  ] satisfies Array<OverviewMetricItem & { loading?: boolean }>
+  ] satisfies Array<
+    OverviewMetricItem & {
+      loading?: boolean
+    }
+  >
   const protocolStatus = [
     {
       key: 'oidc',
@@ -201,16 +211,34 @@ export function IdentityOverviewPage() {
       icon: <DatabaseOutlined />,
     },
   ] satisfies OverviewChipItem[]
-
   return (
     <div className="soha-page soha-overview-page soha-identity-overview-page">
+      {Object.entries(reads).map(([key, query]) => (
+        <ReadFeedback<unknown>
+          key={key}
+          query={query}
+          canRead={query.isEnabled}
+          label={
+            {
+              applications: '应用',
+              providers: '认证接入',
+              outposts: '接入代理',
+              sessions: '活跃会话',
+              audits: '最近审计',
+              softwareStorage: '软件存储',
+              storageIntegrations: '存储源',
+              runtime: '运行能力',
+            }[key as keyof typeof reads]
+          }
+        />
+      ))}
       <div className="soha-overview-metric-grid">
         {overviewStats.map((item) => (
           <OverviewMetricCard
             key={item.key}
             label={item.label}
-            value={item.value}
-            helper={item.helper}
+            value={available(reads[item.key]) ? item.value : '—'}
+            helper={available(reads[item.key]) ? item.helper : '当前数据不可用'}
             icon={item.icon}
             tone={item.tone}
             loading={item.loading}
@@ -252,8 +280,13 @@ export function IdentityOverviewPage() {
                   <OverviewChip
                     key={item.key}
                     label={item.label}
-                    value={item.value}
-                    helper={item.helper}
+                    value={readableQueryData(reads.providers) === undefined ? '—' : item.value}
+                    helper={
+                      readableQueryData(reads.providers) === undefined ||
+                      readableQueryData(reads.runtime) === undefined
+                        ? '当前数据不可用'
+                        : item.helper
+                    }
                     icon={item.icon}
                     tone={item.tone}
                   />
@@ -281,6 +314,13 @@ export function IdentityOverviewPage() {
         >
           {!permissions.audit ? (
             <ManagementState compact bordered={false} kind="no-permission" title="无审计权限" />
+          ) : readableQueryData(reads.audits) === undefined ? (
+            <ManagementState
+              compact
+              bordered={false}
+              kind={reads.audits.isError ? 'error' : 'loading'}
+              title="审计数据不可用"
+            />
           ) : audits.length === 0 ? (
             <ManagementState compact bordered={false} kind="empty" title="暂无审计记录" />
           ) : (
@@ -322,7 +362,7 @@ export function IdentityOverviewPage() {
       >
         {!permissions.software ? (
           <ManagementState compact bordered={false} kind="no-permission" title="无软件库权限" />
-        ) : softwareError ? (
+        ) : softwareError && !softwareStorage ? (
           <ManagementState
             compact
             bordered={false}

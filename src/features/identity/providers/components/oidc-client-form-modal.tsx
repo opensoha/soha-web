@@ -1,7 +1,9 @@
-import { useEffect } from 'react'
-import type { FormInstance } from 'antd'
+import { operationModalStyles } from '@/components/modal-styles'
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
+import type { FormInstance } from 'antd'
 import { Button, Collapse, Form, Input, InputNumber, Modal, Select, Switch } from 'antd'
+import type { ReactNode } from 'react'
+import { useEffect } from 'react'
 import {
   defaultOIDCClientValues,
   oidcClientInputFromValues,
@@ -13,8 +15,9 @@ import {
   type OIDCClientFormValues,
 } from '../provider-form-model'
 import type { IdentityOIDCClient, IdentityOIDCClientInput } from '../types'
-
 interface OIDCClientFormModalProps {
+  feedback?: ReactNode
+  blocked?: boolean
   editing: IdentityOIDCClient | null
   onCancel: () => void
   onSubmit: (input: IdentityOIDCClientInput) => void
@@ -23,8 +26,9 @@ interface OIDCClientFormModalProps {
   submitting: boolean
   title?: string
 }
-
 export function OIDCClientFormModal({
+  feedback,
+  blocked = false,
   editing,
   onCancel,
   onSubmit,
@@ -34,12 +38,10 @@ export function OIDCClientFormModal({
   title,
 }: OIDCClientFormModalProps) {
   const [form] = Form.useForm<OIDCClientFormValues>()
-
   useEffect(() => {
     if (open)
       form.setFieldsValue(editing ? oidcClientValuesFor(editing) : defaultOIDCClientValues())
   }, [editing, form, open])
-
   return (
     <Modal
       destroyOnHidden
@@ -48,19 +50,29 @@ export function OIDCClientFormModal({
       open={open}
       title={title ?? (editing ? '编辑 OIDC client' : '新建 OIDC client')}
       width={840}
+      style={{ top: 32 }}
+      styles={operationModalStyles}
+      closable={!blocked}
+      okButtonProps={{ disabled: blocked }}
+      cancelButtonProps={{ disabled: blocked }}
     >
+      {feedback}
+
       <Form
         form={form}
         className="soha-identity-provider-form"
         initialValues={defaultOIDCClientValues()}
         layout="vertical"
         onFinish={(values) => onSubmit(oidcClientInputFromValues(providerId, values))}
+        disabled={blocked}
       >
         <OIDCClientFields form={form} editing={Boolean(editing)} />
 
         <div className="soha-identity-provider-form-actions">
-          <Button onClick={onCancel}>取消</Button>
-          <Button htmlType="submit" loading={submitting} type="primary">
+          <Button onClick={onCancel} disabled={blocked}>
+            取消
+          </Button>
+          <Button htmlType="submit" loading={submitting} type="primary" disabled={blocked}>
             保存
           </Button>
         </div>
@@ -68,7 +80,6 @@ export function OIDCClientFormModal({
     </Modal>
   )
 }
-
 export function OIDCClientFields({
   form,
   editing = false,
