@@ -153,8 +153,6 @@ for (const theme of ['light', 'dark'])
       page,
       context,
     }, info) => {
-      // This end-to-end flow covers chat, profile, activity and artifacts in one session.
-      test.setTimeout(60_000)
       const requests: { path: string; body: unknown }[] = []
       let assistantName = 'Soha'
       let assistantAvatar = { avatarUrl: '', avatarPosterUrl: '', avatarMotion: 'auto' }
@@ -792,9 +790,13 @@ for (const theme of ['light', 'dark'])
         })
         expect(drawing).toEqual({ start: 1, end: 0 })
         await page.emulateMedia({ reducedMotion: 'reduce' })
+        await expect(page.locator('html')).toHaveCSS('--soha-motion-duration-mid', '0s')
+        await expect(composer).toHaveValue('主聊天的独立草稿')
         await expect(check).toHaveCSS('animation-name', 'none')
         await expect(check).toHaveCSS('opacity', '1')
         await page.emulateMedia({ reducedMotion: 'no-preference' })
+        await expect(page.locator('html')).not.toHaveCSS('--soha-motion-duration-mid', '0s')
+        await expect(composer).toHaveValue('主聊天的独立草稿')
         await page
           .locator('.soha-ai-rail-actions')
           .getByRole('button', { name: '返回对话', exact: true })

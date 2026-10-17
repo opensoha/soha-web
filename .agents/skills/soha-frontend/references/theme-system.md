@@ -45,6 +45,10 @@ They also own `--soha-motion-duration-fast/mid/slow`, `--soha-motion-ease[-out]`
 ConfigProvider and CSS together. Scene CSS consumes these tokens while retaining its own
 task layout and transition shape; avoid separate equivalent VM/Compute/Delivery token sets.
 
+Keep the provider subtree stable when motion preferences change at runtime. Verify that drafts,
+selection and professional sessions survive the first transition in both directions; testing
+only a page that starts with reduced motion does not cover this lifecycle boundary.
+
 - The shared reading baseline is 14 px / 22 px. Supporting text is 12 px; regular input, number,
   date, select and button text is 13 px with 32 px default controls. Section and modal headings
   are 16 px / 24 px. Existing explicit compact/large variants remain available.
