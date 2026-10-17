@@ -489,10 +489,15 @@ test('B4 role editor supports keyboard submission and reduced motion on narrow s
   await page.setViewportSize({ width: 390, height: 1000 })
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.goto('/access/roles')
-  await page.getByRole('button', { name: '添加角色', exact: true }).press('Enter')
+  const addRole = page.getByRole('button', { name: '添加角色', exact: true })
+  await expect(addRole).toBeEnabled()
+  await addRole.press('Enter')
   const dialog = page.getByRole('dialog')
+  await expect(dialog).toBeVisible()
   await dialog.getByLabel('角色名称', { exact: true }).fill('键盘编辑草稿')
-  await dialog.getByRole('button', { name: '创建', exact: true }).press('Enter')
+  const createRole = dialog.getByRole('button', { name: '创建', exact: true })
+  await expect(createRole).toBeEnabled()
+  await createRole.press('Enter')
   await expect(dialog.getByText('保存：请求结果不明')).toBeVisible()
   await expect(dialog.locator('.soha-operation-feedback')).toHaveAttribute(
     'data-motion-disabled',
