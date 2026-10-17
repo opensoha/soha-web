@@ -1,7 +1,7 @@
 import { readableQueryData, writeOutcomeUnknown } from '@/utils/query-feedback'
 import { ReadFeedback } from '@/components/request-feedback'
 import { ComputeOperationFeedback, ComputeMutationFeedback } from '@/features/compute'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -250,6 +250,7 @@ export function VirtualizationVmsPage() {
   const cloneSourceId = searchParams.get('clone') ?? ''
   const [filterForm] = Form.useForm<VirtualizationListParams>()
   const [form] = Form.useForm<VirtualMachineFormValues>()
+  const [createFormVersion, setCreateFormVersion] = useState(0)
   const [pendingTaskId, setPendingTaskId] = useState<string | null>(null)
   const [createPlan, setCreatePlan] = useState<OperationalPlan | null>(null)
   const [pendingCreate, setPendingCreate] = useState<PendingCreate | null>(null)
@@ -259,6 +260,10 @@ export function VirtualizationVmsPage() {
   const [cloneSource, setCloneSource] = useState<VirtualMachine | null>(null)
   const [resizeStep, setResizeStep] = useState(0)
   const [resizeForm] = Form.useForm<VirtualMachineResizeFormValues>()
+  // New initialValues must reach the retained form before resetting a fresh create/clone session.
+  useLayoutEffect(() => {
+    if (createFormVersion > 0) form.resetFields()
+  }, [createFormVersion, form])
   const { virtualizationModuleEnabled, canCreateVMs, canViewVMOperations } =
     useVirtualizationPermissions()
   const permissionSnapshotQuery = usePermissionSnapshot()
@@ -611,12 +616,11 @@ export function VirtualizationVmsPage() {
       createPlanMutation.reset()
       runtimePlanMutation.reset()
       setCurrentStep(0)
-      form.resetFields()
       setCloneSource(source)
+      setCreateFormVersion((version) => version + 1)
       setDrawerOpen(true)
     },
     [
-      form,
       createPlanMutation.isPending,
       createPlanMutation.reset,
       runtimePlanMutation.isPending,
@@ -1135,15 +1139,8 @@ export function VirtualizationVmsPage() {
                     createPlanMutation.reset()
                     runtimePlanMutation.reset()
                     setCurrentStep(0)
-                    form.resetFields()
                     setCloneSource(null)
-                    form.setFieldValue('provider', defaultProvider)
-                    form.setFieldValue(
-                      'sourceMode',
-                      defaultProvider === 'pve' ? 'template_clone' : 'datasource_clone',
-                    )
-                    form.setFieldValue('enableCloudInit', false)
-                    form.setFieldValue('registerRuntimeHost', false)
+                    setCreateFormVersion((version) => version + 1)
                     setDrawerOpen(true)
                   }}
                 >

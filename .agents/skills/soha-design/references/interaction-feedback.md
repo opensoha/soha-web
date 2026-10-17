@@ -37,6 +37,8 @@ do not remove a toast merely because a feedback panel exists behind the modal.
 - Keep target, action, result/task and ongoing error readable beyond a toast. Reuse domain
   task/detail/log reads and gates. If progress is unreadable, say so; do not query unauthorized
   logs or infer a terminal task from predicted resource state.
+- Keep action names accessible and stable through pending/result transitions; decorative
+  loading icons must not replace or contaminate the action label.
 - Separate queued/running/canceling from terminal results. Use real progress or evidence-backed
   stages. Unknown/timeout/canceled is not successful rollback or Provider cancellation.
 - Preserve allowedActions, confirmations, plans/preflight and server ownership. Prevent duplicate
@@ -50,6 +52,8 @@ do not remove a toast merely because a feedback panel exists behind the modal.
 - First load may use skeleton/spinner. Background reads retain content, selection, filters,
   pagination, range, edits and focus with local loading feedback. Scope changes isolate data.
   Denial must hide protected cache; temporary read failure may retain labeled previous data.
+- Fresh create/clone/edit dialogs apply the new target's defaults during rapid close/reopen;
+  correctness must not depend on the previous closing animation finishing.
 - Provide retry on first-load/read errors. Cached errors state that data did not update; stop or
   back off failed polling according to actual query behavior.
 - Refresh rereads the named scope. Provider discovery/sync is a separate operation that may

@@ -352,7 +352,7 @@ export function KnowledgeCenterPage() {
         keyboard={!blocked}
         mask={{ closable: !blocked }}
         cancelButtonProps={{ disabled: blocked }}
-        okButtonProps={{ disabled: blocked }}
+        okButtonProps={{ disabled: blocked, 'aria-label': '创建' }}
         title="新建知识库"
         okText="创建"
         cancelText="取消"

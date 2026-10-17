@@ -961,7 +961,7 @@ for (const theme of ['light', 'dark']) {
       animations: 'disabled',
     })
     await page.getByRole('button', { name: '创建虚拟机', exact: true }).click()
-    const dialog = page.getByRole('dialog')
+    let dialog = page.getByRole('dialog', { name: '创建虚拟机', exact: true })
     await expect(dialog.getByText('创建计算实例', { exact: true })).toBeVisible()
     await dialog.getByRole('button', { name: '下一步', exact: true }).click({ trial: true })
     await page.screenshot({
@@ -972,6 +972,7 @@ for (const theme of ['light', 'dark']) {
     await page.getByRole('button', { name: `更多操作：${state.name}`, exact: true }).focus()
     await page.keyboard.press('Enter')
     await page.getByRole('menuitem', { name: '克隆虚拟机', exact: true }).click()
+    dialog = page.getByRole('dialog', { name: '克隆虚拟机', exact: true })
     await expect(dialog.getByText('克隆来源', { exact: true })).toBeVisible()
     await expect(dialog.getByRole('textbox', { name: /^\*?\s*名称$/ })).toHaveValue(
       `${state.name}-clone`,
@@ -984,6 +985,7 @@ for (const theme of ['light', 'dark']) {
     await dialog.getByRole('button', { name: /^取\s*消$/ }).click()
     await page.getByRole('button', { name: `更多操作：${state.name}`, exact: true }).click()
     await page.getByRole('menuitem', { name: '调整虚拟机规格', exact: true }).click()
+    dialog = page.getByRole('dialog', { name: `调整规格：${state.name}`, exact: true })
     await expect(dialog.getByText('当前配置', { exact: false })).toBeVisible()
     await expect(dialog.getByRole('spinbutton', { name: /^\*?\s*CPU 核数$/ })).toHaveValue('4')
     for (let step = 0; step < 4; step++) {
@@ -999,12 +1001,47 @@ for (const theme of ['light', 'dark']) {
     await dialog.getByRole('button', { name: /^取\s*消$/ }).click()
     await page.getByRole('button', { name: `更多操作：${state.name}`, exact: true }).click()
     await page.getByRole('menuitem', { name: '删除虚拟机', exact: true }).click()
+    dialog = page.getByRole('dialog', { name: `删除虚拟机：${state.name}`, exact: true })
     await expect(dialog.getByText('从 Provider 删除虚拟机', { exact: true })).toBeVisible()
     await dialog.getByRole('button', { name: /^取\s*消$/ }).click()
     expect(state.writes).toEqual([])
     verifyBrowserEvidence(evidence)
   })
 }
+
+test('VM create and clone initialize before the previous modal finishes closing', async ({
+  context,
+  page,
+}) => {
+  const { state, evidence } = await vmMocks(context, page)
+  state.design = true
+  await page.goto('/compute/virtualization/vms')
+  await expect(page.getByRole('link', { name: state.name, exact: true })).toBeVisible()
+  // Keep the closing form mounted to exercise immediate keyboard reopening.
+  await page.addStyleTag({
+    content:
+      '.ant-zoom-leave { animation-duration: 5s !important; } .ant-modal-wrap:has(.ant-zoom-leave) { pointer-events: none !important; }',
+  })
+  const create = page.getByRole('button', { name: '创建虚拟机', exact: true })
+  await create.click()
+  const dialog = page.getByRole('dialog')
+  const name = dialog.getByRole('textbox', { name: /^\*?\s*名称$/ })
+  await name.fill('应当清理的创建草稿')
+  await dialog.getByRole('button', { name: /^取\s*消$/ }).click()
+  await expect(page.locator('#virtual-machine-create_name')).toHaveCount(1)
+  await page.getByRole('button', { name: `更多操作：${state.name}`, exact: true }).focus()
+  await page.keyboard.press('Enter')
+  await page.getByRole('menuitem', { name: '克隆虚拟机', exact: true }).click()
+  await expect(dialog.getByText('克隆来源', { exact: true })).toBeVisible()
+  await expect(name).toHaveValue(`${state.name}-clone`)
+  await dialog.getByRole('button', { name: /^取\s*消$/ }).click()
+  await create.focus()
+  await page.keyboard.press('Enter')
+  await expect(dialog.getByText('创建计算实例', { exact: true })).toBeVisible()
+  await expect(name).toHaveValue('')
+  expect(state.writes).toEqual([])
+  verifyBrowserEvidence(evidence)
+})
 
 test('VM design narrow list forms preserve geometry and reduced motion', async ({
   context,
