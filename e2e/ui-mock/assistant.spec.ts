@@ -153,6 +153,8 @@ for (const theme of ['light', 'dark'])
       page,
       context,
     }, info) => {
+      // This end-to-end flow covers chat, profile, activity and artifacts in one session.
+      test.setTimeout(60_000)
       const requests: { path: string; body: unknown }[] = []
       let assistantName = 'Soha'
       let assistantAvatar = { avatarUrl: '', avatarPosterUrl: '', avatarMotion: 'auto' }
@@ -568,6 +570,7 @@ for (const theme of ['light', 'dark'])
         await expect(composer).toBeFocused()
         await expect(page.getByRole('textbox', { name: '助手名称', exact: true })).toHaveCount(0)
         expect(assistantName).toBe('Soha')
+        await expect(page.getByRole('button', { name: '返回原草稿', exact: true })).toBeVisible()
         await page.getByRole('button', { name: '返回原草稿', exact: true }).click()
         await expect(composer).toHaveValue('主聊天的独立草稿')
         if (width < 992) await page.getByRole('button', { name: '任务', exact: true }).click()
