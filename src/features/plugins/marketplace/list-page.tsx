@@ -7,18 +7,12 @@ import {
   ManagementTableToolbar,
 } from '@/components/management-list'
 import { ReadFeedback } from '@/components/request-feedback'
+import { BooleanTag, MetadataTag } from '@/components/status-tag'
 import { usePermissionSnapshot } from '@/features/auth'
 import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
-import {
-  AppstoreAddOutlined,
-  CloudDownloadOutlined,
-  EyeOutlined,
-  ReloadOutlined,
-  SettingOutlined,
-} from '@ant-design/icons'
+import { CloudDownloadOutlined, ReloadOutlined, SettingOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import {
-  Avatar,
   Button,
   Card,
   Form,
@@ -27,7 +21,6 @@ import {
   Segmented,
   Select,
   Space,
-  Tag,
   Tooltip,
   Typography,
 } from 'antd'
@@ -47,7 +40,7 @@ import { canInstallPlugin } from '../shared/permissions'
 import '../shared/styles.css'
 import { marketplaceDetailPath, useInstallPluginAction } from './install-action'
 
-const { Text, Title } = Typography
+const { Text } = Typography
 const PAGE_SIZE = 12
 
 const initialFilters: Required<PluginMarketplaceFilters> = {
@@ -88,82 +81,38 @@ function PluginMarketplaceCard({
     <Card
       hoverable
       size="small"
-      classNames={{
-        root: 'soha-plugin-market-card',
-        body: 'soha-plugin-market-card-body',
-        actions: 'soha-plugin-market-card-actions',
-      }}
-      styles={{
-        body: {
-          display: 'flex',
-          flexDirection: 'column',
-          padding: 12,
-        },
-      }}
-      actions={[
-        <Tooltip key="details" title="查看插件详情与完整扩展能力">
-          <Button type="text" icon={<EyeOutlined />} onClick={() => navigate(detailPath)}>
-            详情
-          </Button>
-        </Tooltip>,
-        plugin.installed ? (
-          <Button
-            key="manage"
-            type="text"
-            icon={<SettingOutlined />}
-            onClick={() => navigate(`/plugins/installed/${encodeURIComponent(plugin.id)}`)}
-          >
-            管理
-          </Button>
-        ) : (
-          <Button
-            key="install"
-            type="text"
-            disabled={installBlocked || !canInstallPlugin(snapshot)}
-            icon={<CloudDownloadOutlined />}
-            loading={installLoading}
-            onClick={() => onInstall(plugin)}
-          >
-            安装
-          </Button>
-        ),
-      ]}
+      classNames={{ root: 'soha-plugin-market-card', body: 'soha-plugin-market-card-body' }}
     >
       <Link
         aria-label={`查看 ${plugin.name} 详情`}
         className="soha-plugin-market-card-link"
         to={detailPath}
       >
-        <Card.Meta
-          avatar={<Avatar shape="square" size={36} icon={<AppstoreAddOutlined />} />}
-          title={
-            <div className="soha-plugin-market-card-title-row">
-              <span className="soha-plugin-market-card-title">{plugin.name}</span>
-              <Tag>{pluginTypeLabel(plugin.type)}</Tag>
-            </div>
-          }
-          description={
-            <div className="soha-plugin-market-card-meta">
-              <Text type="secondary">
-                {plugin.publisher} / {plugin.id}
-              </Text>
-              <Text className="soha-plugin-market-card-summary">
-                {plugin.summary || plugin.manifest.description || '暂无简介'}
-              </Text>
-            </div>
-          }
-        />
-
+        <div className="soha-plugin-market-card-title-row">
+          <MetadataTag label={pluginTypeLabel(plugin.type)} />
+          {installedPlugin ? (
+            pluginStatusBadge(installedPlugin.status)
+          ) : plugin.installed ? (
+            <BooleanTag value trueLabel="已安装" />
+          ) : (
+            <Text type="secondary">未安装</Text>
+          )}
+        </div>
+        <div className="soha-plugin-market-card-meta">
+          <h2 className="soha-plugin-market-card-title" title={plugin.name}>
+            {plugin.name}
+          </h2>
+          <Text type="secondary" title={`${plugin.publisher} / ${plugin.id}`}>
+            {plugin.publisher} / {plugin.id}
+          </Text>
+        </div>
+        <Text className="soha-plugin-market-card-summary">
+          {plugin.summary || plugin.manifest.description || '暂无简介'}
+        </Text>
         <Space size={[4, 4]} wrap>
-          <Tag>{plugin.sourceId || 'static'}</Tag>
-          {plugin.verified ? <Tag color="green">已验证</Tag> : <Tag>未验证</Tag>}
-          <Tag>{plugin.latestVersion || plugin.version}</Tag>
-          {installedPlugin ? pluginStatusBadge(installedPlugin.status) : null}
-          {!installedPlugin && plugin.installed ? <Tag color="green">已安装</Tag> : null}
-          {!plugin.installed ? <Tag>未安装</Tag> : null}
+          <BooleanTag value={Boolean(plugin.verified)} trueLabel="已验证" falseLabel="未验证" />
           {pluginRiskTag(plugin.riskLevel)}
         </Space>
-
         <div className="soha-plugin-market-card-metrics">
           <div>
             <strong>{manifestAssetCount(plugin.manifest)}</strong>
@@ -179,6 +128,32 @@ function PluginMarketplaceCard({
           </div>
         </div>
       </Link>
+      <div className="soha-plugin-market-card-actions">
+        <Text
+          type="secondary"
+          className="soha-plugin-market-card-source"
+          title={plugin.sourceId || 'static'}
+        >
+          v{plugin.latestVersion || plugin.version} · {plugin.sourceId || 'static'}
+        </Text>
+        {plugin.installed ? (
+          <Button
+            icon={<SettingOutlined />}
+            onClick={() => navigate(`/plugins/installed/${encodeURIComponent(plugin.id)}`)}
+          >
+            管理
+          </Button>
+        ) : (
+          <Button
+            disabled={installBlocked || !canInstallPlugin(snapshot)}
+            icon={<CloudDownloadOutlined />}
+            loading={installLoading}
+            onClick={() => onInstall(plugin)}
+          >
+            安装
+          </Button>
+        )}
+      </div>
     </Card>
   )
 }
@@ -225,14 +200,7 @@ export function PluginMarketplacePage() {
 
   return (
     <div className="soha-page soha-plugin-page">
-      <div className="soha-plugin-market-heading">
-        <div>
-          <Title level={4}>插件市场</Title>
-          <Text type="secondary">
-            {marketplaceData ? `${marketplacePlugins.length} 个插件` : '插件数量暂不可用'}
-          </Text>
-        </div>
-      </div>
+      <h1 className="soha-plugin-market-page-title">插件市场</h1>
 
       <div className="soha-plugin-market-query">
         <ManagementQueryPanel
@@ -272,22 +240,22 @@ export function PluginMarketplacePage() {
           <ManagementQueryField label="类型" minWidth={180} name="type" width={180}>
             <Select allowClear placeholder="全部" options={[...pluginTypeOptions]} />
           </ManagementQueryField>
-          <ManagementQueryField label="Publisher" minWidth={220} name="publisher" width={220}>
-            <Input allowClear placeholder="Publisher" />
+          <ManagementQueryField label="发布者" minWidth={220} name="publisher" width={220}>
+            <Input allowClear placeholder="发布者" />
           </ManagementQueryField>
-          <ManagementQueryField label="Source ID" minWidth={220} name="sourceId" width={220}>
-            <Input allowClear placeholder="Source ID" />
+          <ManagementQueryField label="来源 ID" minWidth={220} name="sourceId" width={220}>
+            <Input allowClear placeholder="来源 ID" />
           </ManagementQueryField>
           <ManagementQueryField
-            label="Marketplace URL"
+            label="市场目录地址"
             minWidth={300}
             name="marketplaceUrl"
             width={300}
           >
-            <Input allowClear placeholder="Marketplace URL" />
+            <Input allowClear placeholder="市场目录地址" />
           </ManagementQueryField>
-          <ManagementQueryField label="Version" minWidth={160} name="version" width={160}>
-            <Input allowClear placeholder="Version" />
+          <ManagementQueryField label="版本" minWidth={160} name="version" width={160}>
+            <Input allowClear placeholder="版本" />
           </ManagementQueryField>
         </ManagementQueryPanel>
       </div>
@@ -300,6 +268,9 @@ export function PluginMarketplacePage() {
             onChange={setInstallationFilter}
           />
         </ManagementTableToolbar>
+        <Text type="secondary" aria-live="polite">
+          {marketplaceData ? `${marketplacePlugins.length} 个插件` : '插件数量暂不可用'}
+        </Text>
       </div>
 
       <ReadFeedback query={marketplaceQuery} label="插件市场" />

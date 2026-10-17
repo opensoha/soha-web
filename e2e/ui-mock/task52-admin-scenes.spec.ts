@@ -152,6 +152,8 @@ async function mocks(context: BrowserContext, page: Page, detail = plugin) {
     applicationStatus: '',
     applicationReads: 0,
     canInstall: true,
+    marketplacePlugins: [detail],
+    installedPlugins: [installed],
   }
   const evidence = await installMocks(context, page, (url, method, request) => {
     const path = url.pathname.replace('/api/v1', '')
@@ -297,9 +299,14 @@ async function mocks(context: BrowserContext, page: Page, detail = plugin) {
       }
       return failure(state.writeStatus)
     }
-    if (path === '/plugins/marketplace') return { body: { data: [plugin] } }
+    if (path === '/plugins/marketplace') {
+      const query = url.searchParams.get('q') ?? ''
+      return {
+        body: { data: state.marketplacePlugins.filter((item) => item.name.includes(query)) },
+      }
+    }
     if (path === '/plugins/marketplace/qa-plugin') return { body: { data: detail } }
-    if (path === '/plugins/installed') return { body: { data: [installed] } }
+    if (path === '/plugins/installed') return { body: { data: state.installedPlugins } }
     if (path === '/plugins/qa-plugin') return { body: { data: installed } }
     if (path === '/plugins/qa-plugin/manifest') return { body: { data: plugin.manifest } }
     if (path === '/extensions/runtime') return { body: { data: [] } }
@@ -427,6 +434,42 @@ for (const view of [
   { width: 390, dark: false },
   { width: 390, dark: true },
 ]) {
+  test(`plugin marketplace catalog layout ${view.width} ${view.dark ? 'dark' : 'light'}`, async ({
+    context,
+    page,
+  }, info) => {
+    await page.setViewportSize({ width: view.width, height: 1209 })
+    const item = {
+      ...plugin,
+      name: `交付助手扩展${'长名称LongName'.repeat(12)}`,
+      publisher: 'LongPublisher'.repeat(8),
+      sourceId: 'long-source-'.repeat(12),
+    }
+    const { state, evidence } = await mocks(context, page, item)
+    state.installedPlugins = []
+    await page.goto('/plugins/marketplace')
+    if (view.dark) await page.getByRole('button', { name: '切换到深色模式' }).click()
+    await expect(page.locator('h1')).toHaveText('插件市场')
+    expect(
+      await page.locator('h1').evaluate((element) => element.getBoundingClientRect().height),
+    ).toBeLessThanOrEqual(1)
+    await expect(page.getByRole('heading', { name: item.name, level: 2 })).toBeVisible()
+    await verifyGeometry(page, page.getByRole('button', { name: /安\s*装$/ }))
+    await expect(page.getByText('1 个插件', { exact: true })).toBeVisible()
+    await page.screenshot({
+      path: info.outputPath('plugin-marketplace.png'),
+      fullPage: true,
+      animations: 'disabled',
+    })
+    const link = page.getByRole('link', { name: `查看 ${item.name} 详情`, exact: true })
+    await link.focus()
+    await page.keyboard.press('Enter')
+    await expect(page).toHaveURL(/\/plugins\/marketplace\/qa-plugin\?/)
+    await expect(page.getByRole('heading', { name: item.name, level: 1 })).toBeVisible()
+    expect(state.writes).toEqual([])
+    verifyBrowserEvidence(evidence)
+  })
+
   test(`plugin detail hierarchy and long values ${view.width} ${view.dark ? 'dark' : 'light'}`, async ({
     context,
     page,
@@ -476,6 +519,64 @@ for (const view of [
   })
 }
 
+test('plugin marketplace preserves query, local pagination, installation filters and management navigation', async ({
+  context,
+  page,
+}) => {
+  const { state, evidence } = await mocks(context, page)
+  state.installedPlugins = []
+  state.marketplacePlugins = Array.from({ length: 13 }, (_, i) => ({
+    ...plugin,
+    id: i ? `qa-plugin-${i}` : plugin.id,
+    name: `${plugin.name} ${i + 1}`,
+  }))
+  await page.goto('/plugins/marketplace')
+  await expect(page.locator('.soha-plugin-market-card')).toHaveCount(12)
+  await expect(page.getByText('13 个插件', { exact: true })).toBeVisible()
+  await page.locator('.ant-pagination-item-2').click()
+  await expect(page.locator('.soha-plugin-market-card')).toHaveCount(1)
+  await expect(page.getByRole('heading', { name: `${plugin.name} 13`, level: 2 })).toBeVisible()
+  await page.getByPlaceholder('搜索 ID、名称、发布者').fill(`${plugin.name} 1`)
+  await page.getByRole('button', { name: /查\s*询/ }).click()
+  await expect(page.locator('.soha-plugin-market-card')).toHaveCount(5)
+  await expect(page.getByText('5 个插件', { exact: true })).toBeVisible()
+  expect(
+    evidence.requests.some(
+      (path) => new URL(path, 'http://127.0.0.1:4179').searchParams.get('q') === `${plugin.name} 1`,
+    ),
+  ).toBe(true)
+  await page.getByRole('button', { name: /重\s*置/ }).click()
+  await expect(page.locator('.soha-plugin-market-card')).toHaveCount(12)
+  await page.getByRole('radiogroup').getByText('已安装', { exact: true }).click()
+  await expect(page.getByText('尚未安装插件', { exact: true })).toBeVisible()
+  await expect(page.getByText('0 个插件', { exact: true })).toBeVisible()
+  await page.getByRole('radiogroup').getByText('未安装', { exact: true }).click()
+  await expect(page.locator('.soha-plugin-market-card')).toHaveCount(12)
+  state.marketplacePlugins = [{ ...plugin, installed: true }]
+  state.installedPlugins = [installed]
+  await page.getByRole('button', { name: '刷新插件列表' }).click()
+  await expect(page.getByText('没有匹配插件', { exact: true })).toBeVisible()
+  await page.getByRole('radiogroup').getByText('已安装', { exact: true }).click()
+  await expect(page.getByRole('button', { name: /管\s*理/ })).toBeVisible()
+  await page.getByRole('button', { name: /管\s*理/ }).click()
+  await expect(page).toHaveURL(/\/plugins\/installed\/qa-plugin$/)
+  expect(state.writes).toEqual([])
+  verifyBrowserEvidence(evidence)
+})
+
+test('plugin marketplace keeps installation disabled without permission', async ({
+  context,
+  page,
+}) => {
+  const { state, evidence } = await mocks(context, page)
+  state.canInstall = false
+  state.installedPlugins = []
+  await page.goto('/plugins/marketplace')
+  await expect(page.getByRole('button', { name: /安\s*装$/ })).toBeDisabled()
+  expect(state.writes).toEqual([])
+  verifyBrowserEvidence(evidence)
+})
+
 test('plugin detail keeps installation disabled without permission', async ({ context, page }) => {
   const { state, evidence } = await mocks(context, page)
   state.canInstall = false
@@ -486,27 +587,29 @@ test('plugin detail keeps installation disabled without permission', async ({ co
   verifyBrowserEvidence(evidence)
 })
 
-test('plugin install keeps the reviewed target and freezes unknown submission', async ({
-  context,
-  page,
-}, info) => {
-  const { state, evidence } = await mocks(context, page)
-  await page.goto('/plugins/marketplace/qa-plugin')
-  await page.getByRole('button', { name: /安\s*装$/ }).click()
-  const dialog = page.getByRole('dialog')
-  await dialog.getByRole('button', { name: /安\s*装/ }).click()
-  await expect(dialog.getByText(/请求结果不明/)).toBeVisible()
-  await expect(dialog.getByRole('button', { name: /安\s*装/ })).toBeDisabled()
-  await expect(dialog.getByRole('button', { name: /取.*消/ })).toBeDisabled()
-  await expect(dialog).toContainText(plugin.name)
-  expect(state.writes).toHaveLength(1)
-  await page.screenshot({
-    path: info.outputPath('plugins-review-feedback.png'),
-    fullPage: true,
-    animations: 'disabled',
+for (const route of ['/plugins/marketplace', '/plugins/marketplace/qa-plugin']) {
+  test(`plugin install keeps the reviewed target and freezes unknown submission from ${route}`, async ({
+    context,
+    page,
+  }, info) => {
+    const { state, evidence } = await mocks(context, page)
+    await page.goto(route)
+    await page.getByRole('button', { name: /安\s*装$/ }).click()
+    const dialog = page.getByRole('dialog')
+    await dialog.getByRole('button', { name: /安\s*装/ }).click()
+    await expect(dialog.getByText(/请求结果不明/)).toBeVisible()
+    await expect(dialog.getByRole('button', { name: /安\s*装/ })).toBeDisabled()
+    await expect(dialog.getByRole('button', { name: /取.*消/ })).toBeDisabled()
+    await expect(dialog).toContainText(plugin.name)
+    expect(state.writes).toHaveLength(1)
+    await page.screenshot({
+      path: info.outputPath('plugins-review-feedback.png'),
+      fullPage: true,
+      animations: 'disabled',
+    })
+    verifyBrowserEvidence(evidence)
   })
-  verifyBrowserEvidence(evidence)
-})
+}
 
 test('code source refresh preserves private draft and original expectedVersion', async ({
   context,

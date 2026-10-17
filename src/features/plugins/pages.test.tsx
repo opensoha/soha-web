@@ -210,6 +210,8 @@ describe('plugin list page data boundaries', () => {
     expect(apiGetMock).toHaveBeenCalledWith('/plugins/marketplace')
     expect(apiGetMock).toHaveBeenCalledWith('/plugins/installed')
     expect(container.textContent).toContain('Marketplace Plugin')
+    expect(container.querySelector('h1')?.textContent).toBe('插件市场')
+    expect(container.querySelector('h2')?.textContent).toBe('Marketplace Plugin')
     expect(container.textContent).not.toContain('alerts.notificationChannels')
     expect(
       container.querySelector('.soha-plugin-market-card-link')?.getAttribute('href'),
@@ -220,6 +222,9 @@ describe('plugin list page data boundaries', () => {
     expect(container.querySelectorAll('.soha-plugin-market-card')).toHaveLength(1)
     expect(container.querySelector('.soha-plugin-market-card-body')).not.toBeNull()
     expect(container.querySelector('.soha-plugin-market-card-actions')).not.toBeNull()
+    expect(
+      container.querySelector('.soha-plugin-market-card-actions button')?.textContent,
+    ).toContain('安装')
   })
 
   it('shows installed plugins through the marketplace page', async () => {
