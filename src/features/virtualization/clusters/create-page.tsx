@@ -540,7 +540,7 @@ export function VirtualizationConnectionStepModal({
         }}
         onCurrentChange={setCurrent}
         onFinish={(values) => {
-          const payload = buildClusterPayload(values)
+          const payload = buildClusterPayload(values, editing)
           if (editing) updateMutation.mutate({ id: editing.id, payload })
           else createMutation.mutate(payload)
         }}

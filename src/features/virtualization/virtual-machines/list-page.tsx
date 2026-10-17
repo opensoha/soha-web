@@ -113,8 +113,11 @@ type PendingCreate =
   | { kind: 'vm'; idempotencyKey: string; payload: CreateVirtualMachineInput }
   | { kind: 'runtime'; idempotencyKey: string; payload: DockerQuickCreateHostInput }
 
-function pveVMSourceRef(item: VirtualMachine) {
-  return String(item.sourceRef || item.config?.sourceRef || item.config?.vmid || '').trim()
+export function pveVMSourceRef(item: VirtualMachine) {
+  const reference = String(
+    item.externalId || item.config?.vmid || item.sourceRef || item.config?.sourceRef || '',
+  ).trim()
+  return /^[1-9]\d*$/.test(reference) ? reference : ''
 }
 
 export function defaultRootDisk(

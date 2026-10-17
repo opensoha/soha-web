@@ -87,6 +87,7 @@ export interface VirtualMachineConfig extends VirtualizationPayloadMap {
 
 export interface VirtualMachine {
   id: string
+  externalId?: string
   name: string
   provider?: string
   connectionId?: string

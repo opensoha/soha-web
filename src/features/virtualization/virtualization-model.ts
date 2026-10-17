@@ -565,9 +565,19 @@ export function buildImagePayload(values: VirtualizationImageInput): Virtualizat
 
 export function buildClusterPayload(
   values: VirtualizationClusterFormValues,
+  existing?: VirtualizationCluster | null,
 ): VirtualizationClusterInput {
   const provider = values.provider ?? 'kubevirt'
-  const config: VirtualizationClusterConfig = {}
+  const config: VirtualizationClusterConfig =
+    existing?.provider === provider ? { ...existing.config } : {}
+  // Preserve provider extensions while allowing the form's own fields to be cleared.
+  for (const key of [
+    'region',
+    'description',
+    ...(provider === 'pve'
+      ? ['defaultNode', 'defaultStorage', 'defaultBridge', 'defaultSnippetStorage', 'snippetStorage']
+      : ['backendUrl', 'prometheusUrl', 'mode']),
+  ]) delete config[key]
   const credential: VirtualizationClusterCredential = {}
   if (values.region) config.region = values.region
   if (values.description) config.description = values.description
@@ -602,7 +612,7 @@ export function buildClusterPayload(
     verifyTls: values.verifyTls !== false,
     region: values.region || undefined,
     description: values.description || undefined,
-    config: Object.keys(config).length ? config : undefined,
+    config: existing ? config : Object.keys(config).length ? config : undefined,
     credential: Object.keys(credential).length ? credential : undefined,
   }
 }

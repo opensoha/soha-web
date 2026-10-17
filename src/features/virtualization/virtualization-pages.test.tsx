@@ -13,7 +13,7 @@ import { VirtualizationClustersPage } from './clusters/list-page'
 import { VirtualizationFlavorsPage } from './flavors/list-page'
 import { VirtualizationImagesPage } from './images/list-page'
 import { VirtualizationVmDetailPage } from './virtual-machines/detail-page'
-import { defaultRootDisk, VirtualizationVmsPage } from './virtual-machines/list-page'
+import { defaultRootDisk, pveVMSourceRef, VirtualizationVmsPage } from './virtual-machines/list-page'
 import {
   buildClusterPayload,
   buildCreateVmPayload,
@@ -260,6 +260,8 @@ const testState = vi.hoisted(() => ({
             credentialConfigured: false,
             config: {
               defaultNode: 'pve-1',
+              sshHost: 'node.example',
+              sshHostKeys: { 'pve-1': 'trusted-public-key' },
               defaultStorage: 'local-lvm',
               defaultBridge: 'vmbr0',
               defaultSnippetStorage: 'local',
@@ -1079,6 +1081,28 @@ describe('virtualization pages', () => {
     expect(payload.imageId).toBeUndefined()
   })
 
+  it('clones the VM identity rather than its cloud image or clone origin', () => {
+    const source = {
+      id: 'created-vm',
+      name: 'created-vm',
+      externalId: '129',
+      sourceRef: 'local:import/debian.qcow2',
+      config: { sourceRef: 'local:import/debian.qcow2' },
+    }
+    const payload = buildCreateVmPayload({
+      provider: 'pve',
+      connectionId: 'conn-pve',
+      name: 'cloned-vm',
+      sourceMode: 'vm_clone',
+      templateId: pveVMSourceRef(source),
+    })
+    expect(payload).toMatchObject({ sourceId: '129', templateId: '129' })
+    expect(pveVMSourceRef({ ...source, sourceRef: '101' })).toBe('129')
+    expect(pveVMSourceRef({ ...source, externalId: undefined, config: { vmid: 130 } })).toBe('130')
+    expect(pveVMSourceRef({ ...source, externalId: undefined, config: undefined })).toBe('')
+    expect(pveVMSourceRef({ id: 'legacy', name: 'legacy', sourceRef: '101' })).toBe('101')
+  })
+
   it('creates from a catalog cloud image with managed credential references', () => {
     const payload = buildCreateVmPayload({
       provider: 'pve',
@@ -1226,6 +1250,45 @@ describe('virtualization pages', () => {
     expect(kubevirtPayload).not.toHaveProperty('backendUrl')
     expect(kubevirtPayload).not.toHaveProperty('prometheusUrl')
     expect(kubevirtPayload.config).not.toHaveProperty('prometheusBearerToken')
+  })
+
+  it('preserves connection extensions without retaining cleared fields or crossing providers', () => {
+    const existing = {
+      id: 'conn-pve',
+      name: 'pve-a',
+      provider: 'pve',
+      config: {
+        defaultNode: 'old-node',
+        defaultStorage: 'old-storage',
+        snippetStorage: 'old-snippets',
+        sshHost: 'node.example',
+        sshHostKeys: { 'old-node': 'trusted-public-key' },
+        providerExtension: { enabled: true },
+        mode: 'provider-extension-mode',
+      },
+    }
+    const payload = buildClusterPayload(
+      { name: 'renamed', provider: 'pve', defaultNode: 'new-node' },
+      existing,
+    )
+    expect(payload.config).toEqual({
+      defaultNode: 'new-node',
+      sshHost: 'node.example',
+      sshHostKeys: { 'old-node': 'trusted-public-key' },
+      providerExtension: { enabled: true },
+      mode: 'provider-extension-mode',
+    })
+    expect(payload.credential).toBeUndefined()
+    expect(existing.config.defaultNode).toBe('old-node')
+    expect(
+      buildClusterPayload({ name: 'changed-provider', provider: 'kubevirt' }, existing).config,
+    ).toEqual({})
+    expect(
+      buildClusterPayload(
+        { name: 'cleared', provider: 'pve' },
+        { ...existing, config: { defaultNode: 'old-node' } },
+      ).config,
+    ).toEqual({})
   })
 
   it('renders VM detail with provider raw, operations, logs and AI investigation entry', async () => {
@@ -1554,7 +1617,11 @@ describe('virtualization pages', () => {
         provider: 'pve',
         endpoint: 'https://pve.example:8006',
         verifyTls: true,
-        config: expect.objectContaining({ defaultNode: 'pve-1' }),
+        config: expect.objectContaining({
+          defaultNode: 'pve-1',
+          sshHost: 'node.example',
+          sshHostKeys: { 'pve-1': 'trusted-public-key' },
+        }),
       }),
     )
     expect(

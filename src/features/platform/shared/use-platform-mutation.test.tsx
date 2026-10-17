@@ -84,9 +84,11 @@ describe.each([
     expect(write).toHaveBeenCalledTimes(1)
     await act(async () => {
       reject(apiError(503))
-      await new Promise((resolve) => setTimeout(resolve, 0))
     })
-    expect(read().outcomeUnknown).toBe(true)
+    await vi.waitFor(async () => {
+      await act(async () => undefined)
+      expect(read().outcomeUnknown).toBe(true)
+    })
     await act(async () => {
       read().reset()
       read().mutate({ ...target, name: 'app-b' })
