@@ -1607,8 +1607,8 @@ export function VirtualizationVmsPage() {
                             showIcon
                             title={localeText(
                               localeCode,
-                              '模板将作为系统盘来源，存储用于承载克隆后的磁盘。',
-                              'The template supplies the system disk; storage holds the cloned disk.',
+                              '所选来源用于生成系统盘，存储用于承载新建的磁盘。',
+                              'The selected source supplies the system disk; storage holds the new disk.',
                             )}
                           />
                         )}
