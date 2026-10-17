@@ -9,10 +9,16 @@ const plugin = {
   type: 'skill',
   version: '1.0.0',
   source: 'static',
+  sourceId: 'qa-local',
+  sourceUrl: `https://market.example.test/${'long-catalog-segment-'.repeat(16)}index.json`,
   installed: false,
   manifest: {
     description: '交付检查与诊断工具',
-    permissions: { required: [] },
+    permissions: { required: Array.from({ length: 7 }, (_, i) => `qa.permission.${i}`) },
+    assets: { skills: [`skills/${'long-path-segment-'.repeat(16)}SKILL.md`] },
+    capabilities: { tools: ['qa.inspect', 'qa.report'] },
+    compatibility: { soha: '>=0.1.0', contracts: '>=0.1.24' },
+    metadata: { preservedField: 'raw-manifest-proof' },
     configSchema: {
       type: 'object',
       properties: { endpoint: { type: 'string', title: '服务地址' } },
@@ -135,7 +141,7 @@ const cases = [
   { route: '/system/menus', path: '/menus', name: menu.labelZh },
 ]
 
-async function mocks(context: BrowserContext, page: Page) {
+async function mocks(context: BrowserContext, page: Page, detail = plugin) {
   const state = {
     failedPath: '',
     status: 200,
@@ -145,6 +151,7 @@ async function mocks(context: BrowserContext, page: Page) {
     batch: false,
     applicationStatus: '',
     applicationReads: 0,
+    canInstall: true,
   }
   const evidence = await installMocks(context, page, (url, method, request) => {
     const path = url.pathname.replace('/api/v1', '')
@@ -198,7 +205,7 @@ async function mocks(context: BrowserContext, page: Page) {
               'system.menus.delete',
               'workbench.settings.view',
               'workbench.home.view',
-            ],
+            ].filter((key) => state.canInstall || key !== 'plugin.install'),
             visibleMenuIds: [
               'settings-extensions-marketplace',
               'home-workbench',
@@ -291,7 +298,7 @@ async function mocks(context: BrowserContext, page: Page) {
       return failure(state.writeStatus)
     }
     if (path === '/plugins/marketplace') return { body: { data: [plugin] } }
-    if (path === '/plugins/marketplace/qa-plugin') return { body: { data: plugin } }
+    if (path === '/plugins/marketplace/qa-plugin') return { body: { data: detail } }
     if (path === '/plugins/installed') return { body: { data: [installed] } }
     if (path === '/plugins/qa-plugin') return { body: { data: installed } }
     if (path === '/plugins/qa-plugin/manifest') return { body: { data: plugin.manifest } }
@@ -413,6 +420,71 @@ for (const item of cases) {
     verifyBrowserEvidence(evidence)
   })
 }
+
+for (const view of [
+  { width: 1440, dark: false },
+  { width: 1166, dark: true },
+  { width: 390, dark: false },
+  { width: 390, dark: true },
+]) {
+  test(`plugin detail hierarchy and long values ${view.width} ${view.dark ? 'dark' : 'light'}`, async ({
+    context,
+    page,
+  }, info) => {
+    await page.setViewportSize({ width: view.width, height: 1209 })
+    const detail = { ...plugin, name: `交付助手扩展${'长名称'.repeat(24)}` }
+    const { state, evidence } = await mocks(context, page, detail)
+    await page.goto('/plugins/marketplace/qa-plugin?sourceId=qa-local&version=1.0.0')
+    if (view.dark) await page.getByRole('button', { name: '切换到深色模式' }).click()
+    await expect(page.getByRole('heading', { name: detail.name, level: 1 })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '扩展', exact: true })).toHaveCount(0)
+    await verifyGeometry(page, page.getByRole('button', { name: /安\s*装$/ }))
+    await expect(page.getByText('qa.permission.6', { exact: true })).toBeVisible()
+    await expect(page.getByText(plugin.manifest.assets.skills[0], { exact: true })).toBeVisible()
+    const raw = page.getByRole('button', { name: '原始 Manifest', exact: true })
+    await expect(raw).toHaveAttribute('aria-expanded', 'false')
+    await raw.focus()
+    await page.keyboard.press('Enter')
+    await expect(raw).toHaveAttribute('aria-expanded', 'true')
+    await expect(page.locator('.soha-plugin-json')).toContainText('raw-manifest-proof')
+    await page.keyboard.press('Enter')
+    await expect(raw).toHaveAttribute('aria-expanded', 'false')
+    const previousReads = evidence.requests.length
+    await page.getByRole('button', { name: '刷新插件详情' }).click()
+    await expect.poll(() => evidence.requests.length).toBeGreaterThan(previousReads)
+    expect(
+      evidence.requests.some(
+        (path) =>
+          path.includes('/plugins/marketplace/qa-plugin?') &&
+          path.includes('sourceId=qa-local') &&
+          path.includes('version=1.0.0'),
+      ),
+    ).toBe(true)
+    await page.screenshot({
+      path: info.outputPath('plugin-detail.png'),
+      fullPage: true,
+      animations: 'disabled',
+    })
+    await page.getByRole('button', { name: '返回市场', exact: true }).click()
+    await expect(page).toHaveURL(/\/plugins\/marketplace$/)
+    await page.goto('/plugins/installed/qa-plugin')
+    await expect(page.getByRole('heading', { name: plugin.name, level: 1 })).toBeVisible()
+    await verifyGeometry(page, page.getByRole('button', { name: /移\s*除$/ }))
+    await expect(page.getByRole('button', { name: '原始 Manifest', exact: true })).toHaveCount(1)
+    expect(state.writes).toEqual([])
+    verifyBrowserEvidence(evidence)
+  })
+}
+
+test('plugin detail keeps installation disabled without permission', async ({ context, page }) => {
+  const { state, evidence } = await mocks(context, page)
+  state.canInstall = false
+  await page.goto('/plugins/marketplace/qa-plugin')
+  await expect(page.getByRole('heading', { name: plugin.name, level: 1 })).toBeVisible()
+  await expect(page.getByRole('button', { name: /安\s*装$/ })).toBeDisabled()
+  expect(state.writes).toEqual([])
+  verifyBrowserEvidence(evidence)
+})
 
 test('plugin install keeps the reviewed target and freezes unknown submission', async ({
   context,

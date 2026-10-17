@@ -7,6 +7,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PluginMarketplacePage } from './marketplace/list-page'
+import { PluginManifestSections } from './shared/manifest-sections'
 
 const apiGetMock = vi.hoisted(() => vi.fn())
 
@@ -144,6 +145,40 @@ async function renderPage(node: ReactNode, route: string) {
 }
 
 describe('plugin list page data boundaries', () => {
+  it('shows complete permission requirements and retains non-property configuration schemas', async () => {
+    const container = await renderPage(
+      <PluginManifestSections
+        manifest={{
+          id: 'qa-plugin',
+          name: 'QA',
+          publisher: 'Soha',
+          version: '1.0.0',
+          type: 'skill',
+          permissions: { required: Array.from({ length: 8 }, (_, i) => `qa.permission.${i}`) },
+          configSchema: { type: 'string', enum: ['one', 'two'] },
+          secrets: {
+            required: [
+              { name: 'optional-token', required: false, description: 'Optional service token' },
+            ],
+          },
+        }}
+      />,
+      '/plugins/marketplace/qa-plugin',
+    )
+    expect(container.textContent).toContain('qa.permission.7')
+    expect(container.textContent).toContain('Optional service token')
+    expect(container.textContent).toContain('可选')
+    const schema = Array.from(container.querySelectorAll('[role="button"]')).find((button) =>
+      button.textContent?.includes('配置 Schema'),
+    )
+    expect(schema).toBeDefined()
+    await act(async () => {
+      ;(schema as HTMLElement).click()
+    })
+    expect(container.querySelector('.soha-plugin-json')?.textContent).toContain('"enum"')
+    expect(container.textContent).not.toContain('未声明配置 Schema')
+  })
+
   it('loads marketplace data through the feature API', async () => {
     apiGetMock.mockImplementation((path: string) => {
       if (path === '/plugins/installed') return Promise.resolve({ data: [] })
