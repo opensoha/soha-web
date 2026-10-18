@@ -83,7 +83,8 @@ export function PlatformOperationsPanel({
   const visibleNodesQueryData =
     permissions.nodes && Boolean(clusterId) ? readableQueryData(nodesQuery) : undefined
   const eventsQuery = useQuery(platformOverviewQueries.events(clusterId, permissions.events, 12))
-  const visibleEventsQueryData = readableQueryData(eventsQuery)
+  const visibleEventsQueryData =
+    permissions.events && Boolean(clusterId) ? readableQueryData(eventsQuery) : undefined
   const auditQuery = useQuery({
     ...systemQueries.audit('system', { clusterId: clusterId ?? undefined, limit: 8 }),
     enabled: permissions.audit && Boolean(clusterId),

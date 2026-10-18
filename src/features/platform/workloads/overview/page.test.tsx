@@ -5,12 +5,15 @@ import type { ReactNode } from 'react'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WorkloadsOverviewPage } from './page'
+import { ApiError } from '@/services/api-error'
 
 const testState = vi.hoisted(() => ({
   adminTableProps: null as Record<string, unknown> | null,
   events: [] as Array<Record<string, unknown>>,
+  resourceError: null as Error | null,
+  resourceData: [] as unknown[] | undefined,
   permissionKeys: ['platform.workloads.overview.view', 'platform.pods.view'],
 }))
 
@@ -31,7 +34,9 @@ vi.mock('@tanstack/react-query', async (importOriginal) => ({
           }
         : queryKey.includes('events')
           ? testState.events
-          : [],
+          : testState.resourceData,
+      error: testState.resourceError,
+      isError: Boolean(testState.resourceError),
       isFetching: false,
       isLoading: false,
       refetch: vi.fn(),
@@ -79,7 +84,11 @@ vi.mock('@/components/management-list', () => ({
   ManagementTableToolbar: ({ children }: { children: ReactNode }) => <>{children}</>,
 }))
 vi.mock('@/components/overview-visuals', () => ({
-  OverviewMetricCard: ({ label }: { label: ReactNode }) => <div>{label}</div>,
+  OverviewMetricCard: ({ label, value }: { label: ReactNode; value: ReactNode }) => (
+    <div data-testid="metric">
+      {label}: {value}
+    </div>
+  ),
 }))
 vi.mock('@/components/status-tag', () => ({ StatusTag: () => <span /> }))
 vi.mock('../shared/list-controls', () => ({
@@ -89,9 +98,13 @@ vi.mock('../shared/list-controls', () => ({
   WorkloadTableSummary: () => null,
 }))
 
+beforeEach(() => vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true))
 afterEach(() => {
+  vi.unstubAllGlobals()
   document.body.innerHTML = ''
   testState.adminTableProps = null
+  testState.resourceError = null
+  testState.resourceData = []
   testState.events = []
   testState.permissionKeys = ['platform.workloads.overview.view', 'platform.pods.view']
   vi.clearAllMocks()
@@ -183,4 +196,21 @@ describe('workloads overview permissions', () => {
     })
     act(() => root.unmount())
   })
+})
+
+it.each([new ApiError(403, 'denied'), new ApiError(503, 'unavailable')])(
+  'shows unknown rather than zero when resource counts are unreadable (%s)',
+  (error) => {
+    testState.resourceError = error
+    testState.resourceData =
+      error instanceof ApiError && error.status === 403 ? [{ name: 'protected' }] : undefined
+    const { container, root } = renderPage()
+    expect(container.querySelector('[data-testid="metric"]')?.textContent).toBe('Pods: —')
+    act(() => root.unmount())
+  },
+)
+it('keeps a successfully read empty workload count as zero', () => {
+  const { container, root } = renderPage()
+  expect(container.querySelector('[data-testid="metric"]')?.textContent).toBe('Pods: 0')
+  act(() => root.unmount())
 })

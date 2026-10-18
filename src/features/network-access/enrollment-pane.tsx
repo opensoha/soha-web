@@ -24,7 +24,7 @@ import {
   Space,
   Typography,
 } from 'antd'
-import { useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { networkAccessMutations } from './mutations'
 import { networkAccessQueries } from './queries'
 import { MetadataTag } from '@/components/status-tag'
@@ -62,6 +62,29 @@ export function NetworkEnrollmentPane({
   const [createOpen, setCreateOpen] = useState(false)
   const [secret, setSecret] = useState<NetworkRuntimeEnrollmentSecret | null>(null)
   const [form] = Form.useForm<NetworkRuntimeEnrollmentInput>()
+
+  const canRevealSecret =
+    canCreate && enrollments.isEnabled !== false && !queryAccessDenied(enrollments)
+  const secretAccess = useRef({ allowed: canRevealSecret, generation: 0 })
+  useLayoutEffect(() => {
+    secretAccess.current.allowed = canRevealSecret
+    if (!canRevealSecret) {
+      secretAccess.current.generation += 1
+      setSecret(null)
+      setCreateOpen(false)
+      form.resetFields()
+    }
+  }, [canRevealSecret, form])
+  useLayoutEffect(
+    () => () => {
+      secretAccess.current.allowed = false
+      secretAccess.current.generation += 1
+    },
+    [],
+  )
+  useEffect(() => {
+    if (!canRevealSecret && createEnrollment.isSuccess) createEnrollment.reset()
+  }, [canRevealSecret, createEnrollment])
   const isRadius = runtimeKind === 'nas'
   function openCreate() {
     if (operationBlocked) return
@@ -74,7 +97,9 @@ export function NetworkEnrollmentPane({
     form.resetFields()
   }
   async function submitCreate() {
+    const generation = secretAccess.current.generation
     const values = await form.validateFields()
+    if (!secretAccess.current.allowed || generation !== secretAccess.current.generation) return
     const result = await createEnrollment.mutateAsync({
       runtimeId: values.runtimeId.trim(),
       runtimeKind: runtimeKind ?? values.runtimeKind,
@@ -82,6 +107,10 @@ export function NetworkEnrollmentPane({
       subjectId: values.subjectId.trim(),
       ttlSeconds: values.ttlSeconds,
     })
+    if (!secretAccess.current.allowed || generation !== secretAccess.current.generation) {
+      createEnrollment.reset()
+      return
+    }
     closeCreate()
     setSecret(result)
   }

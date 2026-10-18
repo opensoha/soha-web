@@ -23,7 +23,7 @@ import {
   Space,
   Typography,
 } from 'antd'
-import { useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { networkAccessMutations } from './mutations'
 import { networkAccessQueries } from './queries'
 import { TablePane } from './table-pane'
@@ -64,6 +64,28 @@ export function NetworkAccessGrantPane({ canCreate, canRevoke }: NetworkAccessGr
   const [createOpen, setCreateOpen] = useState(false)
   const [secret, setSecret] = useState<NetworkAccessGrantSecret | null>(null)
   const [form] = Form.useForm<GrantFormValues>()
+
+  const canRevealSecret = canCreate && grants.isEnabled !== false && !queryAccessDenied(grants)
+  const secretAccess = useRef({ allowed: canRevealSecret, generation: 0 })
+  useLayoutEffect(() => {
+    secretAccess.current.allowed = canRevealSecret
+    if (!canRevealSecret) {
+      secretAccess.current.generation += 1
+      setSecret(null)
+      setCreateOpen(false)
+      form.resetFields()
+    }
+  }, [canRevealSecret, form])
+  useLayoutEffect(
+    () => () => {
+      secretAccess.current.allowed = false
+      secretAccess.current.generation += 1
+    },
+    [],
+  )
+  useEffect(() => {
+    if (!canRevealSecret && createGrant.isSuccess) createGrant.reset()
+  }, [canRevealSecret, createGrant])
   function openCreate() {
     if (operationBlocked) return
     form.resetFields()
@@ -75,7 +97,9 @@ export function NetworkAccessGrantPane({ canCreate, canRevoke }: NetworkAccessGr
     form.resetFields()
   }
   async function submitCreate() {
+    const generation = secretAccess.current.generation
     const values = await form.validateFields()
+    if (!secretAccess.current.allowed || generation !== secretAccess.current.generation) return
     const resourceIds = [...new Set(values.resourceIdsText.split(/[\s,]+/).filter(Boolean))].sort()
     const result = await createGrant.mutateAsync({
       deviceId: values.deviceId.trim(),
@@ -85,6 +109,10 @@ export function NetworkAccessGrantPane({ canCreate, canRevoke }: NetworkAccessGr
       resourceIds,
       ttlSeconds: values.ttlSeconds,
     })
+    if (!secretAccess.current.allowed || generation !== secretAccess.current.generation) {
+      createGrant.reset()
+      return
+    }
     closeCreate()
     setSecret(result)
   }

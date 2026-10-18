@@ -246,7 +246,7 @@ async function platformMocks(context: BrowserContext, page: Page) {
       if (path === '/api/v1/clusters/capabilities')
         return {
           body: {
-            data: ['resource.yaml.apply', 'helm.releases'].map((key) => ({
+            data: ['resource.yaml.apply', 'helm.releases', 'workload.mutations'].map((key) => ({
               key,
               category: 'configuration',
               label: key,
@@ -301,6 +301,11 @@ async function platformMocks(context: BrowserContext, page: Page) {
           },
         },
       }
+    }
+    if (path === root + '/workloads/deployments/restart' && method === 'POST') {
+      expect(request.postDataJSON()).toEqual({ namespace: 'monitoring', name: 'api' })
+      state.writes.push(path)
+      return failure(state.writeStatus)
     }
     if (path === root + '/configuration/hpas/autoscale-api/yaml' && method === 'PUT') {
       state.writes.push(path)
@@ -465,5 +470,22 @@ test('Platform cluster batch keeps per-target evidence and only failed selection
   await expect(page.getByRole('button', { name: '批量删除', exact: true })).toBeDisabled()
   expect(state.writes).toEqual(['/api/v1/clusters/cluster-a', '/api/v1/clusters/cluster-b'])
   await page.screenshot({ path: info.outputPath('platform-batch.png'), fullPage: true })
+  verifyBrowserEvidence(evidence)
+})
+
+test('Deployment unknown batch restart also blocks the row restart and other writes', async ({
+  context,
+  page,
+}) => {
+  const { state, evidence } = await platformMocks(context, page)
+  await page.goto('/workloads/deployments')
+  const row = page.getByRole('row').filter({ has: page.getByText('api', { exact: true }) })
+  await row.getByRole('checkbox').check()
+  await page.getByRole('button', { name: '批量重启 (1)', exact: true }).click()
+  await expect(page.getByText('批量重启 Deployment：请求结果不明', { exact: true })).toBeVisible()
+  await expect(row.getByRole('button', { name: '重启', exact: true })).toBeDisabled()
+  await expect(row.getByRole('button', { name: '编辑 api', exact: true })).toBeDisabled()
+  await expect(page.getByRole('button', { name: '批量重启 (1)', exact: true })).toBeDisabled()
+  expect(state.writes).toEqual([root + '/workloads/deployments/restart'])
   verifyBrowserEvidence(evidence)
 })

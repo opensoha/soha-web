@@ -101,6 +101,7 @@ function isWorkloadMutationPending<T extends DeploymentTarget>(
 
 function buildWorkloadActionColumn<T extends WorkloadActionRecord>({
   capability,
+  blocked,
   deleteMutation,
   editCapability,
   localeCode,
@@ -115,6 +116,7 @@ function buildWorkloadActionColumn<T extends WorkloadActionRecord>({
   width,
 }: {
   capability: ClusterCapabilityDecision
+  blocked: boolean
   deleteMutation: {
     isPending: boolean
     mutate: (value: DeploymentTarget) => void
@@ -168,46 +170,54 @@ function buildWorkloadActionColumn<T extends WorkloadActionRecord>({
             <ManagementIconButton
               icon={<FormOutlined />}
               aria-label={`${editLabel} ${name}`}
-              disabled={editCapability.disabled}
+              disabled={blocked || editCapability.disabled}
               tooltip={capabilityActionTooltip(editLabel, editCapability)}
-              onClick={() => onEdit?.(record, name)}
+              onClick={() => {
+                if (!blocked) onEdit?.(record, name)
+              }}
             />
           ) : null}
           {canRestart ? (
             <ManagementIconButton
               icon={<ReloadOutlined />}
               aria-label={restartLabel}
-              disabled={capability.disabled}
+              disabled={blocked || capability.disabled}
               loading={isWorkloadMutationPending(
                 restartMutation ?? { isPending: false },
                 name,
                 record.namespace,
               )}
               tooltip={capabilityActionTooltip(restartLabel, capability)}
-              onClick={() => onRestart?.(record, name)}
+              onClick={() => {
+                if (!blocked) onRestart?.(record, name)
+              }}
             />
           ) : null}
           {canScale ? (
             <ManagementIconButton
               icon={<EditOutlined />}
               aria-label={resolvedScaleLabel}
-              disabled={capability.disabled}
+              disabled={blocked || capability.disabled}
               tooltip={capabilityActionTooltip(resolvedScaleLabel, capability)}
-              onClick={() => onScale?.(record, name)}
+              onClick={() => {
+                if (!blocked) onScale?.(record, name)
+              }}
             />
           ) : null}
           {canRollback ? (
             <ManagementIconButton
               icon={<UndoOutlined />}
               aria-label={rollbackLabel}
-              disabled={capability.disabled}
+              disabled={blocked || capability.disabled}
               loading={isWorkloadMutationPending(
                 rollbackMutation ?? { isPending: false },
                 name,
                 record.namespace,
               )}
               tooltip={capabilityActionTooltip(rollbackLabel, capability)}
-              onClick={() => onRollback?.(record, name)}
+              onClick={() => {
+                if (!blocked) onRollback?.(record, name)
+              }}
             />
           ) : null}
           {canDelete && capability.disabled ? (
@@ -229,14 +239,18 @@ function buildWorkloadActionColumn<T extends WorkloadActionRecord>({
               }
               okText={deleteLabel}
               cancelText={localeCode === 'zh_CN' ? '取消' : 'Cancel'}
-              okButtonProps={{ danger: true, loading: deletePending }}
+              disabled={blocked}
+              okButtonProps={{ danger: true, loading: deletePending, disabled: blocked }}
               placement="topRight"
-              onConfirm={() => deleteMutation.mutate(toTarget(name, record.namespace))}
+              onConfirm={() => {
+                if (!blocked) deleteMutation.mutate(toTarget(name, record.namespace))
+              }}
             >
               <ManagementIconButton
                 danger
                 icon={<DeleteOutlined />}
                 aria-label={deleteLabel}
+                disabled={blocked}
                 loading={deletePending}
                 tooltip={deleteLabel}
               />
@@ -491,7 +505,7 @@ export function WorkloadsDeploymentsPage() {
       : ''
 
   const openBatchRollbackModal = async () => {
-    if (!clusterId || selectedDeployments.length === 0) return
+    if (!clusterId || selectedDeployments.length === 0 || platformWriteBlocked) return
     setBatchRollbackLoading(true)
     setBatchRollbackVisible(true)
     try {
@@ -576,6 +590,7 @@ export function WorkloadsDeploymentsPage() {
     },
     buildWorkloadActionColumn<Deployment>({
       capability: workloadMutationCapability,
+      blocked: platformWriteBlocked,
       deleteMutation: deleteActionMutation,
       editCapability: yamlApplyCapability,
       localeCode,
@@ -642,9 +657,11 @@ export function WorkloadsDeploymentsPage() {
             autoInsertSpace={false}
             size="small"
             variant="outlined"
-            disabled={!canBatchRestart}
+            disabled={platformWriteBlocked || !canBatchRestart}
             loading={batchRestartMutation.isPending}
-            onClick={() => batchRestartMutation.mutate(selectedDeployments)}
+            onClick={() => {
+              if (!platformWriteBlocked) batchRestartMutation.mutate(selectedDeployments)
+            }}
           >
             {localeCode === 'zh_CN'
               ? `批量重启 (${selectedDeployments.length})`
@@ -658,7 +675,7 @@ export function WorkloadsDeploymentsPage() {
             autoInsertSpace={false}
             size="small"
             variant="outlined"
-            disabled={!canBatchRollback}
+            disabled={platformWriteBlocked || !canBatchRollback}
             loading={batchRollbackLoading}
             onClick={openBatchRollbackModal}
           >
@@ -674,8 +691,9 @@ export function WorkloadsDeploymentsPage() {
             autoInsertSpace={false}
             size="small"
             variant="outlined"
-            disabled={!canBatchScale}
+            disabled={platformWriteBlocked || !canBatchScale}
             onClick={() => {
+              if (platformWriteBlocked) return
               setBatchScaleReplicas(selectedDeployments[0]?.desiredReplicas ?? 1)
               setBatchScaleVisible(true)
             }}
@@ -774,7 +792,7 @@ export function WorkloadsDeploymentsPage() {
         title={localeCode === 'zh_CN' ? '扩缩容' : 'Scale deployment'}
         open={!!scaleTarget}
         onOk={() => {
-          if (scaleTarget) {
+          if (scaleTarget && !platformWriteBlocked) {
             scaleMutation.mutate(
               {
                 ...targetFor(scaleTarget.name, scaleTarget.namespace),
@@ -829,7 +847,9 @@ export function WorkloadsDeploymentsPage() {
         }}
         title={localeCode === 'zh_CN' ? '批量回滚' : 'Batch rollback deployments'}
         open={batchRollbackVisible}
-        onOk={() => batchRollbackMutation.mutate(batchRollbackDrafts)}
+        onOk={() => {
+          if (!platformWriteBlocked) batchRollbackMutation.mutate(batchRollbackDrafts)
+        }}
         onCancel={() => {
           if (!platformWriteBlocked) (() => setBatchRollbackVisible(false))?.()
         }}
@@ -887,9 +907,10 @@ export function WorkloadsDeploymentsPage() {
         okButtonProps={{ disabled: platformWriteBlocked }}
         title={localeCode === 'zh_CN' ? '批量扩缩容' : 'Batch scale deployments'}
         open={batchScaleVisible}
-        onOk={() =>
-          batchScaleMutation.mutate({ items: selectedDeployments, replicas: batchScaleReplicas })
-        }
+        onOk={() => {
+          if (!platformWriteBlocked)
+            batchScaleMutation.mutate({ items: selectedDeployments, replicas: batchScaleReplicas })
+        }}
         onCancel={() => {
           if (!platformWriteBlocked) (() => setBatchScaleVisible(false))?.()
         }}
