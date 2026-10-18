@@ -4,7 +4,7 @@ export default function AdmissionSettingsRedirect() {
   const { pathname, search, hash } = useLocation()
   const params = new URLSearchParams(search)
   if (!params.has('tab')) {
-    params.set('tab', pathname.slice(pathname.lastIndexOf('/') + 1))
+    params.set('tab', pathname.split('/').filter(Boolean).pop()?.toLowerCase() ?? '')
   }
   return (
     <Navigate

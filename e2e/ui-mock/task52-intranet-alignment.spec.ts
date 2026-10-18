@@ -610,6 +610,22 @@ for (const tab of ['radius-services', 'ssids', 'nas-bindings']) {
     verifyBrowserEvidence(evidence)
   })
 }
+test('legacy admission links preserve trailing slashes and an explicit tab', async ({
+  context,
+  page,
+}) => {
+  const { evidence } = await setup(context, page)
+  await page.goto('/network-access/radius-services/?scope=retained#network-settings')
+  await expect(page).toHaveURL(
+    '/network-access/settings?scope=retained&tab=radius-services#network-settings',
+  )
+  await expect(page.getByRole('tab', { selected: true })).toHaveText('RADIUS 接入')
+  await page.goto('/network-access/ssids/?tab=radius-services')
+  await expect(page).toHaveURL('/network-access/settings?tab=radius-services')
+  await expect(page.getByRole('tab', { selected: true })).toHaveText('RADIUS 接入')
+  verifyBrowserEvidence(evidence)
+})
+
 test('intranet containers prune denied children and retain custom navigation', async ({
   context,
   page,
