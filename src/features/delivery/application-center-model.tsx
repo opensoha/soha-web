@@ -1,3 +1,5 @@
+import { MutationFeedback } from '@/components/request-feedback'
+import { writeOutcomeUnknown } from '@/utils/query-feedback'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, App, Button, Form, Input, Modal, Select, Switch } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -180,7 +182,6 @@ export function useApplicationCenterState({
       setSelectedApplicationId(result.id || '')
       setAppModalVisible(false)
     },
-    onError: (err: Error) => message.error(err.message),
   })
 
   const updateAppOptions = deliveryMutations.applications.update(queryClient)
@@ -191,9 +192,6 @@ export function useApplicationCenterState({
       message.success('应用更新成功')
       setAppModalVisible(false)
       setEditingApp(null)
-    },
-    onError: (err: Error) => {
-      message.error(err.message)
     },
   })
 
@@ -301,6 +299,12 @@ export function ApplicationForm({
   const { message } = App.useApp()
   const [form] = Form.useForm<Record<string, unknown>>()
   const keyEdited = useRef(false)
+  const submitting = useRef(false)
+  const locked =
+    state.createAppMutation.isPending ||
+    state.updateAppMutation.isPending ||
+    writeOutcomeUnknown(state.createAppMutation.error) ||
+    writeOutcomeUnknown(state.updateAppMutation.error)
   const reload = useMutation({
     mutationFn: async () => (await deliveryApi.applications.detail(application!.id)).application,
     onSuccess: (latest) => {
@@ -338,33 +342,57 @@ export function ApplicationForm({
           form.setFieldValue('key', applicationKeyFromName(changed.name))
         }
       }}
-      onFinish={(values) => {
-        if (application) {
-          state.updateAppMutation.mutate({
-            id: application.id,
-            payload: {
-              ...application,
-              ...form.getFieldsValue(true),
-              ...values,
-              expectedVersion: form.getFieldValue('version'),
+      onFinish={async (values) => {
+        if (submitting.current || locked) return
+        submitting.current = true
+        try {
+          if (application) {
+            await state.updateAppMutation.mutateAsync({
+              id: application.id,
+              payload: {
+                ...application,
+                ...form.getFieldsValue(true),
+                ...values,
+                expectedVersion: form.getFieldValue('version'),
+                group: joinApplicationGroups(values.group as string[] | string),
+                buildSources: state.buildSources,
+              },
+            })
+            return
+          }
+          await state.createAppMutation
+            .mutateAsync({
+              name: values.name,
+              key: values.key,
+              description: values.description,
               group: joinApplicationGroups(values.group as string[] | string),
-              buildSources: state.buildSources,
-            },
-          })
-          return
+              enabled: true,
+            })
+            .then((created) => onCreated?.(created))
+            .catch(() => undefined)
+        } catch {
+          /* Mutation feedback retains the application draft. */
+        } finally {
+          submitting.current = false
         }
-        void state.createAppMutation
-          .mutateAsync({
-            name: values.name,
-            key: values.key,
-            description: values.description,
-            group: joinApplicationGroups(values.group as string[] | string),
-            enabled: true,
-          })
-          .then((created) => onCreated?.(created))
-          .catch(() => undefined)
       }}
     >
+      <MutationFeedback
+        operations={[
+          {
+            mutation: state.createAppMutation,
+            label: '创建应用',
+            target: state.createAppMutation.variables?.name
+              ? String(state.createAppMutation.variables.name)
+              : undefined,
+          },
+          {
+            mutation: state.updateAppMutation,
+            label: '保存应用配置',
+            target: state.updateAppMutation.variables?.id,
+          },
+        ]}
+      />
       {application && conflicted ? (
         <Alert
           type="warning"
@@ -416,6 +444,7 @@ export function ApplicationForm({
         <Button
           htmlType="submit"
           type="primary"
+          disabled={locked}
           loading={state.createAppMutation.isPending || state.updateAppMutation.isPending}
         >
           {application ? '保存' : '创建应用'}

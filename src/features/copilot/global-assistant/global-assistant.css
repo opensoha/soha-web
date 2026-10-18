@@ -529,3 +529,10 @@ body:has(.soha-ai-panel) .soha-companion-shell {
     max-width: 220px;
   }
 }
+
+.soha-companion__feedback {
+  position: absolute;
+  right: 12px;
+  bottom: -12px;
+  pointer-events: auto;
+}

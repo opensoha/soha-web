@@ -1,12 +1,12 @@
+import { API_BASE_URL, getStoredAccessToken, refreshAuthSession } from '@/features/auth'
+import { api } from '@/services/api-client'
+import type { ApiResponse } from '@/types'
 import type {
   CompanionInteractionReceipt,
   CompanionInteractionRequest,
   CompanionProfile,
   CompanionProfileResetRequest,
 } from '@opensoha/contracts/gen/ts/sohaapi'
-import { API_BASE_URL, getStoredAccessToken, refreshAuthSession } from '@/features/auth'
-import { api } from '@/services/api-client'
-import type { ApiResponse } from '@/types'
 
 async function unwrap<T>(request: Promise<ApiResponse<T>>): Promise<T> {
   return (await request).data
@@ -19,7 +19,7 @@ function idempotencyKey(prefix: string) {
 
 export const companionKeys = {
   all: ['companion'] as const,
-  profile: () => ['companion', 'profile'] as const,
+  profile: (owner: string) => ['companion', 'profile', owner] as const,
 }
 
 export const companionApi = {

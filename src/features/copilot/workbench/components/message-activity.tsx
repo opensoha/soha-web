@@ -1,15 +1,15 @@
-import { useState } from 'react'
-import { App, Button, Popover, Space, Tag, Typography } from 'antd'
-import type { WorkbenchSource } from '@opensoha/contracts/gen/ts/sohaapi'
 import {
-  CopyOutlined,
-  LikeOutlined,
-  DislikeOutlined,
   BookOutlined,
   BranchesOutlined,
-  SmileOutlined,
+  CopyOutlined,
+  DislikeOutlined,
+  LikeOutlined,
   RollbackOutlined,
+  SmileOutlined,
 } from '@ant-design/icons'
+import type { WorkbenchSource } from '@opensoha/contracts/gen/ts/sohaapi'
+import { App, Button, Popover, Space, Tag, Typography } from 'antd'
+import { useState } from 'react'
 import type { ConversationMessage } from '../conversation'
 import {
   metadataAgentStatus,
@@ -27,8 +27,10 @@ export function MessageActivity({
   hasArtifact,
   onSource,
   onBranch,
+  branchBlocked,
   onSaveMemory,
   onFeedback,
+  feedbackBlocked,
   onReply,
   reaction,
   onReaction,
@@ -36,8 +38,10 @@ export function MessageActivity({
   message: ConversationMessage
   hasArtifact: boolean
   onSource?: (source: WorkbenchSource) => void
+  branchBlocked?: boolean
   onBranch?: () => void
   onSaveMemory?: () => void
+  feedbackBlocked?: boolean
   onFeedback?: (disposition: 'accepted' | 'rejected') => void
   onReply?: () => void
   reaction?: string
@@ -121,6 +125,7 @@ export function MessageActivity({
                 size="small"
                 type="text"
                 aria-label="有帮助"
+                disabled={feedbackBlocked}
                 icon={<LikeOutlined />}
                 onClick={() => onFeedback('accepted')}
               />
@@ -128,6 +133,7 @@ export function MessageActivity({
                 size="small"
                 type="text"
                 aria-label="有问题"
+                disabled={feedbackBlocked}
                 icon={<DislikeOutlined />}
                 onClick={() => onFeedback('rejected')}
               />
@@ -147,6 +153,7 @@ export function MessageActivity({
               size="small"
               type="text"
               aria-label="从此处开旁聊"
+              disabled={branchBlocked}
               icon={<BranchesOutlined />}
               onClick={onBranch}
             />

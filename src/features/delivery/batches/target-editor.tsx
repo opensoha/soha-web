@@ -1,4 +1,6 @@
 import { Alert, Button, Form, Input, Modal, Radio, Select, Space } from 'antd'
+import { ReadFeedback } from '@/components/request-feedback'
+import { readableQueryData } from '@/utils/query-feedback'
 import { useQuery } from '@tanstack/react-query'
 import { kubernetesHelmQueries } from '@/features/platform'
 import { deliveryQueries } from '../queries'
@@ -46,14 +48,14 @@ export function DeliveryTargetEditor({
   const repositories = useQuery(
     deliveryQueries.repositories.list({ applicationId }, !!applicationId && building),
   )
-  const service = services.data?.find((item) => item.id === serviceId)
-  const source = detail.data?.application.buildSources?.find(
+  const service = readableQueryData(services)?.find((item) => item.id === serviceId)
+  const source = readableQueryData(detail)?.application.buildSources?.find(
     (item) => item.id === service?.buildSourceId,
   )
   const repositoryIds =
     source?.config?.repositoryBindings?.map((item) => item.repositoryId) ??
     [source?.config?.repositoryId || service?.repositoryId].filter(Boolean)
-  const binding = detail.data?.bindings?.find(
+  const binding = readableQueryData(detail)?.bindings?.find(
     (item) => item.applicationEnvironmentId === environmentId,
   )
   const targets = (binding?.targets ?? []).filter(
@@ -76,17 +78,31 @@ export function DeliveryTargetEditor({
         : null,
     ),
   )
-  const latestRevision = Math.max(0, ...(history.data ?? []).map((item) => Number(item.revision)))
-  const error = [applications, detail, services, bundles, repositories, history].find(
-    (query) => query.isError,
-  )?.error
+  const latestRevision = Math.max(
+    0,
+    ...(readableQueryData(history) ?? []).map((item) => Number(item.revision)),
+  )
+  const blocked = Boolean(
+    (!fixed && (applications.isLoading || applications.isError)) ||
+    (applicationId &&
+      (detail.isError || services.isError || detail.isLoading || services.isLoading)) ||
+    (building && (repositories.isLoading || repositories.isError)) ||
+    ((action === 'deploy' || (docker && action === 'config_update')) &&
+      (bundles.isError || bundles.isLoading)) ||
+    (rollback && (history.isError || history.isLoading)),
+  )
   const content = (
     <>
-      {error ? <Alert type="error" showIcon title={error.message} /> : null}
+      <ReadFeedback query={applications} label="应用选项" />
+      <ReadFeedback query={detail} label="应用环境" />
+      <ReadFeedback query={services} label="服务选项" />
+      <ReadFeedback query={bundles} label="已验证产物" />
+      <ReadFeedback query={repositories} label="源码仓库" />
+      <ReadFeedback query={history} label="Helm 历史版本" />
       <Form
         form={form}
         layout="vertical"
-        disabled={pending}
+        disabled={pending || blocked}
         onValuesChange={onChange}
         initialValues={{
           ...target,
@@ -94,6 +110,7 @@ export function DeliveryTargetEditor({
           arguments: Object.entries(target.buildArgs ?? {}).map(([key, value]) => ({ key, value })),
         }}
         onFinish={(values) => {
+          if (blocked || pending) return
           const { arguments: args, helmOperation: _operation, ...input } = values
           onSave({
             ...target,
@@ -122,7 +139,10 @@ export function DeliveryTargetEditor({
             disabled={fixed}
             showSearch={{ optionFilterProp: 'label' }}
             loading={applications.isLoading}
-            options={(fixed && detail.data ? [detail.data.application] : applications.data)
+            options={(fixed && readableQueryData(detail)
+              ? [readableQueryData(detail)!.application]
+              : readableQueryData(applications)
+            )
               ?.filter((item) => item.enabled)
               .map((item) => ({ value: item.id, label: item.name }))}
             onChange={() =>
@@ -148,7 +168,7 @@ export function DeliveryTargetEditor({
             disabled={fixed || !applicationId}
             showSearch={{ optionFilterProp: 'label' }}
             loading={services.isLoading}
-            options={services.data
+            options={readableQueryData(services)
               ?.filter((item) => item.enabled)
               .map((item) => ({ value: item.id, label: item.name }))}
             onChange={() =>
@@ -181,7 +201,7 @@ export function DeliveryTargetEditor({
             disabled={fixed && !embedded}
             allowClear={action === 'build'}
             loading={detail.isLoading}
-            options={detail.data?.bindings?.map((item) => ({
+            options={readableQueryData(detail)?.bindings?.map((item) => ({
               value: item.applicationEnvironmentId,
               label: item.environmentName || item.environmentKey || item.environmentId,
             }))}
@@ -208,7 +228,7 @@ export function DeliveryTargetEditor({
             <Select
               showSearch={{ optionFilterProp: 'label' }}
               loading={bundles.isLoading}
-              options={bundles.data
+              options={readableQueryData(bundles)
                 ?.filter((item) => item.applicationId === applicationId && !!item.artifactDigest)
                 .map((item) => ({
                   value: item.id,
@@ -237,7 +257,7 @@ export function DeliveryTargetEditor({
               >
                 <Select
                   loading={history.isLoading}
-                  options={(history.data ?? [])
+                  options={(readableQueryData(history) ?? [])
                     .filter(
                       (item) =>
                         Number(item.revision) > 0 &&
@@ -277,7 +297,7 @@ export function DeliveryTargetEditor({
                           aria-label="源码仓库"
                           placeholder="源码仓库"
                           style={{ width: 200 }}
-                          options={repositories.data
+                          options={readableQueryData(repositories)
                             ?.filter((item) => repositoryIds.includes(item.id))
                             .map((item) => ({ value: item.id, label: item.name }))}
                         />
@@ -339,7 +359,12 @@ export function DeliveryTargetEditor({
         {embedded ? (
           <Space style={{ marginTop: 16 }}>
             <Button onClick={onClose}>取消</Button>
-            <Button type="primary" htmlType="submit" loading={pending}>
+            <Button
+              type="primary"
+              htmlType="submit"
+              loading={pending}
+              disabled={blocked || pending}
+            >
               检查交付参数
             </Button>
           </Space>
@@ -356,6 +381,7 @@ export function DeliveryTargetEditor({
       width={720}
       onCancel={onClose}
       okText="保存目标"
+      okButtonProps={{ disabled: blocked || pending }}
       onOk={() => form.submit()}
     >
       {content}

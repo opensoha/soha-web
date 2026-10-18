@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
-import type { AlertEventStreamSignal } from '@opensoha/contracts/gen/ts/sohaapi'
 import { buildSameOriginStreamURL, withStreamTicket } from '@/features/auth'
+import { queryAccessDenied } from '@/utils/query-feedback'
+import type { AlertEventStreamSignal } from '@opensoha/contracts/gen/ts/sohaapi'
+import { useEffect, useRef, useState } from 'react'
 
 export type AlertEventStreamStatus =
   | 'idle'
@@ -27,6 +28,8 @@ export function useAlertEventStream({
 }: AlertEventStreamOptions) {
   const [status, setStatus] = useState<AlertEventStreamStatus>('idle')
   const [lastEventAt, setLastEventAt] = useState<string>()
+  const [error, setError] = useState<Error | null>(null)
+  const [revision, setRevision] = useState(0)
   const onFallbackRef = useRef(onFallback)
   const onSignalRef = useRef(onSignal)
   const statusRef = useRef(status)
@@ -38,8 +41,11 @@ export function useAlertEventStream({
   useEffect(() => {
     if (!enabled) {
       setStatus('idle')
+      setError(null)
       return
     }
+    setError(null)
+    setLastEventAt(undefined)
     let stopped = false
     let socket: WebSocket | undefined
     let reconnectTimer: ReturnType<typeof setTimeout> | undefined
@@ -54,10 +60,12 @@ export function useAlertEventStream({
         if (stopped) return
         socket = new WebSocket(ticketedURL)
         socket.onopen = () => {
+          if (stopped) return
           attempt = 0
           setStatus('connecting')
         }
         socket.onmessage = (message) => {
+          if (stopped) return
           try {
             const signal = JSON.parse(String(message.data)) as AlertEventStreamSignal
             setLastEventAt(signal.observedAt)
@@ -67,15 +75,24 @@ export function useAlertEventStream({
             setStatus('degraded')
           }
         }
-        socket.onerror = () => setStatus('degraded')
+        socket.onerror = () => {
+          if (!stopped) setStatus('degraded')
+        }
         socket.onclose = () => {
           if (stopped) return
           attempt += 1
           setStatus(attempt > 3 ? 'polling' : 'reconnecting')
           reconnectTimer = setTimeout(connect, Math.min(15_000, 1000 * 2 ** Math.min(attempt, 4)))
         }
-      } catch {
+      } catch (error) {
         if (stopped) return
+        if (error instanceof Error && queryAccessDenied({ error })) {
+          stopped = true
+          setError(error)
+          setStatus('degraded')
+          clearInterval(fallbackTimer)
+          return
+        }
         attempt += 1
         setStatus(attempt > 3 ? 'polling' : 'reconnecting')
         reconnectTimer = setTimeout(connect, Math.min(15_000, 1000 * 2 ** Math.min(attempt, 4)))
@@ -83,7 +100,7 @@ export function useAlertEventStream({
     }
 
     const fallbackTimer = setInterval(() => {
-      if (statusRef.current !== 'live') onFallbackRef.current?.()
+      if (!stopped && statusRef.current !== 'live') onFallbackRef.current?.()
     }, fallbackIntervalMs)
     void connect()
     return () => {
@@ -92,7 +109,13 @@ export function useAlertEventStream({
       clearInterval(fallbackTimer)
       socket?.close()
     }
-  }, [clusterId, enabled, fallbackIntervalMs])
+  }, [clusterId, enabled, fallbackIntervalMs, revision])
 
-  return { status, lastEventAt, live: status === 'live' }
+  return {
+    status,
+    lastEventAt,
+    live: status === 'live',
+    error,
+    reconnect: () => setRevision((value) => value + 1),
+  }
 }

@@ -1,21 +1,24 @@
-import type { ObservabilityDashboard } from '@opensoha/contracts/gen/ts/sohaapi'
-import { DeleteOutlined, EyeOutlined, ImportOutlined } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Button, Flex, Popconfirm, Space } from 'antd'
-import type { TableProps } from 'antd'
-import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
   ManagementIconButton,
   ManagementState,
   ManagementTableToolbar,
 } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
 import { MetadataTag } from '@/components/status-tag'
+import { useOperationMutation } from '@/components/use-operation-mutation'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useAIPageContext } from '@/features/copilot'
+import { readableQueryData } from '@/utils/query-feedback'
 import { tableColumnPresets } from '@/utils/table-columns'
 import { formatDateTime } from '@/utils/time'
+import { DeleteOutlined, EyeOutlined, ImportOutlined } from '@ant-design/icons'
+import type { ObservabilityDashboard } from '@opensoha/contracts/gen/ts/sohaapi'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TableProps } from 'antd'
+import { Button, Flex, Popconfirm, Space } from 'antd'
+import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { ImportDashboardModal } from './import-modal'
 import { observabilityDashboardMutations } from './mutations'
 import { observabilityDashboardQueries } from './queries'
@@ -23,7 +26,6 @@ import './styles.css'
 
 export function ObservabilityDashboardsPage() {
   const navigate = useNavigate()
-  const { message } = App.useApp()
   const queryClient = useQueryClient()
   const permissionQuery = usePermissionSnapshot()
   const snapshot = permissionQuery.data?.data
@@ -33,8 +35,8 @@ export function ObservabilityDashboardsPage() {
   const dashboardsQuery = useQuery(observabilityDashboardQueries.list())
   const dataSourcesQuery = useQuery(observabilityDashboardQueries.metricDataSources())
   const dataSourceNames = useMemo(
-    () => new Map((dataSourcesQuery.data ?? []).map((item) => [item.id, item.name])),
-    [dataSourcesQuery.data],
+    () => new Map((readableQueryData(dataSourcesQuery) ?? []).map((item) => [item.id, item.name])),
+    [dataSourcesQuery.data, dataSourcesQuery.error],
   )
   useAIPageContext({
     sourceWorkbench: 'monitoring',
@@ -49,11 +51,12 @@ export function ObservabilityDashboardsPage() {
       : undefined,
     promptHint: '分析当前仪表盘覆盖范围、数据源绑定和可调查入口。',
   })
-  const deleteMutation = useMutation({
-    ...observabilityDashboardMutations.delete(queryClient),
-    onError: (error) => message.error(error.message),
-    onSuccess: () => message.success('仪表盘已删除'),
+  const deleteMutation = useOperationMutation(observabilityDashboardMutations.delete(queryClient), {
+    label: ['删除仪表盘', 'Delete dashboard'],
+    target: (id) => id,
+    receipt: () => ({ message: '仪表盘记录已删除' }),
   })
+
   const columns: TableProps<ObservabilityDashboard>['columns'] = [
     {
       title: '名称',
@@ -141,11 +144,16 @@ export function ObservabilityDashboardsPage() {
               description={record.name}
               okText="删除"
               cancelText="取消"
-              okButtonProps={{ danger: true, loading: deleteMutation.isPending }}
+              okButtonProps={{
+                danger: true,
+                loading: deleteMutation.isPending,
+                disabled: deleteMutation.blocked,
+              }}
               onConfirm={() => deleteMutation.mutate(record.id)}
             >
               <ManagementIconButton
                 aria-label="删除仪表盘"
+                disabled={deleteMutation.blocked}
                 danger
                 icon={<DeleteOutlined />}
                 size="small"
@@ -161,11 +169,18 @@ export function ObservabilityDashboardsPage() {
   return (
     <>
       <ManagementDataPage
+        beforeQuery={
+          <>
+            <ReadFeedback label="指标数据源" query={dataSourcesQuery} />
+            {deleteMutation.feedback}
+          </>
+        }
         table={{
           columnSettingIconOnly: true,
           columnSettingPlacement: 'header',
           enableDensity: true,
           error: dashboardsQuery.error,
+          hasReadData: dashboardsQuery.data !== undefined,
           refreshing: dashboardsQuery.isFetching,
           onRefresh: () => {
             void dashboardsQuery.refetch()
@@ -173,7 +188,12 @@ export function ObservabilityDashboardsPage() {
           },
           headerExtra: canImport ? (
             <ManagementTableToolbar>
-              <Button icon={<ImportOutlined />} type="primary" onClick={() => setImportOpen(true)}>
+              <Button
+                aria-label="导入仪表盘"
+                icon={<ImportOutlined />}
+                type="primary"
+                onClick={() => setImportOpen(true)}
+              >
                 导入
               </Button>
             </ManagementTableToolbar>
@@ -191,7 +211,15 @@ export function ObservabilityDashboardsPage() {
         open={importOpen}
         onOpenChange={setImportOpen}
         onImported={(result) =>
-          navigate(`/monitoring-workbench/dashboards/${encodeURIComponent(result.dashboard.id)}`)
+          navigate(`/monitoring-workbench/dashboards/${encodeURIComponent(result.dashboard.id)}`, {
+            state: {
+              importedDashboard: {
+                id: result.dashboard.id,
+                panelCount: result.importedPanelCount,
+                warnings: result.warnings.map((item) => item.message),
+              },
+            },
+          })
         }
       />
     </>

@@ -1,15 +1,11 @@
-import { queryOptions } from '@tanstack/react-query'
+import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query'
 import type {
   ComputeDomain,
   ComputeProviderDomain,
   ComputeResourceKind,
   ComputeTaskDomain,
 } from '@opensoha/contracts/gen/ts/sohaapi'
-import {
-  computeApi,
-  type ComputeProviderInstanceFilters,
-  type ComputeTaskFilters,
-} from './api'
+import { computeApi, type ComputeProviderInstanceFilters, type ComputeTaskFilters } from './api'
 import { computeKeys } from './keys'
 
 export const computeQueries = {
@@ -19,7 +15,7 @@ export const computeQueries = {
       queryFn: computeApi.overview,
       enabled,
       staleTime: 15_000,
-      refetchInterval: 15_000,
+      refetchInterval: (query) => (query.state.status === 'error' ? false : 15_000),
     }),
   providerInstances: (filters: ComputeProviderInstanceFilters = {}, enabled = true) =>
     queryOptions({
@@ -27,7 +23,7 @@ export const computeQueries = {
       queryFn: () => computeApi.providerInstances(filters),
       enabled,
       staleTime: 15_000,
-      refetchInterval: 30_000,
+      refetchInterval: (query) => (query.state.status === 'error' ? false : 30_000),
     }),
   providerInstance: (
     domain: ComputeProviderDomain,
@@ -47,17 +43,24 @@ export const computeQueries = {
     id: string,
     enabled = true,
   ) =>
-    queryOptions({
+    infiniteQueryOptions({
       queryKey: computeKeys.resourceRelations(domain, kind, id),
-      queryFn: () => computeApi.resourceRelations(domain, kind, id),
-      select: (response) => response.data,
+      queryFn: ({ pageParam }) =>
+        computeApi.resourceRelations(domain, kind, id, { cursor: pageParam }),
+      initialPageParam: undefined as string | undefined,
+      getNextPageParam: (response) => response.data.nextCursor || undefined,
+      select: ({ pages }) => ({
+        ...pages[0].data,
+        relations: pages.flatMap((page) => page.data.relations),
+        nextCursor: pages[pages.length - 1].data.nextCursor,
+      }),
       enabled: enabled && Boolean(id.trim()),
     }),
   tasks: (filters: ComputeTaskFilters = {}) =>
     queryOptions({
       queryKey: computeKeys.tasks(filters),
       queryFn: () => computeApi.tasks(filters),
-      refetchInterval: 10_000,
+      refetchInterval: (query) => (query.state.status === 'error' ? false : 10_000),
     }),
   task: (domain: ComputeTaskDomain, taskId: string) =>
     queryOptions({
@@ -65,7 +68,12 @@ export const computeQueries = {
       queryFn: () => computeApi.task(domain, taskId),
       select: (response) => response.data,
       enabled: Boolean(taskId),
-      refetchInterval: 15_000,
+      refetchInterval: (query) =>
+        query.state.status === 'error' ||
+        (query.state.data &&
+          !['queued', 'running'].includes(query.state.data.data.normalizedStatus))
+          ? false
+          : 15_000,
     }),
   taskLogs: (domain: ComputeTaskDomain, taskId: string) =>
     queryOptions({
@@ -73,6 +81,6 @@ export const computeQueries = {
       queryFn: () => computeApi.taskLogs(domain, taskId),
       select: (response) => response.items,
       enabled: Boolean(taskId),
-      refetchInterval: 15_000,
+      refetchInterval: (query) => (query.state.status === 'error' ? false : 15_000),
     }),
 }

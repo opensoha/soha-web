@@ -14,6 +14,7 @@ import {
   ManagementRefreshButton,
   ManagementTableToolbar,
 } from '@/components/management-list'
+import { readableQueryData } from '@/utils/query-feedback'
 import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { formatDateTime } from '@/utils/time'
 import { tableColumnPresets } from '@/utils/table-columns'
@@ -173,8 +174,21 @@ function OperationLogDrawer({
 }
 
 export function OperationLogsPage() {
-  const [searchParams] = useSearchParams()
-  const initialUsageFilters = useMemo(() => usageSnapshotFilterParams(searchParams), [searchParams])
+  const [params] = useSearchParams()
+  const filters = usageSnapshotFilterParams(params)
+  return (
+    <OperationLogsPageContent
+      key={JSON.stringify([filters.metadataKey, filters.metadataValue])}
+      initialUsageFilters={filters}
+    />
+  )
+}
+
+function OperationLogsPageContent({
+  initialUsageFilters,
+}: {
+  initialUsageFilters: ReturnType<typeof usageSnapshotFilterParams>
+}) {
   const [operationTypeFilter, setOperationTypeFilter] = useState<string>('')
   const [resultFilter, setResultFilter] = useState<string>('')
   const [requestMethodFilter, setRequestMethodFilter] = useState<string>('')
@@ -190,7 +204,7 @@ export function OperationLogsPage() {
   >('all')
   const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
   const [activeRecord, setActiveRecord] = useState<OperationLog | null>(null)
-  const { data: rawLogs = [], isFetching, isLoading, refetch } = useQuery(
+  const query = useQuery(
     systemQueries.operationLogs({
       operationType: operationTypeFilter,
       requestMethod: requestMethodFilter,
@@ -200,11 +214,12 @@ export function OperationLogsPage() {
       metadataValue: metadataValueFilter,
     }),
   )
+  const { isFetching, isLoading, refetch } = query
+  const rawLogs = readableQueryData(query)
   const filteredLogs = useMemo(() => {
-    if (moduleView === 'all') return rawLogs
-    return rawLogs.filter(
-      (item) => compactText(String(item.targetScope?.module || '')) === moduleView,
-    )
+    const logs = rawLogs ?? []
+    if (moduleView === 'all') return logs
+    return logs.filter((item) => compactText(String(item.targetScope?.module || '')) === moduleView)
   }, [moduleView, rawLogs])
 
   const columns: TableColumnsType<OperationLog> = [
@@ -262,9 +277,7 @@ export function OperationLogsPage() {
       render: (_: string, record: OperationLog) =>
         record.requestPath ? (
           <div className="soha-log-request-cell">
-            {record.requestMethod ? (
-              <MetadataTag label={record.requestMethod} tone="blue" />
-            ) : null}
+            {record.requestMethod ? <MetadataTag label={record.requestMethod} tone="blue" /> : null}
             <Text className="soha-log-request-path" ellipsis={{ tooltip: record.requestPath }}>
               {record.requestPath}
             </Text>
@@ -344,13 +357,7 @@ export function OperationLogsPage() {
               value={moduleView}
               onChange={(value) =>
                 setModuleView(
-                  value as
-                    | 'all'
-                    | 'system'
-                    | 'access'
-                    | 'platform'
-                    | 'virtualization'
-                    | 'delivery',
+                  value as 'all' | 'system' | 'access' | 'platform' | 'virtualization' | 'delivery',
                 )
               }
               options={[
@@ -405,7 +412,7 @@ export function OperationLogsPage() {
             <ManagementQueryField minWidth={180} width={220} label="字段">
               <Select
                 allowClear
-                placeholder="usageSnapshot 字段"
+                placeholder="元数据 字段"
                 value={metadataKeyFilter || undefined}
                 onChange={(value) => setMetadataKeyFilter(value || '')}
                 options={[
@@ -421,7 +428,7 @@ export function OperationLogsPage() {
             <ManagementQueryField grow minWidth={180} width={220} label="字段值">
               <Input
                 allowClear
-                placeholder="usageSnapshot 值"
+                placeholder="元数据 值"
                 value={metadataValueFilter}
                 onChange={(event) => setMetadataValueFilter(event.target.value)}
               />
@@ -451,6 +458,10 @@ export function OperationLogsPage() {
         ),
         columns,
         dataSource: filteredLogs,
+        hasReadData: rawLogs !== undefined,
+        error: query.error,
+        onRetry: () => void refetch(),
+        refreshing: isFetching,
         rowKey: 'id',
         loading: isLoading,
         pageSize: 50,
@@ -463,8 +474,8 @@ export function OperationLogsPage() {
       }}
       afterTable={
         <OperationLogDrawer
-          record={activeRecord}
-          open={Boolean(activeRecord)}
+          record={rawLogs?.find((item) => item.id === activeRecord?.id) ?? null}
+          open={!!rawLogs?.some((item) => item.id === activeRecord?.id)}
           onClose={() => setActiveRecord(null)}
         />
       }

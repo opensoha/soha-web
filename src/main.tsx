@@ -17,6 +17,7 @@ import {
   readStoredThemePreference,
   resolveThemeMode,
   watchSystemThemeMode,
+  watchSystemMotion,
 } from './theme/app-theme'
 import {
   applyBrandingSettings,
@@ -47,6 +48,8 @@ function AppProviders() {
   const brandingQuery = useBrandingSettings()
   const [systemThemeVersion, setSystemThemeVersion] = React.useState(0)
 
+  React.useEffect(() => setSystemThemeVersion((current) => current + 1), [])
+
   React.useEffect(() => {
     if (!brandingQuery.isSuccess || !brandingQuery.data?.data) return
     const branding = brandingQuery.data.data
@@ -59,11 +62,24 @@ function AppProviders() {
     return watchSystemThemeMode(() => setSystemThemeVersion((current) => current + 1))
   }, [themeMode])
 
+  React.useEffect(
+    () =>
+      watchSystemMotion(() => {
+        applyAppTheme(DEFAULT_APP_THEME_ID, themeMode)
+        setSystemThemeVersion((current) => current + 1)
+      }),
+    [themeMode],
+  )
+
   const resolvedThemeMode = React.useMemo(
     () => resolveThemeMode(themeMode),
     [themeMode, systemThemeVersion],
   )
-  const antdTheme = React.useMemo(() => getAntdTheme(resolvedThemeMode), [resolvedThemeMode])
+  const antdTheme = React.useMemo(() => {
+    const theme = getAntdTheme(resolvedThemeMode)
+    // Keep Antd's motion provider present from the first render to preserve page state.
+    return systemThemeVersion === 0 ? { ...theme, token: { ...theme.token, motion: false } } : theme
+  }, [resolvedThemeMode, systemThemeVersion])
 
   return (
     <ConfigProvider

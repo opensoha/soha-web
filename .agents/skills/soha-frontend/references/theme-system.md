@@ -40,6 +40,15 @@ route/data/state/runtime behavior. Documentation changes do not apply new runtim
 `app-theme.ts`. The latter applies Soha variables before React mounts. Do not redefine those
 values in `globals.css`; a CSS fallback is not a separate design setting.
 
+They also own `--soha-motion-duration-fast/mid/slow`, `--soha-motion-ease[-out]` and
+`--soha-motion-activity`, derived from Antd. System reduced motion updates the single
+ConfigProvider and CSS together. Scene CSS consumes these tokens while retaining its own
+task layout and transition shape; avoid separate equivalent VM/Compute/Delivery token sets.
+
+Keep the provider subtree stable when motion preferences change at runtime. Verify that drafts,
+selection and professional sessions survive the first transition in both directions; testing
+only a page that starts with reduced motion does not cover this lifecycle boundary.
+
 - The shared reading baseline is 14 px / 22 px. Supporting text is 12 px; regular input, number,
   date, select and button text is 13 px with 32 px default controls. Section and modal headings
   are 16 px / 24 px. Existing explicit compact/large variants remain available.

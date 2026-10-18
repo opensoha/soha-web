@@ -1,28 +1,30 @@
-import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Button, Card, Popconfirm, Typography } from 'antd'
-import type { TableColumnsType } from 'antd'
-import { ReloadOutlined } from '@ant-design/icons'
-import type { NetworkProxyConnection } from '@opensoha/contracts/gen/ts/sohaapi'
 import { AdminTable } from '@/components/admin-table'
-import { formatBytes } from '@/components/resource-metrics-format'
 import {
   ManagementKeywordField,
   ManagementQueryActions,
   ManagementQueryPanel,
   ManagementState,
 } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
+import { formatBytes } from '@/components/resource-metrics-format'
+import { useOperationMutation } from '@/components/use-operation-mutation'
 import { hasPermission } from '@/features/auth'
 import { useI18n } from '@/i18n'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
 import { formatDateTime } from '@/utils/time'
+import { ReloadOutlined } from '@ant-design/icons'
+import type { NetworkProxyConnection } from '@opensoha/contracts/gen/ts/sohaapi'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TableColumnsType } from 'antd'
+import { Button, Card, Popconfirm, Typography } from 'antd'
+import { useState } from 'react'
 import { closeConnection } from './api'
 import { ProxyInstanceHeader, useProxyContext } from './context'
 import { proxyKeys, proxyQueries } from './queries'
 import './styles.css'
-
 export default function ProxyConnectionsPage() {
   const { t } = useI18n()
-  const { message } = App.useApp()
+
   const queryClient = useQueryClient()
   const context = useProxyContext('network_access.proxy_instances.view')
   const canView = hasPermission(
@@ -35,23 +37,29 @@ export default function ProxyConnectionsPage() {
   )
   const selected = context.selected
   const snapshot = useQuery(proxyQueries.connections(selected?.id, canView))
+  const visibleSnapshotData = snapshot.isEnabled === false ? undefined : readableQueryData(snapshot)
   const traffic = useQuery(proxyQueries.traffic(selected?.id, canView))
-  const samples = traffic.data?.samples ?? []
+  const visibleTrafficData = traffic.isEnabled === false ? undefined : readableQueryData(traffic)
+  const samples = visibleTrafficData?.samples ?? []
   const latest = samples[samples.length - 1]
   const [draft, setDraft] = useState('')
   const [keyword, setKeyword] = useState('')
-  const close = useMutation({
-    mutationFn: (connectionId: string) => closeConnection(selected!.id, connectionId),
-    onSuccess: () => {
-      message.success(
-        t('networkAccess.proxyRuntime.closeQueued', '关闭请求已提交，等待运行时确认。'),
-      )
-      if (selected)
-        void queryClient.invalidateQueries({ queryKey: proxyKeys.connections(selected.id) })
+  const close = useOperationMutation(
+    {
+      mutationFn: (connectionId: string) => closeConnection(selected!.id, connectionId),
+      onSuccess: () => {
+        if (selected)
+          void queryClient.invalidateQueries({ queryKey: proxyKeys.connections(selected.id) })
+      },
     },
-    onError: () => message.error(t('networkAccess.proxyRuntime.closeFailed', '关闭请求提交失败。')),
-  })
-  const rows = (snapshot.data?.connections ?? []).filter(
+    {
+      label: ['执行会话命令 代理连接', 'Execute session command proxy connection'],
+      target: (v) => v,
+    },
+  )
+  const operationBlocked =
+    close.blocked || (snapshot.isEnabled !== false && queryAccessDenied(snapshot))
+  const rows = (visibleSnapshotData?.connections ?? []).filter(
     (item) =>
       !keyword ||
       [item.id, item.destination, item.network].some((value) =>
@@ -95,8 +103,9 @@ export default function ProxyConnectionsPage() {
                 title={t('networkAccess.proxyRuntime.confirmClose', '确认断开此连接？')}
                 description={record.destination}
                 okText={t('networkAccess.proxyRuntime.disconnect', '断开')}
-                okButtonProps={{ danger: true }}
+                okButtonProps={{ ...{ danger: true }, disabled: operationBlocked }}
                 onConfirm={() => close.mutate(record.id)}
+                disabled={operationBlocked}
               >
                 <Button
                   danger
@@ -139,6 +148,11 @@ export default function ProxyConnectionsPage() {
     )
   return (
     <main className="soha-server-proxy-page">
+      {close.feedback}
+
+      <ReadFeedback canRead={snapshot.isEnabled} query={snapshot} label="连接采样" />
+      <ReadFeedback canRead={traffic.isEnabled} query={traffic} label="流量采样" />
+
       <ProxyInstanceHeader
         instances={context.instances.data ?? []}
         selected={selected}
@@ -148,37 +162,23 @@ export default function ProxyConnectionsPage() {
         <div>
           <h2>{t('networkAccess.proxyRuntime.connections', '活动连接')}</h2>
           <Typography.Text type="secondary">
-            {snapshot.data?.observedAt
-              ? `${t('networkAccess.proxyRuntime.sampledAt', '最近采样')}：${formatDateTime(snapshot.data.observedAt)} · ${t('networkAccess.proxyRuntime.maxConnections', '最多展示 200 条')}`
+            {visibleSnapshotData?.observedAt
+              ? `${t('networkAccess.proxyRuntime.sampledAt', '最近采样')}：${formatDateTime(visibleSnapshotData.observedAt)} · ${t('networkAccess.proxyRuntime.maxConnections', '最多展示 200 条')}`
               : t('networkAccess.proxyRuntime.noSample', '未采集')}
           </Typography.Text>
         </div>
         <Button
           icon={<ReloadOutlined />}
           loading={snapshot.isFetching}
-          onClick={() => void snapshot.refetch()}
+          onClick={() => void (snapshot.isEnabled === false ? undefined : snapshot.refetch())}
         >
           {t('networkAccess.refresh', '刷新')}
         </Button>
       </div>
-      {snapshot.isError && snapshot.data ? (
-        <ManagementState
-          compact
-          kind="error"
-          description={t('networkAccess.proxyRuntime.stale', '刷新失败，当前显示上次采样。')}
-        />
-      ) : null}
-      {snapshot.isError && !snapshot.data ? (
-        <ManagementState
-          kind="error"
-          description={t(
-            'networkAccess.proxyRuntime.connectionsError',
-            '连接快照暂不可用，请检查运行时后重试。',
-          )}
-        />
-      ) : snapshot.isLoading ? (
+      {snapshot.isError && visibleSnapshotData ? null : null}
+      {snapshot.isError && !visibleSnapshotData ? null : snapshot.isLoading ? (
         <ManagementState kind="loading" />
-      ) : snapshot.data?.state === 'unsupported' ? (
+      ) : visibleSnapshotData?.state === 'unsupported' ? (
         <ManagementState
           kind="empty"
           description={t(
@@ -186,7 +186,7 @@ export default function ProxyConnectionsPage() {
             '此引擎不提供逐连接详情和断开操作。',
           )}
         />
-      ) : snapshot.data?.state === 'unavailable' ? (
+      ) : visibleSnapshotData?.state === 'unavailable' ? (
         <ManagementState
           kind="empty"
           description={t(
@@ -208,7 +208,7 @@ export default function ProxyConnectionsPage() {
             </Card>
             <Card size="small">
               <span>{t('networkAccess.proxyRuntime.visibleConnections', '已展示连接')}</span>
-              <strong>{snapshot.data?.connections.length ?? 0}</strong>
+              <strong>{visibleSnapshotData?.connections.length ?? 0}</strong>
               <small>{t('networkAccess.proxyRuntime.maxConnections', '最多展示 200 条')}</small>
             </Card>
             <Card size="small">
@@ -258,7 +258,7 @@ export default function ProxyConnectionsPage() {
             localSorting
             loading={snapshot.isLoading}
             refreshing={snapshot.isFetching}
-            onRefresh={() => void snapshot.refetch()}
+            onRefresh={() => void (snapshot.isEnabled === false ? undefined : snapshot.refetch())}
             pagination={{ pageSize: 15, showSizeChanger: false }}
             empty={
               keyword

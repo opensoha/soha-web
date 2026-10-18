@@ -1,8 +1,19 @@
-import { useState } from 'react'
-import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { ReadFeedback } from '@/components/request-feedback'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
 import {
-  App,
+  CommentOutlined,
+  HeartFilled,
+  HeartOutlined,
+  MoreOutlined,
+  ReloadOutlined,
+  SettingOutlined,
+} from '@ant-design/icons'
+import type { PersonalFeedItem, PersonalFeedSettings } from '@opensoha/contracts/gen/ts/sohaapi'
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
+import {
   Alert,
+  App,
   Button,
   Card,
   Dropdown,
@@ -16,18 +27,10 @@ import {
   Switch,
   Typography,
 } from 'antd'
-import {
-  CommentOutlined,
-  HeartFilled,
-  HeartOutlined,
-  MoreOutlined,
-  ReloadOutlined,
-  SettingOutlined,
-} from '@ant-design/icons'
-import type { PersonalFeedItem, PersonalFeedSettings } from '@opensoha/contracts/gen/ts/sohaapi'
-import { workbenchQueries } from '../queries'
-import { workbenchMutations } from '../mutations'
+import { useEffect, useState } from 'react'
 import { workbenchKeys } from '../keys'
+import { workbenchMutations } from '../mutations'
+import { workbenchQueries } from '../queries'
 import { safeSourceURL, WorkbenchMarkdown } from './markdown'
 
 export function PersonalFeed({
@@ -37,33 +40,52 @@ export function PersonalFeed({
   owner?: string
   onDiscuss: (item: PersonalFeedItem) => void
 }) {
-  const { message, modal } = App.useApp()
+  const { modal } = App.useApp()
   const client = useQueryClient()
   const query = useInfiniteQuery(workbenchQueries.feed(owner, true))
-  const page = query.data?.pages[0]?.data
-  const items = query.data?.pages.flatMap((page) => page.data?.items ?? []) ?? []
+  const data = readableQueryData(query)
+  const page = data?.pages[0]?.data
+  const items = data?.pages.flatMap((page) => page.data?.items ?? []) ?? []
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [form] = Form.useForm<PersonalFeedSettings>()
   const invalidate = () => void client.invalidateQueries({ queryKey: workbenchKeys.feed(owner) })
-  const onError = (error: Error) => void message.error(error.message || '操作未完成，请重试')
-  const settings = useMutation({
-    ...workbenchMutations.feed.settings(),
-    onSuccess: () => {
-      setSettingsOpen(false)
-      invalidate()
+  const settings = useOperationMutation(
+    {
+      ...workbenchMutations.feed.settings(),
+      onSuccess: () => {
+        form.resetFields()
+        setSettingsOpen(false)
+        invalidate()
+      },
     },
-    onError,
-  })
-  const refresh = useMutation({
-    ...workbenchMutations.feed.refresh(),
-    onSuccess: invalidate,
-    onError,
-  })
-  const feedback = useMutation({
-    ...workbenchMutations.feed.feedback(),
-    onSuccess: invalidate,
-    onError,
-  })
+    { label: ['保存动态偏好', 'Save feed preferences'], target: () => owner ?? '当前账号' },
+  )
+  const refresh = useOperationMutation(
+    {
+      ...workbenchMutations.feed.refresh(),
+      onSuccess: invalidate,
+    },
+    { label: ['更新个人动态', 'Refresh personal feed'], target: () => owner ?? '当前账号' },
+  )
+  const feedback = useOperationMutation(
+    {
+      ...workbenchMutations.feed.feedback(),
+      onSuccess: invalidate,
+    },
+    { label: ['更新动态反馈', 'Update feed feedback'], target: (input) => input.id },
+  )
+  const denied =
+    queryAccessDenied(query) ||
+    queryAccessDenied(settings) ||
+    queryAccessDenied(refresh) ||
+    queryAccessDenied(feedback)
+  const blocked = settings.blocked || refresh.blocked || feedback.blocked
+  useEffect(() => {
+    if (denied) {
+      if (settingsOpen) form.resetFields()
+      setSettingsOpen(false)
+    }
+  }, [denied, form, settingsOpen])
   const running = page?.state === 'queued' || page?.state === 'running'
   const available = page?.searchTools.some((tool) => tool.name === page.settings.searchTool)
   return (
@@ -77,7 +99,7 @@ export function PersonalFeed({
           <Button
             icon={<SettingOutlined />}
             aria-label="动态偏好"
-            disabled={!page}
+            disabled={!page || blocked || denied}
             onClick={() => {
               form.setFieldsValue(page!.settings)
               setSettingsOpen(true)
@@ -88,7 +110,7 @@ export function PersonalFeed({
           <Button
             icon={<ReloadOutlined />}
             loading={running || refresh.isPending}
-            disabled={!available}
+            disabled={!available || blocked || denied}
             onClick={() => refresh.mutate()}
           >
             更新
@@ -101,13 +123,10 @@ export function PersonalFeed({
         </Typography.Text>
       ) : null}
       {query.isLoading ? <Spin /> : null}
-      {query.isError ? (
-        <Alert
-          type="error"
-          title="动态加载失败"
-          action={<Button onClick={() => void query.refetch()}>重试</Button>}
-        />
-      ) : null}
+      <ReadFeedback query={query} label="个人动态" />
+      {refresh.feedback}
+      {feedback.feedback}
+      {!settingsOpen ? settings.feedback : null}
       {page?.error ? <Alert type="warning" title={page.error} /> : null}
       {page && !page.searchTools.length ? (
         <Alert
@@ -122,6 +141,7 @@ export function PersonalFeed({
           title="选择内容来源后开始更新"
           action={
             <Button
+              disabled={blocked || denied}
               onClick={() => {
                 form.setFieldsValue(page.settings)
                 setSettingsOpen(true)
@@ -152,6 +172,7 @@ export function PersonalFeed({
               </Typography.Text>
               <Dropdown
                 trigger={['click']}
+                disabled={blocked || denied}
                 menu={{
                   items: [
                     { key: 'why', label: '为什么创建这条内容' },
@@ -194,7 +215,7 @@ export function PersonalFeed({
                 aria-label={item.liked ? '取消喜欢' : '喜欢'}
                 aria-pressed={item.liked}
                 icon={item.liked ? <HeartFilled /> : <HeartOutlined />}
-                disabled={feedback.isPending}
+                disabled={blocked || denied}
                 onClick={() => feedback.mutate({ id: item.id, input: { liked: !item.liked } })}
               />
               <Button type="text" icon={<CommentOutlined />} onClick={() => onDiscuss(item)}>
@@ -211,13 +232,25 @@ export function PersonalFeed({
       ) : null}
       <Modal
         title="动态偏好"
-        open={settingsOpen}
-        onCancel={() => setSettingsOpen(false)}
+        open={settingsOpen && !denied}
+        onCancel={() => {
+          if (!settings.blocked) {
+            form.resetFields()
+            setSettingsOpen(false)
+          }
+        }}
+        closable={!settings.blocked}
+        keyboard={!settings.blocked}
+        mask={{ closable: !settings.blocked }}
+        cancelButtonProps={{ disabled: settings.blocked }}
+        okButtonProps={{ disabled: settings.blocked }}
         onOk={() => form.submit()}
         confirmLoading={settings.isPending}
         okText="保存"
       >
+        {settings.feedback}
         <Form
+          disabled={blocked || denied}
           form={form}
           layout="vertical"
           onFinish={(value) => settings.mutate({ ...value, searchTool: value.searchTool || '' })}

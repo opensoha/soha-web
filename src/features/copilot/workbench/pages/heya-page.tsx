@@ -1,8 +1,11 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Button, Card, Flex, Popconfirm, Result, Space, Typography } from 'antd'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { ReadFeedback } from '@/components/request-feedback'
+import { useOperationMutation } from '@/components/use-operation-mutation'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useAuthStore } from '@/stores/auth-store'
+import { readableQueryData } from '@/utils/query-feedback'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Button, Card, Flex, Popconfirm, Result, Space, Typography } from 'antd'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { workbenchApi } from '../api'
 import { workbenchKeys } from '../keys'
 import { AIWorkbenchPage } from '../page'
@@ -16,13 +19,12 @@ const accessLabel = {
 }
 
 export function HeyaPage() {
-  const { message } = App.useApp()
   const navigate = useNavigate()
   const location = useLocation()
   const owner = useAuthStore((state) => state.user?.userId)
   const permissions = usePermissionSnapshot()
-  const canChat = hasPermission(permissions.data?.data, 'observe.ai.chat')
-  const canManage = hasPermission(permissions.data?.data, 'ai.environments.update')
+  const canChat = hasPermission(readableQueryData(permissions)?.data, 'observe.ai.chat')
+  const canManage = hasPermission(readableQueryData(permissions)?.data, 'ai.environments.update')
   const client = useQueryClient()
   const key = workbenchKeys.personalAgentAccess(owner)
   const access = useQuery({
@@ -30,35 +32,56 @@ export function HeyaPage() {
     queryFn: workbenchApi.personalAgent.access,
     enabled: !!owner && canChat,
     retry: false,
-    refetchInterval: 5000,
+    refetchInterval: (query) => (query.state.status === 'error' ? false : 5000),
   })
   const requests = useQuery({
     queryKey: workbenchKeys.personalAgentAccessRequests(owner),
     queryFn: workbenchApi.personalAgent.requests,
     enabled: !!owner && canManage && location.pathname === '/heya/access',
     retry: false,
-    refetchInterval: 5000,
+    refetchInterval: (query) => (query.state.status === 'error' ? false : 5000),
   })
-  const request = useMutation({
-    mutationFn: workbenchApi.personalAgent.request,
-    onSuccess: async () => {
-      await client.invalidateQueries({ queryKey: key })
+  const request = useOperationMutation(
+    {
+      mutationFn: workbenchApi.personalAgent.request,
+      onSuccess: async () => {
+        await client.invalidateQueries({ queryKey: key })
+      },
     },
-    onError: (err: Error) => void message.error(err.message),
-  })
-  const decision = useMutation({
-    mutationFn: workbenchApi.personalAgent.decide,
-    onSuccess: async () => {
-      await client.invalidateQueries({ queryKey: workbenchKeys.personalAgentAccessRequests() })
-      await client.invalidateQueries({ queryKey: key })
+    { label: ['申请开通 Heya', 'Request Heya access'], target: () => owner || '当前账号' },
+  )
+  const decision = useOperationMutation(
+    {
+      mutationFn: workbenchApi.personalAgent.decide,
+      onSuccess: async () => {
+        await client.invalidateQueries({ queryKey: workbenchKeys.personalAgentAccessRequests() })
+        await client.invalidateQueries({ queryKey: key })
+      },
     },
-    onError: (err: Error) => void message.error(`决定未保存，请刷新状态后重试：${err.message}`),
-  })
-  if (access.data?.data?.status === 'approved' && location.pathname === '/heya')
-    return <AIWorkbenchPage />
-  const status = access.data?.data?.status
+    { label: ['更新 Heya 开通决定', 'Update Heya decision'], target: (input) => input.userId },
+  )
+  if (
+    canChat &&
+    readableQueryData(access)?.data?.status === 'approved' &&
+    location.pathname === '/heya'
+  )
+    return (
+      <>
+        <ReadFeedback label="Heya 开通状态" query={access} canRead={canChat} />
+        <AIWorkbenchPage />
+      </>
+    )
+  const status = canChat ? readableQueryData(access)?.data?.status : undefined
   return (
     <div className="soha-heya-access">
+      <ReadFeedback label="Heya 开通状态" query={access} canRead={canChat} />
+      <ReadFeedback
+        label="Heya 开通申请"
+        query={requests}
+        canRead={canManage && location.pathname === '/heya/access'}
+      />
+      {request.feedback}
+      {decision.feedback}
       <Flex justify="space-between" align="center">
         <Button type="text" onClick={() => navigate('/ai-workbench/overview')}>
           返回 AI 工作台
@@ -81,7 +104,7 @@ export function HeyaPage() {
               <Button
                 type="primary"
                 loading={request.isPending}
-                disabled={!canChat || !status || status === 'pending'}
+                disabled={!canChat || !status || status === 'pending' || request.blocked}
                 onClick={() => request.mutate()}
               >
                 {status === 'pending'
@@ -153,6 +176,7 @@ export function HeyaPage() {
                   ).map((next) => (
                     <Popconfirm
                       key={next}
+                      disabled={decision.blocked}
                       title={`${next === 'approved' ? '批准' : next === 'rejected' ? '拒绝' : '撤销'} ${item.userId} 的 Heya 开通？`}
                       onConfirm={() =>
                         decision.mutateAsync({
@@ -162,7 +186,11 @@ export function HeyaPage() {
                         })
                       }
                     >
-                      <Button loading={decision.isPending} danger={next === 'revoked'}>
+                      <Button
+                        disabled={decision.blocked}
+                        loading={decision.isPending}
+                        danger={next === 'revoked'}
+                      >
                         {next === 'approved' ? '批准' : next === 'rejected' ? '拒绝' : '撤销'}
                       </Button>
                     </Popconfirm>

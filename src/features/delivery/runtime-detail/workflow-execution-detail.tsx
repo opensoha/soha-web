@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useDocumentHidden } from '@/utils/use-document-hidden'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Alert, App, Button, Card, Collapse, Descriptions, Space, Typography, theme } from 'antd'
 import {
   ArrowLeftOutlined,
@@ -10,6 +11,8 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { StatusTag } from '@/components/status-tag'
+import { requestErrorMessage, useInlineApiError } from '@/components/request-feedback'
+import { writeOutcomeUnknown } from '@/utils/query-feedback'
 import { formatDateTime } from '@/utils/time'
 import { deliveryKeys } from '../keys'
 import { deliveryMutations } from '../mutations'
@@ -58,11 +61,13 @@ export function WorkflowExecutionDetail({
   const approve = useMutation(deliveryMutations.workflows.approve(queryClient))
   const reject = useMutation(deliveryMutations.workflows.reject(queryClient))
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
-  const [hidden, setHidden] = useState(document.hidden)
+  const hidden = useDocumentHidden()
   const [confirming, setConfirming] = useState(false)
   const [submitting, setSubmitting] = useState<'approve' | 'reject' | null>(null)
   const [acknowledged, setAcknowledged] = useState(false)
   const [actionError, setActionError] = useState('')
+  const [decisionError, setDecisionError] = useState<Error | null>(null)
+  useInlineApiError(actionError ? decisionError : null)
   const decisionDialog = useRef<ReturnType<typeof modal.confirm> | null>(null)
   const state = workflowExecutionState(record.status)
   const summary = workflowExecutionSummary(record)
@@ -71,29 +76,34 @@ export function WorkflowExecutionDetail({
     hasPermission(snapshot, 'delivery.application-environments.approve') &&
     workflowCanReview(record)
   const live = workflowExecutionIsLive(record.status)
-  const actionDisabled = confirming || refreshing || !!refreshError || acknowledged
+  const unknown = writeOutcomeUnknown(approve.error) || writeOutcomeUnknown(reject.error)
+  const submittingRequest = useRef(false)
+  const actionDisabled = confirming || refreshing || !!refreshError || acknowledged || unknown
 
-  useEffect(() => {
-    const update = () => setHidden(document.hidden)
-    document.addEventListener('visibilitychange', update)
-    return () => {
-      document.removeEventListener('visibilitychange', update)
+  useEffect(
+    () => () => {
       decisionDialog.current?.destroy()
-    }
-  }, [])
+    },
+    [],
+  )
 
   useEffect(() => {
     if (!workflowCanReview(record)) setAcknowledged(false)
   }, [record])
 
   async function decide(action: 'approve' | 'reject') {
+    if (submittingRequest.current || unknown) return
+    submittingRequest.current = true
     let saved = false
+    let writeStarted = false
     setSubmitting(action)
     setActionError('')
+    setDecisionError(null)
     try {
       const fresh = await onRefresh()
       if (!fresh || !workflowCanReview(fresh))
         throw new Error('执行状态已变化，请核对最新记录后再操作。')
+      writeStarted = true
       await (action === 'approve' ? approve : reject).mutateAsync({
         id: record.id,
         comment:
@@ -106,26 +116,41 @@ export function WorkflowExecutionDetail({
       })
       await onRefresh()
     } catch (error) {
-      const message = `${saved ? '审批已提交，执行记录尚未更新。' : '审批未提交。'}${error instanceof Error ? error.message : '请重试。'}`
+      setDecisionError(error instanceof Error ? error : null)
+      const uncertain =
+        writeStarted && !saved && writeOutcomeUnknown(error instanceof Error ? error : null)
+      const message = `${saved ? '审批已提交，执行记录尚未更新。' : uncertain ? '审批请求结果不明，请先核对执行记录，不要重复提交。' : '审批未提交。'}${error instanceof Error ? requestErrorMessage(error, 'zh_CN') : '请重试。'}`
       setActionError(message)
       if (!saved) {
-        decisionDialog.current?.update({ content: <Alert type="error" showIcon title={message} /> })
+        decisionDialog.current?.update({
+          content: <Alert type={uncertain ? 'warning' : 'error'} showIcon title={message} />,
+          okButtonProps: {
+            'aria-label': action === 'approve' ? '确认批准' : '确认拒绝',
+            loading: false,
+            disabled: uncertain,
+            danger: action === 'reject',
+          },
+        })
         throw error
       }
     } finally {
+      submittingRequest.current = false
       setSubmitting(null)
     }
   }
 
   async function confirmDecision(action: 'approve' | 'reject') {
-    if (decisionDialog.current) return
+    if (decisionDialog.current || unknown) return
     setConfirming(true)
     decisionDialog.current = modal.confirm({
       title: action === 'approve' ? '批准本次执行？' : '拒绝本次执行？',
       content: `工作流「${record.workflowName}」 · ${environmentName}。${action === 'approve' ? '批准后工作流可以继续执行。' : '拒绝将结束本次审批。'}`,
       okText: action === 'approve' ? '确认批准' : '确认拒绝',
       cancelText: '返回',
-      okButtonProps: { danger: action === 'reject' },
+      okButtonProps: {
+        'aria-label': action === 'approve' ? '确认批准' : '确认拒绝',
+        danger: action === 'reject',
+      },
       onOk: () => decide(action),
       afterClose: () => {
         setConfirming(false)
@@ -154,14 +179,8 @@ export function WorkflowExecutionDetail({
   return (
     <div
       className="soha-page soha-workflow-execution"
+      data-motion-disabled={!token.motion}
       data-motion-paused={hidden ? 'true' : 'false'}
-      style={
-        {
-          '--soha-execution-motion-fast': token.motion ? token.motionDurationFast : '0s',
-          '--soha-execution-motion-mid': token.motion ? token.motionDurationMid : '0s',
-          '--soha-execution-motion-ease': token.motionEaseOut,
-        } as CSSProperties
-      }
     >
       <header className="soha-execution-identity">
         <div className="soha-execution-identity-main">
@@ -201,7 +220,11 @@ export function WorkflowExecutionDetail({
           type="warning"
           showIcon
           title="证据未更新，正在展示上次记录"
-          description={refreshError instanceof Error ? refreshError.message : '刷新失败，请重试。'}
+          description={
+            refreshError instanceof Error
+              ? requestErrorMessage(refreshError, 'zh_CN')
+              : '刷新失败，请重试。'
+          }
           action={
             <Button size="small" onClick={() => void onRefresh().catch(() => {})}>
               重试
@@ -253,6 +276,7 @@ export function WorkflowExecutionDetail({
         {canReview ? (
           <Space wrap>
             <Button
+              aria-label="拒绝执行"
               disabled={actionDisabled}
               loading={submitting === 'reject'}
               danger
@@ -261,6 +285,7 @@ export function WorkflowExecutionDetail({
               拒绝执行
             </Button>
             <Button
+              aria-label="批准执行"
               disabled={actionDisabled}
               loading={submitting === 'approve'}
               type="primary"

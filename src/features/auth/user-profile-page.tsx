@@ -1,29 +1,16 @@
-import type { ChangeEvent, CSSProperties } from 'react'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import {
-  Alert,
-  App,
-  Avatar,
-  Button,
-  Card,
-  Descriptions,
-  Dropdown,
-  Empty,
-  Form,
-  Input,
-  Modal,
-  Popconfirm,
-  Select,
-  Skeleton,
-  Slider,
-  Space,
-  Table,
-  Tabs,
-  Tag,
-  Tooltip,
-  Typography,
-} from 'antd'
-import type { DescriptionsProps, TableColumnsType, TabsProps } from 'antd'
+import { AdminTable } from '@/components/admin-table'
+import { ManagementIconButton } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
+import { StatusTag } from '@/components/status-tag'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { consolePermissionLabelMap } from '@/features/auth/permission-catalog'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth/permission-snapshot'
+import type { PersonalAccessToken } from '@/features/copilot'
+import { useAuthStore } from '@/stores/auth-store'
+import type { LinkedIdentity, UserProfile, UserSession } from '@/types'
+import { loginProviderLabel, loginProviderTagColor } from '@/utils/login-provider'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import { formatDateTime, formatRelativeTime } from '@/utils/time'
 import {
   ApiOutlined,
   EditOutlined,
@@ -41,17 +28,33 @@ import {
   UploadOutlined,
   UserOutlined,
 } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { DescriptionsProps, TableColumnsType, TabsProps } from 'antd'
+import {
+  Alert,
+  App,
+  Avatar,
+  Button,
+  Card,
+  Descriptions,
+  Dropdown,
+  Empty,
+  Form,
+  Input,
+  Modal,
+  Popconfirm,
+  Select,
+  Skeleton,
+  Slider,
+  Space,
+  Tabs,
+  Tag,
+  Tooltip,
+  Typography,
+} from 'antd'
+import type { ChangeEvent, CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ManagementIconButton } from '@/components/management-list'
-import { StatusTag } from '@/components/status-tag'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth/permission-snapshot'
-import { consolePermissionLabelMap } from '@/features/auth/permission-catalog'
-import type { CreatedPersonalAccessToken, PersonalAccessToken } from '@/features/copilot'
-import { useAuthStore } from '@/stores/auth-store'
-import type { ApiResponse, LinkedIdentity, UserProfile, UserSession } from '@/types'
-import { formatDateTime, formatRelativeTime } from '@/utils/time'
-import { loginProviderLabel, loginProviderTagColor } from '@/utils/login-provider'
 import { authKeys } from './keys'
 import { authProfileApi } from './profile-api'
 import './user-profile-page.css'
@@ -300,7 +303,7 @@ export function UserProfilePage() {
   const avatarDragRef = useRef<{ clientX: number; clientY: number; crop: AvatarCrop } | null>(null)
   const avatarUrlValue = Form.useWatch('avatarUrl', avatarForm)
 
-  const { data, isLoading, error } = useQuery({
+  const profileQuery = useQuery({
     queryKey: authKeys.profile(),
     queryFn: authProfileApi.get,
   })
@@ -309,7 +312,7 @@ export function UserProfilePage() {
     queryFn: authProfileApi.listIdentityProviders,
   })
   const permissionSnapshotQuery = usePermissionSnapshot()
-  const snapshot = permissionSnapshotQuery.data?.data
+  const snapshot = readableQueryData(permissionSnapshotQuery)?.data
   const canViewGatewayKeys = hasPermission(snapshot, 'ai.gateway.view')
   const canIssueGatewayKeys = hasPermission(snapshot, 'ai.gateway.invoke')
 
@@ -319,23 +322,32 @@ export function UserProfilePage() {
     enabled: canViewGatewayKeys,
   })
 
-  const profile = data?.data
-  const gatewayTokens = gatewayTokensQuery.data?.data ?? []
+  const profile = readableQueryData(profileQuery)?.data
+  const denied = queryAccessDenied(profileQuery)
+  const tokenDenied = queryAccessDenied(gatewayTokensQuery) || !canIssueGatewayKeys || denied
+  const secretGeneration = useRef(0)
+  const secretAllowed = useRef(!tokenDenied)
+  secretAllowed.current = !tokenDenied
+  const gatewayTokens = canViewGatewayKeys
+    ? (readableQueryData(gatewayTokensQuery)?.data ?? [])
+    : []
   const gatewayTokenSummary = tokenSummaryText(gatewayTokens)
   const displayName = valueOrUnset(profile?.displayName || profile?.username)
   const avatarText = displayName === '未设置' ? 'U' : displayName.charAt(0).toUpperCase()
   const primaryIdentity = profile?.identities?.[0]
-  const linkableProviders = (identityProvidersQuery.data?.data ?? []).filter(
+  const linkableProviders = (readableQueryData(identityProvidersQuery)?.data ?? []).filter(
     (provider) =>
       provider.enabled &&
       provider.type !== 'password' &&
       !profile?.identities?.some(
-        (identity) => identity.providerId === provider.id && identity.providerType === provider.type,
+        (identity) =>
+          identity.providerId === provider.id && identity.providerType === provider.type,
       ),
   )
   const currentAvatarFit = normalizeAvatarFit(profile?.avatarFit)
 
   const openProfileEditor = () => {
+    if (profileBlocked) return
     profileForm.setFieldsValue({
       displayName: profile?.displayName,
       email: profile?.email ?? '',
@@ -345,6 +357,7 @@ export function UserProfilePage() {
   }
 
   const openAvatarEditor = () => {
+    if (profileBlocked) return
     avatarForm.setFieldsValue({
       avatarUrl: profile?.avatarUrl ?? '',
       avatarFit: normalizeAvatarFit(profile?.avatarFit),
@@ -354,6 +367,7 @@ export function UserProfilePage() {
   }
 
   const openPasswordEditor = () => {
+    if (profileBlocked) return
     passwordForm.resetFields()
     setPasswordOpen(true)
   }
@@ -377,16 +391,22 @@ export function UserProfilePage() {
     setSearchParams(next, { replace: true })
   }, [message, queryClient, searchParams, setSearchParams])
 
-  const beginIdentityLink = async (providerId: string) => {
-    try {
-      const response = await authProfileApi.beginIdentityLink(providerId)
-      window.location.assign(response.data.url)
-    } catch (linkError) {
-      void message.error(linkError instanceof Error ? linkError.message : '无法发起登录关联')
-    }
+  const linkIdentity = useOperationMutation(
+    {
+      mutationFn: async (providerId: string) => {
+        const response = await authProfileApi.beginIdentityLink(providerId)
+        window.location.assign(response.data.url)
+      },
+    },
+    { label: ['关联登录', 'Link identity'], target: (id) => id },
+  )
+  const beginIdentityLink = (providerId: string) => {
+    if (!denied && !linkIdentity.blocked) linkIdentity.mutate(providerId)
   }
 
   const openCreateToken = () => {
+    if (tokenBlocked || tokenDenied) return
+    createTokenMutation.reset()
     tokenForm.setFieldsValue({
       name: defaultGatewayTokenName(profile),
       permissionKeys: ['ai.gateway.invoke'],
@@ -421,6 +441,7 @@ export function UserProfilePage() {
   }
 
   const handleAvatarSubmit = async (values: AvatarFormValues) => {
+    if (profileBlocked) return
     const source = compact(values.avatarUrl)
     try {
       updateProfileMutation.mutate({
@@ -436,113 +457,186 @@ export function UserProfilePage() {
     }
   }
 
-  const updateProfileMutation = useMutation<ApiResponse<UserProfile>, Error, ProfileFormValues>({
-    mutationFn: (values) =>
-      authProfileApi.update({
-        displayName: compact(values.displayName),
-        email: compact(values.email),
-        phone: compact(values.phone),
-        avatarUrl:
-          values.avatarUrl === undefined ? compact(profile?.avatarUrl) : compact(values.avatarUrl),
-        avatarFit:
-          values.avatarFit === undefined ? currentAvatarFit : normalizeAvatarFit(values.avatarFit),
-      }),
-    onSuccess: (res, values) => {
-      const updated = res.data
-      if (
-        values.avatarUrl !== undefined &&
-        compact(values.avatarUrl) &&
-        !compact(updated?.avatarUrl)
-      ) {
-        message.error('头像保存未生效，请重试')
-        return
-      }
-      queryClient.setQueryData(authKeys.profile(), res)
-      void queryClient.invalidateQueries({ queryKey: authKeys.profile() })
-      if (updated) {
-        setAuthUser(authUserFromProfile(updated))
-      }
+  const updateProfileMutation = useOperationMutation(
+    {
+      mutationFn: async (values: ProfileFormValues) => {
+        const res = await authProfileApi.update({
+          displayName: compact(values.displayName),
+          email: compact(values.email),
+          phone: compact(values.phone),
+          avatarUrl:
+            values.avatarUrl === undefined
+              ? compact(profile?.avatarUrl)
+              : compact(values.avatarUrl),
+          avatarFit:
+            values.avatarFit === undefined
+              ? currentAvatarFit
+              : normalizeAvatarFit(values.avatarFit),
+        })
+        return {
+          ...res,
+          avatarSaved: !compact(values.avatarUrl) || Boolean(compact(res.data?.avatarUrl)),
+        }
+      },
+      onSuccess: (res) => {
+        if (!res.avatarSaved) return
+        queryClient.setQueryData(authKeys.profile(), res)
+        void queryClient.invalidateQueries({ queryKey: authKeys.profile() })
+        if (res.data) setAuthUser(authUserFromProfile(res.data))
+        setProfileOpen(false)
+        setAvatarOpen(false)
+        profileForm.resetFields()
+        avatarForm.resetFields()
+      },
+    },
+    {
+      label: ['更新账号资料', 'Update profile'],
+      target: () => profile?.userId || '当前账号',
+      resultError: (res) =>
+        res.avatarSaved ? undefined : new Error('头像保存未生效，请核对账号资料'),
+      receipt: () => ({ message: '账号资料已更新' }),
+    },
+  )
+  const changePasswordMutation = useOperationMutation(
+    {
+      gcTime: 0,
+      mutationFn: async (values: PasswordFormValues) => {
+        await authProfileApi.changePassword({
+          currentPassword: values.currentPassword,
+          newPassword: values.newPassword,
+        })
+      },
+      onSuccess: () => {
+        setPasswordOpen(false)
+        passwordForm.resetFields()
+      },
+    },
+    {
+      label: ['修改密码', 'Change password'],
+      target: () => profile?.userId || '当前账号',
+      receipt: () => ({ message: '密码修改请求已返回' }),
+    },
+  )
+  const createTokenMutation = useOperationMutation(
+    {
+      gcTime: 0,
+      mutationFn: async (values: GatewayTokenFormValues) => {
+        const generation = secretGeneration.current
+        const res = await authProfileApi.createGatewayToken({
+          name: values.name,
+          permissionKeys: values.permissionKeys ?? [],
+          scopes: values.scopes ?? [],
+          expiresAt: gatewayTokenExpiresAt(values),
+        })
+        if (generation === secretGeneration.current && secretAllowed.current && res.data?.value) {
+          setOneTimeToken({
+            title: 'Soha AI Gateway Login Key 已生成',
+            value: res.data.value,
+            prefix: res.data.token?.tokenPrefix,
+          })
+        }
+        return res.data?.token
+      },
+      onSuccess: () => {
+        setCreateTokenOpen(false)
+        tokenForm.resetFields()
+        void refreshGatewayTokens()
+      },
+    },
+    {
+      label: ['生成 Gateway key', 'Create Gateway key'],
+      target: (values) => values.name,
+      receipt: (token) => ({ message: 'Gateway key 记录已返回', evidence: token?.id }),
+    },
+  )
+  const revokeTokenMutation = useOperationMutation(
+    {
+      mutationFn: authProfileApi.revokeGatewayToken,
+      onSuccess: () => {
+        void refreshGatewayTokens()
+      },
+    },
+    {
+      label: ['吊销 Gateway key', 'Revoke Gateway key'],
+      target: (id) => id,
+      receipt: () => ({ message: 'Gateway key 吊销请求已返回' }),
+    },
+  )
+  const rotateTokenMutation = useOperationMutation(
+    {
+      gcTime: 0,
+      mutationFn: async (record: PersonalAccessToken) => {
+        const generation = secretGeneration.current
+        const res = await authProfileApi.rotateGatewayToken(record.id)
+        if (generation === secretGeneration.current && secretAllowed.current && res.data?.value) {
+          setOneTimeToken({
+            title: 'Soha AI Gateway Login Key 已轮换',
+            value: res.data.value,
+            prefix: res.data.token?.tokenPrefix,
+          })
+        }
+        return res.data?.token
+      },
+      onSuccess: () => {
+        void refreshGatewayTokens()
+      },
+    },
+    {
+      label: ['轮换 Gateway key', 'Rotate Gateway key'],
+      target: (record) => record.id,
+      receipt: (token) => ({ message: 'Gateway key 轮换记录已返回', evidence: token?.id }),
+    },
+  )
+  const profileBlocked = denied || updateProfileMutation.blocked || changePasswordMutation.blocked
+  const tokenBlocked =
+    createTokenMutation.blocked || rotateTokenMutation.blocked || revokeTokenMutation.blocked
+  useEffect(() => {
+    if (denied || queryAccessDenied(updateProfileMutation)) {
       setProfileOpen(false)
       setAvatarOpen(false)
       profileForm.resetFields()
       avatarForm.resetFields()
-      message.success('账号资料已更新')
-    },
-    onError: (mutationError) => message.error(mutationError.message),
-  })
-
-  const changePasswordMutation = useMutation<unknown, Error, PasswordFormValues>({
-    mutationFn: (values) =>
-      authProfileApi.changePassword({
-        currentPassword: values.currentPassword,
-        newPassword: values.newPassword,
-      }),
-    onSuccess: () => {
+    }
+    if (denied || queryAccessDenied(changePasswordMutation)) {
       setPasswordOpen(false)
       passwordForm.resetFields()
-      message.success('密码已修改')
-    },
-    onError: (mutationError) => message.error(mutationError.message),
-  })
-
-  const createTokenMutation = useMutation<
-    ApiResponse<CreatedPersonalAccessToken>,
-    Error,
-    GatewayTokenFormValues
-  >({
-    mutationFn: (values) =>
-      authProfileApi.createGatewayToken({
-        name: values.name,
-        permissionKeys: values.permissionKeys ?? [],
-        scopes: values.scopes ?? [],
-        expiresAt: gatewayTokenExpiresAt(values),
-      }),
-    onSuccess: (res) => {
-      const created = res.data
+    }
+  }, [
+    denied,
+    updateProfileMutation.error,
+    changePasswordMutation.error,
+    profileForm,
+    avatarForm,
+    passwordForm,
+  ])
+  useEffect(() => {
+    if (
+      tokenDenied ||
+      queryAccessDenied(createTokenMutation) ||
+      queryAccessDenied(rotateTokenMutation)
+    ) {
+      secretGeneration.current += 1
+      setOneTimeToken(null)
       setCreateTokenOpen(false)
       tokenForm.resetFields()
-      if (created?.value) {
-        setOneTimeToken({
-          title: 'Soha AI Gateway Login Key 已生成',
-          value: created.value,
-          prefix: created.token?.tokenPrefix,
-        })
-      }
-      void refreshGatewayTokens()
-      message.success('Gateway key 已生成')
+    }
+  }, [tokenDenied, createTokenMutation.error, rotateTokenMutation.error, tokenForm])
+  useEffect(
+    () => () => {
+      secretGeneration.current += 1
     },
-    onError: (mutationError) => message.error(mutationError.message),
-  })
-
-  const revokeTokenMutation = useMutation<unknown, Error, string>({
-    mutationFn: authProfileApi.revokeGatewayToken,
-    onSuccess: () => {
-      void refreshGatewayTokens()
-      message.success('Gateway key 已吊销')
-    },
-    onError: (mutationError) => message.error(mutationError.message),
-  })
-
-  const rotateTokenMutation = useMutation<
-    ApiResponse<CreatedPersonalAccessToken>,
-    Error,
-    PersonalAccessToken
-  >({
-    mutationFn: (record) => authProfileApi.rotateGatewayToken(record.id),
-    onSuccess: (res) => {
-      const created = res.data
-      if (created?.value) {
-        setOneTimeToken({
-          title: 'Soha AI Gateway Login Key 已轮换',
-          value: created.value,
-          prefix: created.token?.tokenPrefix,
-        })
-      }
-      void refreshGatewayTokens()
-      message.success('Gateway key 已轮换')
-    },
-    onError: (mutationError) => message.error(mutationError.message),
-  })
+    [],
+  )
+  const operationFeedback = (
+    <>
+      {!profileOpen && !avatarOpen ? updateProfileMutation.feedback : null}
+      {!passwordOpen ? changePasswordMutation.feedback : null}
+      {!createTokenOpen ? createTokenMutation.feedback : null}
+      {revokeTokenMutation.feedback}
+      {rotateTokenMutation.feedback}
+      {linkIdentity.feedback}
+    </>
+  )
 
   const identityColumns = useMemo<TableColumnsType<LinkedIdentity>>(
     () => [
@@ -703,7 +797,10 @@ export function UserProfilePage() {
             <Popconfirm
               title="轮换 Gateway key？"
               description="旧 key 会被吊销，新明文只展示一次。"
-              okButtonProps={{ loading: rotateTokenMutation.isPending }}
+              okButtonProps={{
+                loading: rotateTokenMutation.isPending,
+                disabled: tokenBlocked || tokenDenied,
+              }}
               onConfirm={() => rotateTokenMutation.mutate(record)}
             >
               <ManagementIconButton
@@ -718,7 +815,11 @@ export function UserProfilePage() {
             <Popconfirm
               title="吊销 Gateway key？"
               description="吊销后外部 AI Client 将不能再使用该 key 登录 Gateway。"
-              okButtonProps={{ danger: true, loading: revokeTokenMutation.isPending }}
+              okButtonProps={{
+                danger: true,
+                loading: revokeTokenMutation.isPending,
+                disabled: tokenBlocked || tokenDenied,
+              }}
               onConfirm={() => revokeTokenMutation.mutate(record.id)}
             >
               <ManagementIconButton
@@ -735,7 +836,7 @@ export function UserProfilePage() {
         ),
       },
     ],
-    [canIssueGatewayKeys, revokeTokenMutation, rotateTokenMutation],
+    [canIssueGatewayKeys, revokeTokenMutation, rotateTokenMutation, tokenBlocked, tokenDenied],
   )
 
   const descriptionItems = useMemo<DescriptionsProps['items']>(
@@ -775,86 +876,80 @@ export function UserProfilePage() {
     [profile],
   )
 
-  const tabItems = useMemo<TabsProps['items']>(
-    () => [
-      {
-        key: 'identities',
-        label: '关联登录',
-        children: (
-          <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <Dropdown
-                disabled={linkableProviders.length === 0}
-                menu={{
-                  items: linkableProviders.map((provider) => ({
-                    key: provider.id || provider.name,
-                    label: provider.name,
-                  })),
-                  onClick: ({ key }) => void beginIdentityLink(key),
-                }}
-                trigger={['click']}
-              >
-                <Button className="soha-profile-link-button" icon={<LinkOutlined />}>
-                  关联登录
-                </Button>
-              </Dropdown>
-            </div>
-            <Table
-              columns={identityColumns}
-              dataSource={profile?.identities ?? []}
-              locale={{
-                emptyText: (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无关联登录方式" />
-                ),
+  const tabItems: TabsProps['items'] = [
+    {
+      key: 'identities',
+      label: '关联登录',
+      children: (
+        <Space orientation="vertical" size={12} style={{ width: '100%' }}>
+          <ReadFeedback label="可关联登录方式" query={identityProvidersQuery} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <Dropdown
+              disabled={
+                linkableProviders.length === 0 ||
+                linkIdentity.blocked ||
+                queryAccessDenied(identityProvidersQuery)
+              }
+              menu={{
+                items: linkableProviders.map((provider) => ({
+                  key: provider.id || provider.name,
+                  label: provider.name,
+                })),
+                onClick: ({ key }) => void beginIdentityLink(key),
               }}
-              pagination={false}
-              rowKey="id"
-              scroll={{ x: 760 }}
-              size="small"
-            />
-          </Space>
-        ),
-      },
-      {
-        key: 'sessions',
-        label: '活跃会话',
-        children: (
-          <Table
-            columns={sessionColumns}
-            dataSource={profile?.sessions ?? []}
-            locale={{
-              emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无活跃会话" />,
-            }}
+              trigger={['click']}
+            >
+              <Button className="soha-profile-link-button" icon={<LinkOutlined />}>
+                关联登录
+              </Button>
+            </Dropdown>
+          </div>
+          <AdminTable
+            enableColumnSelection={false}
+            columns={identityColumns}
+            dataSource={profile?.identities ?? []}
+            empty={<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无关联登录方式" />}
             pagination={false}
             rowKey="id"
-            scroll={{ x: 900 }}
-            size="small"
+            scroll={{ x: 760 }}
+            tableSize="small"
           />
-        ),
-      },
-      {
-        key: 'access',
-        label: '权限归属',
-        children: <Descriptions bordered column={1} items={permissionItems} size="small" />,
-      },
-    ],
-    [identityColumns, linkableProviders, permissionItems, profile?.identities, profile?.sessions, sessionColumns],
-  )
+        </Space>
+      ),
+    },
+    {
+      key: 'sessions',
+      label: '活跃会话',
+      children: (
+        <AdminTable
+          enableColumnSelection={false}
+          columns={sessionColumns}
+          dataSource={profile?.sessions ?? []}
+          empty={<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无活跃会话" />}
+          pagination={false}
+          rowKey="id"
+          scroll={{ x: 900 }}
+          tableSize="small"
+        />
+      ),
+    },
+    {
+      key: 'access',
+      label: '权限归属',
+      children: <Descriptions bordered column={1} items={permissionItems} size="small" />,
+    },
+  ]
 
-  if (error) {
+  if (profileQuery.isError && !profile) {
     return (
       <div className="soha-page">
-        <Alert
-          type="error"
-          showIcon
-          title="个人中心加载失败"
-          description={(error as Error).message}
-        />
+        <ReadFeedback label="个人中心" query={profileQuery} />
+        {operationFeedback}
       </div>
     )
   }
 
-  if (isLoading || !profile) {
+  if (profileQuery.isLoading || !profile) {
     return (
       <div className="soha-page soha-profile-page">
         <Skeleton active paragraph={{ rows: 10 }} />
@@ -864,7 +959,9 @@ export function UserProfilePage() {
 
   const gatewayKeysUnavailable = !permissionSnapshotQuery.isLoading && !canViewGatewayKeys
   const gatewayKeysSummary = canViewGatewayKeys
-    ? `${gatewayTokenSummary.activeCount} active / ${gatewayTokens.length} total`
+    ? readableQueryData(gatewayTokensQuery)
+      ? `${gatewayTokenSummary.activeCount} active / ${gatewayTokens.length} total`
+      : '未读取'
     : '未授权'
   const avatarPreviewURL =
     avatarOpen && avatarUrlValue !== undefined
@@ -874,6 +971,8 @@ export function UserProfilePage() {
 
   return (
     <div className="soha-page soha-profile-page">
+      <ReadFeedback label="个人中心" query={profileQuery} />
+      {operationFeedback}
       <div className="soha-profile-layout">
         <Card className="soha-profile-summary-card" size="small">
           <div className="soha-profile-identity">
@@ -881,6 +980,7 @@ export function UserProfilePage() {
               className="soha-profile-avatar-button"
               type="button"
               aria-label="更换头像"
+              disabled={profileBlocked}
               onClick={openAvatarEditor}
             >
               <Avatar
@@ -953,6 +1053,7 @@ export function UserProfilePage() {
                   size="small"
                   aria-label="编辑资料"
                   icon={<EditOutlined />}
+                  disabled={profileBlocked}
                   onClick={openProfileEditor}
                 >
                   编辑信息
@@ -962,6 +1063,7 @@ export function UserProfilePage() {
                   type="primary"
                   aria-label="修改密码"
                   icon={<LockOutlined />}
+                  disabled={profileBlocked}
                   onClick={openPasswordEditor}
                 >
                   修改密码
@@ -991,7 +1093,7 @@ export function UserProfilePage() {
                 size="small"
                 type="primary"
                 icon={<PlusOutlined />}
-                disabled={!canIssueGatewayKeys}
+                disabled={!canIssueGatewayKeys || tokenBlocked || tokenDenied}
                 onClick={openCreateToken}
               >
                 生成 key
@@ -1025,22 +1127,25 @@ export function UserProfilePage() {
                 description="需要 ai.gateway.view 查看已有 key，需要 ai.gateway.invoke 生成、轮换或吊销个人 key。"
               />
             ) : (
-              <Table
+              <AdminTable
+                enableColumnSelection={false}
                 columns={gatewayTokenColumns}
+                error={gatewayTokensQuery.error}
+                hasReadData={gatewayTokensQuery.data !== undefined}
+                onRefresh={() => void gatewayTokensQuery.refetch()}
+                refreshing={gatewayTokensQuery.isFetching}
                 dataSource={gatewayTokens}
                 loading={gatewayTokensQuery.isLoading || permissionSnapshotQuery.isLoading}
-                locale={{
-                  emptyText: (
-                    <Empty
-                      image={Empty.PRESENTED_IMAGE_SIMPLE}
-                      description="暂无 AI Gateway login key"
-                    />
-                  ),
-                }}
+                empty={
+                  <Empty
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    description="暂无 AI Gateway login key"
+                  />
+                }
                 pagination={false}
                 rowKey="id"
                 scroll={{ x: 920 }}
-                size="small"
+                tableSize="small"
                 tableLayout="fixed"
               />
             )}
@@ -1062,15 +1167,26 @@ export function UserProfilePage() {
 
       <Modal
         title="更换头像"
-        open={avatarOpen}
+        open={avatarOpen && !denied}
+        closable={!updateProfileMutation.blocked}
+        keyboard={!updateProfileMutation.blocked}
+        mask={{ closable: !updateProfileMutation.blocked }}
+        okButtonProps={{ disabled: profileBlocked }}
+        cancelButtonProps={{ disabled: updateProfileMutation.blocked }}
         okText="保存"
         cancelText="取消"
         confirmLoading={updateProfileMutation.isPending}
         destroyOnHidden
-        onCancel={() => setAvatarOpen(false)}
+        onCancel={() => {
+          if (updateProfileMutation.blocked) return
+          setAvatarOpen(false)
+          avatarForm.resetFields()
+        }}
         onOk={() => avatarForm.submit()}
       >
+        {updateProfileMutation.feedback}
         <Form
+          disabled={profileBlocked}
           form={avatarForm}
           layout="vertical"
           size="small"
@@ -1081,6 +1197,7 @@ export function UserProfilePage() {
               <div
                 className="soha-profile-avatar-crop"
                 onPointerDown={(event) => {
+                  if (profileBlocked) return
                   avatarDragRef.current = {
                     clientX: event.clientX,
                     clientY: event.clientY,
@@ -1090,7 +1207,7 @@ export function UserProfilePage() {
                 }}
                 onPointerMove={(event) => {
                   const drag = avatarDragRef.current
-                  if (!drag) return
+                  if (!drag || profileBlocked) return
                   setAvatarCrop({
                     ...drag.crop,
                     x: drag.crop.x + event.clientX - drag.clientX,
@@ -1121,10 +1238,15 @@ export function UserProfilePage() {
               </Avatar>
             )}
             <Space size={8} wrap>
-              <Button icon={<UploadOutlined />} onClick={() => avatarFileInputRef.current?.click()}>
+              <Button
+                disabled={profileBlocked}
+                icon={<UploadOutlined />}
+                onClick={() => avatarFileInputRef.current?.click()}
+              >
                 上传图片
               </Button>
               <Button
+                disabled={profileBlocked}
                 onClick={() => {
                   avatarForm.setFieldsValue({ avatarUrl: '' })
                   setAvatarCrop(defaultAvatarCrop)
@@ -1179,15 +1301,26 @@ export function UserProfilePage() {
 
       <Modal
         title="编辑账号资料"
-        open={profileOpen}
+        open={profileOpen && !denied}
+        closable={!updateProfileMutation.blocked}
+        keyboard={!updateProfileMutation.blocked}
+        mask={{ closable: !updateProfileMutation.blocked }}
+        okButtonProps={{ disabled: profileBlocked }}
+        cancelButtonProps={{ disabled: updateProfileMutation.blocked }}
         okText="保存"
         cancelText="取消"
         confirmLoading={updateProfileMutation.isPending}
         destroyOnHidden
-        onCancel={() => setProfileOpen(false)}
+        onCancel={() => {
+          if (updateProfileMutation.blocked) return
+          setProfileOpen(false)
+          profileForm.resetFields()
+        }}
         onOk={() => profileForm.submit()}
       >
+        {updateProfileMutation.feedback}
         <Form
+          disabled={profileBlocked}
           form={profileForm}
           layout="vertical"
           size="small"
@@ -1214,15 +1347,26 @@ export function UserProfilePage() {
 
       <Modal
         title="修改密码"
-        open={passwordOpen}
+        open={passwordOpen && !denied}
+        closable={!changePasswordMutation.blocked}
+        keyboard={!changePasswordMutation.blocked}
+        mask={{ closable: !changePasswordMutation.blocked }}
+        okButtonProps={{ disabled: profileBlocked }}
+        cancelButtonProps={{ disabled: changePasswordMutation.blocked }}
         okText="保存"
         cancelText="取消"
         confirmLoading={changePasswordMutation.isPending}
         destroyOnHidden
-        onCancel={() => setPasswordOpen(false)}
+        onCancel={() => {
+          if (changePasswordMutation.blocked) return
+          setPasswordOpen(false)
+          passwordForm.resetFields()
+        }}
         onOk={() => passwordForm.submit()}
       >
+        {changePasswordMutation.feedback}
         <Form
+          disabled={profileBlocked}
           form={passwordForm}
           layout="vertical"
           size="small"
@@ -1266,15 +1410,26 @@ export function UserProfilePage() {
 
       <Modal
         title="生成 Soha AI Gateway Login Key"
-        open={createTokenOpen}
+        open={createTokenOpen && !tokenDenied}
+        closable={!createTokenMutation.blocked}
+        keyboard={!createTokenMutation.blocked}
+        mask={{ closable: !createTokenMutation.blocked }}
+        okButtonProps={{ disabled: tokenBlocked || tokenDenied }}
+        cancelButtonProps={{ disabled: createTokenMutation.blocked }}
         okText="生成 key"
         cancelText="取消"
         confirmLoading={createTokenMutation.isPending}
         destroyOnHidden
-        onCancel={() => setCreateTokenOpen(false)}
+        onCancel={() => {
+          if (createTokenMutation.blocked) return
+          setCreateTokenOpen(false)
+          tokenForm.resetFields()
+        }}
         onOk={() => tokenForm.submit()}
       >
+        {createTokenMutation.feedback}
         <Form
+          disabled={tokenBlocked || tokenDenied}
           form={tokenForm}
           layout="vertical"
           initialValues={{ permissionKeys: ['ai.gateway.invoke'], scopes: [], expiresIn: '30d' }}
@@ -1322,7 +1477,7 @@ export function UserProfilePage() {
 
       <Modal
         title={oneTimeToken?.title}
-        open={!!oneTimeToken}
+        open={!!oneTimeToken && !tokenDenied}
         okText="我已保存"
         cancelButtonProps={{ style: { display: 'none' } }}
         destroyOnHidden
@@ -1343,9 +1498,12 @@ export function UserProfilePage() {
             className="soha-profile-secret-value"
             readOnly
             autoSize={{ minRows: 3, maxRows: 6 }}
-            value={oneTimeToken?.value}
+            value={!tokenDenied ? oneTimeToken?.value : undefined}
           />
-          <Paragraph copyable={{ text: oneTimeToken?.value ?? '' }} type="secondary">
+          <Paragraph
+            copyable={{ text: !tokenDenied ? (oneTimeToken?.value ?? '') : '' }}
+            type="secondary"
+          >
             复制完整 key
           </Paragraph>
         </Space>

@@ -1,9 +1,12 @@
-import { App, Button, Space, Tag, Typography } from 'antd'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { ReadFeedback } from '@/components/request-feedback'
+import { useOperationMutation } from '@/components/use-operation-mutation'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { readableQueryData } from '@/utils/query-feedback'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { App, Button, Space, Tag, Typography } from 'antd'
 import { gatewayApi } from '../../gateway/api'
-import { gatewayQueries } from '../../gateway/queries'
 import { gatewayKeys } from '../../gateway/keys'
+import { gatewayQueries } from '../../gateway/queries'
 
 export function MessageApproval({
   id,
@@ -12,7 +15,7 @@ export function MessageApproval({
   id: string
   continuesTask?: boolean
 }) {
-  const { message, modal } = App.useApp()
+  const { modal } = App.useApp()
   const client = useQueryClient()
   const snapshot = usePermissionSnapshot().data?.data
   const canView = hasPermission(snapshot, 'ai.gateway.approvals.view')
@@ -32,34 +35,38 @@ export function MessageApproval({
       canView,
     ),
     refetchInterval: (state) =>
+      !state.state.error &&
       state.state.data?.data?.some((item) => ['pending', 'approved'].includes(item.status))
         ? 4000
         : false,
   })
-  const request = query.data?.data?.find((item) => item.id === id)
-  const decide = useMutation({
-    mutationFn: (action: 'approve' | 'reject' | 'cancel') =>
-      gatewayApi.approvals.decide(id, action),
-    onSuccess: () => {
-      void message.success('审批状态已更新')
+  const request = readableQueryData(query)?.data?.find((item) => item.id === id)
+  const decide = useOperationMutation(
+    {
+      mutationFn: (input: { id: string; action: 'approve' | 'reject' | 'cancel' }) =>
+        gatewayApi.approvals.decide(input.id, input.action),
+      onSettled: () => client.invalidateQueries({ queryKey: gatewayKeys.all }),
     },
-    onError: () => {
-      void message.error('操作未完成，请检查最新状态与权限。')
-    },
-    onSettled: () => client.invalidateQueries({ queryKey: gatewayKeys.all }),
-  })
+    { label: ['提交审批决定', 'Submit approval decision'], target: (input) => input.id },
+  )
   if (!canView)
     return (
-      <Typography.Paragraph type="secondary">
-        申请已提交；当前账号无权查看审批。
-      </Typography.Paragraph>
+      <>
+        {decide.feedback}
+        <Typography.Paragraph type="secondary">
+          申请已提交；当前账号无权查看审批。
+        </Typography.Paragraph>
+      </>
     )
-  if (query.isError) return <Button onClick={() => void query.refetch()}>审批读取失败，重试</Button>
   if (!request)
     return (
-      <Typography.Paragraph type="secondary">
-        {query.isPending ? '正在读取审批…' : '审批记录不可用'}
-      </Typography.Paragraph>
+      <>
+        {decide.feedback}
+        <ReadFeedback query={query} label="审批" />
+        <Typography.Paragraph type="secondary">
+          {query.isPending ? '正在读取审批…' : query.isError ? '审批状态未确认' : '审批记录不可用'}
+        </Typography.Paragraph>
+      </>
     )
   const pending = request.status === 'pending'
   const labels: Record<string, string> = {
@@ -73,6 +80,8 @@ export function MessageApproval({
   }
   return (
     <div className="soha-ai-approval">
+      <ReadFeedback query={query} label="审批" />
+      {decide.feedback}
       <Space wrap>
         <Typography.Text strong>变更审批</Typography.Text>
         <Tag color={pending ? 'warning' : request.status === 'executed' ? 'success' : 'default'}>
@@ -112,11 +121,11 @@ export function MessageApproval({
               <Button
                 key={action}
                 size="small"
-                loading={decide.isPending && decide.variables === action}
-                disabled={decide.isPending}
+                loading={decide.isPending && decide.variables?.action === action}
+                disabled={decide.blocked || query.isError}
                 onClick={() => {
                   if (action !== 'approve') {
-                    decide.mutate(action)
+                    decide.mutate({ id, action })
                     return
                   }
                   modal.confirm({
@@ -131,7 +140,13 @@ export function MessageApproval({
                     ),
                     okText: '批准并执行',
                     cancelText: '返回',
-                    onOk: () => decide.mutateAsync(action),
+                    onOk: async () => {
+                      try {
+                        await decide.mutateAsync({ id, action })
+                      } catch {
+                        /* The persistent receipt remains visible after the confirmation closes. */
+                      }
+                    },
                   })
                 }}
               >

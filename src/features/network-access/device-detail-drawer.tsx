@@ -1,4 +1,4 @@
-import { Descriptions, Drawer, Tabs } from 'antd'
+import { Descriptions, Drawer, Tabs, Typography } from 'antd'
 import type { TableColumnsType } from 'antd'
 import type {
   EndpointDevice,
@@ -7,10 +7,12 @@ import type {
   EndpointNetworkInterface,
 } from '@opensoha/contracts/gen/ts/sohaapi'
 import { AdminTable } from '@/components/admin-table'
-import { MetadataTag, StatusTag } from '@/components/status-tag'
+import { MetadataTag } from '@/components/status-tag'
 import { useI18n } from '@/i18n'
 import type { LocaleCode } from '@/i18n'
 import { formatDateTime } from '@/utils/time'
+import { NetworkStatusTag } from './network-status-tag'
+import './styles.css'
 
 const DEVICE_TYPE_LABELS: Record<EndpointDeviceType, [string, string]> = {
   desktop: ['台式机', 'Desktop'],
@@ -48,7 +50,7 @@ export function endpointOwnershipLabel(
 }
 
 function join(values?: string[]) {
-  return values?.join(', ') || '-'
+  return <span className="soha-network-long-value">{values?.join(', ') || '-'}</span>
 }
 
 export function EndpointDeviceDetailDrawer({
@@ -79,7 +81,7 @@ export function EndpointDeviceDetailDrawer({
       title: t('networkAccess.status', '状态'),
       dataIndex: 'status',
       width: 90,
-      render: (value) => <StatusTag value={value} />,
+      render: (value) => <NetworkStatusTag value={value} />,
     },
     { title: 'MAC', dataIndex: 'macAddress', width: 160, render: (value) => value || '-' },
     { title: 'IPv4', dataIndex: 'ipv4Addresses', width: 180, render: join },
@@ -88,7 +90,15 @@ export function EndpointDeviceDetailDrawer({
   ]
 
   const basicItems = [
-    { key: 'id', label: t('networkAccess.device.id', '终端 ID'), children: device.id },
+    {
+      key: 'id',
+      label: t('networkAccess.device.id', '终端 ID'),
+      children: (
+        <Typography.Text className="soha-network-long-value" copyable={!!device.id}>
+          {device.id}
+        </Typography.Text>
+      ),
+    },
     {
       key: 'hostname',
       label: t('networkAccess.device.hostname', '主机名'),
@@ -104,17 +114,33 @@ export function EndpointDeviceDetailDrawer({
       label: t('networkAccess.device.ownership', '设备归属'),
       children: endpointOwnershipLabel(device.ownershipType, localeCode),
     },
-    { key: 'owner', label: t('networkAccess.owner', '用户'), children: device.ownerUserId },
-    { key: 'site', label: t('networkAccess.siteId', '站点 ID'), children: device.siteId || '-' },
+    {
+      key: 'owner',
+      label: t('networkAccess.owner', '用户'),
+      children: (
+        <Typography.Text className="soha-network-long-value" copyable={!!device.ownerUserId}>
+          {device.ownerUserId}
+        </Typography.Text>
+      ),
+    },
+    {
+      key: 'site',
+      label: t('networkAccess.siteId', '站点 ID'),
+      children: (
+        <Typography.Text className="soha-network-long-value" copyable={!!device.siteId}>
+          {device.siteId || '-'}
+        </Typography.Text>
+      ),
+    },
     {
       key: 'status',
       label: t('networkAccess.status', '状态'),
-      children: <StatusTag value={device.status} />,
+      children: <NetworkStatusTag value={device.status} />,
     },
     {
       key: 'posture',
       label: t('networkAccess.posture', '设备状态'),
-      children: <StatusTag value={device.postureStatus} />,
+      children: <NetworkStatusTag value={device.postureStatus} />,
     },
     {
       key: 'os',
@@ -144,7 +170,11 @@ export function EndpointDeviceDetailDrawer({
     {
       key: 'serial',
       label: t('networkAccess.device.serial', '序列号'),
-      children: facts?.serialNumber || '-',
+      children: (
+        <Typography.Text className="soha-network-long-value" copyable={!!facts?.serialNumber}>
+          {facts?.serialNumber || '-'}
+        </Typography.Text>
+      ),
     },
     {
       key: 'agentVersion',
@@ -171,7 +201,14 @@ export function EndpointDeviceDetailDrawer({
             key: 'basic',
             label: t('networkAccess.device.basic', '基本信息'),
             children: (
-              <Descriptions bordered size="small" column={{ xs: 1, md: 2 }} items={basicItems} />
+              <Descriptions
+                className="soha-network-detail"
+                bordered
+                size="small"
+                styles={{ content: { overflowWrap: 'anywhere' } }}
+                column={{ xs: 1, md: 2 }}
+                items={basicItems}
+              />
             ),
           },
           {

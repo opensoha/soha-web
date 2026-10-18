@@ -7,12 +7,34 @@ for (const width of [1440, 390])
     await page.setViewportSize({ width, height: 1000 })
     const messages: unknown[] = []
     const requests: Record<string, any>[] = []
+    let allowReadReceipt = false
     const session = {
       id: 'main-chat',
       title: '主聊天',
       metadata: { conversationKind: 'main', mode: 'general', agentProviderId: 'internal' },
     }
     const evidence = await installMocks(context, page, (url) => {
+      if (
+        url.pathname.endsWith('/native-request') &&
+        allowReadReceipt &&
+        url.searchParams.get('requestId') === requests[0]?.requestId
+      )
+        return {
+          body: {
+            data: {
+              id: 'image-failed-run',
+              sessionId: 'main-chat',
+              providerId: 'internal',
+              providerKind: 'native',
+              executionOwner: 'native',
+              capabilityId: 'general',
+              status: 'failed',
+              input: { requestId: requests[0].requestId },
+              errorMessage: '图片请求执行失败',
+              createdAt: '2026-10-09T01:00:00Z',
+            },
+          },
+        }
       if (url.pathname.endsWith('/native-request'))
         return {
           status: 404,
@@ -73,8 +95,12 @@ for (const width of [1440, 390])
     await context.route('**/copilot/sessions/main-chat/messages/stream', async (route) => {
       const body = route.request().postDataJSON()
       requests.push(body)
+      if (requests.length === 3) {
+        await route.fulfill({ status: 503, body: 'unknown image request outcome' })
+        return
+      }
       if (requests.length === 1) {
-        await route.fulfill({ status: 503, body: 'retry' })
+        await route.fulfill({ status: 503, body: 'request outcome unknown' })
         return
       }
       const user = {
@@ -111,7 +137,7 @@ for (const width of [1440, 390])
     ).setFiles({
       name: 'diagram.png',
       mimeType: 'image/png',
-      buffer: readFileSync('.tmp/quality/chat-image-fixture.png'),
+      buffer: readFileSync(new URL('../fixtures/chat-image.png', import.meta.url)),
     })
     await expect(page.getByAltText('diagram.png')).toBeVisible()
     await expect(composer).toHaveValue('分析这张图片')
@@ -119,6 +145,12 @@ for (const width of [1440, 390])
     await composer.press('Enter')
     await expect(composer).toHaveValue('分析这张图片')
     await expect(page.getByRole('button', { name: '移除图片 diagram.png' })).toBeVisible()
+    await expect(page.getByText('任务提交结果未确认', { exact: false }).first()).toBeVisible()
+    await composer.press('Enter')
+    expect(requests).toHaveLength(1)
+    allowReadReceipt = true
+    await page.getByRole('button', { name: '重新读取', exact: true }).click()
+    await expect(page.getByText('任务提交结果未确认', { exact: false })).toHaveCount(0)
     await composer.press('Enter')
     await expect(page.getByRole('img', { name: '助手回应 👀' })).toBeVisible()
     expect(requests[1].assistantTask).toBeUndefined()
@@ -135,17 +167,24 @@ for (const width of [1440, 390])
       true,
     )
     await composer.fill('原草稿保持')
-    await composer.evaluate((node, base64) => {
-      const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0))
-      const transfer = new DataTransfer()
-      transfer.items.add(new File([bytes], 'pasted.png', { type: 'image/png' }))
-      node.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true }))
-    }, readFileSync('.tmp/quality/chat-image-fixture.png').toString('base64'))
+    await composer.evaluate(
+      (node, base64) => {
+        const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0))
+        const transfer = new DataTransfer()
+        transfer.items.add(new File([bytes], 'pasted.png', { type: 'image/png' }))
+        node.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true }))
+      },
+      readFileSync(new URL('../fixtures/chat-image.png', import.meta.url)).toString('base64'),
+    )
     await expect(page.getByRole('button', { name: '移除图片 pasted.png' })).toBeVisible()
     await expect(composer).toHaveValue('原草稿保持')
     await expect(page.getByText('形象参考图', { exact: true })).toHaveCount(0)
-    await page.getByRole('button', { name: '移除图片 pasted.png' }).click()
-    await composer.fill('')
+    await composer.press('Enter')
+    await expect(page.getByText('任务提交结果未确认', { exact: false }).first()).toBeVisible()
+    await expect(page.getByRole('button', { name: '移除图片 pasted.png' })).toBeVisible()
+    await expect(composer).toHaveValue('原草稿保持')
+    await composer.press('Enter')
+    expect(requests).toHaveLength(3)
     await page.screenshot({ path: `.tmp/quality/chat-image-reaction-${width}.png`, fullPage: true })
     await verifyBrowserEvidence(evidence)
   })

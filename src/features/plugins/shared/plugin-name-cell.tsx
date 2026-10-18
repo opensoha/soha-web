@@ -1,4 +1,5 @@
-import { Space, Tag, Typography } from 'antd'
+import { MetadataTag } from '@/components/status-tag'
+import { Space, Typography } from 'antd'
 import { pluginTypeLabel } from '../plugin-model'
 
 const { Paragraph, Text } = Typography
@@ -21,18 +22,14 @@ export function PluginNameCell({
   return (
     <Space orientation="vertical" size={2} className="soha-plugin-name-cell">
       <Space size={6} wrap>
-        <Text strong>{name}</Text>
-        <Tag>{pluginTypeLabel(type)}</Tag>
-        <Tag color="blue">{version}</Tag>
+        <h1 className="soha-plugin-title">{name}</h1>
+        <MetadataTag label={pluginTypeLabel(type)} />
+        <Text type="secondary">v{version}</Text>
       </Space>
       <Text type="secondary">
         {publisher} / {id}
       </Text>
-      {description ? (
-        <Paragraph ellipsis={{ rows: 2, tooltip: description }} className="soha-plugin-summary">
-          {description}
-        </Paragraph>
-      ) : null}
+      {description ? <Paragraph className="soha-plugin-summary">{description}</Paragraph> : null}
     </Space>
   )
 }

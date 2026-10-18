@@ -1,49 +1,39 @@
-import { PersonalFeed } from './components/personal-feed'
-import { MessageSearch, rememberChatVisit } from './components/message-search'
-import type { BubbleListRef } from '@ant-design/x/es/bubble/interface'
-import type { WorkbenchMessageWindow } from '@opensoha/contracts/gen/ts/sohaapi'
-import { evaluationLifecycleApi } from '../evaluation-lifecycle/api'
-import { ChatMemory } from './components/chat-memory'
-import { PINNED_SESSION_TAG, sessionTagsWithPin } from './session-organization'
-import { MessageActivity } from './components/message-activity'
-import { MessageProgress } from './components/message-progress'
-import { WorkbenchMarkdown, safeSourceURL } from './components/markdown'
-import { StaticArtifactView } from './components/static-artifact'
-import { ChatContextSelection, ChatContextTags } from './components/context-selection'
-import { contextSnapshotSummary } from './context-selection'
-import { workbenchApi } from './api'
-import { agentUnavailableReason, taskAgentUnavailableReason } from './agent-selection'
-import { observeQueries } from '../observe/queries'
+import { ManagementState } from '@/components/management-list'
+import { MutationFeedback, ReadFeedback } from '@/components/request-feedback'
+import { StatusTag } from '@/components/status-tag'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { observabilitySignalQueries } from '@/features/observability'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { systemKeys } from '@/features/system'
+import { useAuthStore } from '@/stores/auth-store'
+import { downloadBlob } from '@/utils/download'
+import { queryAccessDenied, readableQueryData, writeOutcomeUnknown } from '@/utils/query-feedback'
 import {
   BookOutlined,
   CommentOutlined,
   CopyOutlined,
   DeleteOutlined,
-  PlusOutlined,
   EditOutlined,
   LinkOutlined,
+  PlusOutlined,
   ReloadOutlined,
 } from '@ant-design/icons'
 import { Bubble, Conversations, Prompts, Sources, ThoughtChain, Welcome } from '@ant-design/x'
+import type { BubbleListRef } from '@ant-design/x/es/bubble/interface'
 import type { SenderRef } from '@ant-design/x/es/sender'
-import '../copilot-pages.css'
-import './assistant.css'
-import { useChatDraft } from './hooks/use-chat-draft'
-import { useNativeRequestRecovery } from './hooks/use-native-request-recovery'
-import { AssistantPanel, type AssistantTab } from './components/assistant-panel'
-import { AssistantAvatar } from './components/assistant-avatar'
-import { AssistantChatResult, UserMessageContent } from './components/assistant-chat-result'
-import type { AssistantChatTask } from './types'
-import { useAuthStore } from '@/stores/auth-store'
-import { downloadBlob } from '@/utils/download'
+import type {
+  AgentRunEventPage,
+  WorkbenchMessageWindow,
+  WorkbenchSendMessageStreamRequest,
+  WorkbenchSource,
+  WorkbenchTaskIntent,
+} from '@opensoha/contracts/gen/ts/sohaapi'
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Alert,
   App,
   Button,
   Card,
-  Switch,
   Flex,
   Input,
   InputNumber,
@@ -52,55 +42,63 @@ import {
   Segmented,
   Select,
   Space,
+  Switch,
   Tag,
   Tooltip,
   Typography,
 } from 'antd'
-import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ManagementState } from '@/components/management-list'
-import { StatusTag } from '@/components/status-tag'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
-import { systemKeys } from '@/features/system'
-import type {
-  WorkbenchSendMessageStreamRequest,
-  WorkbenchSource,
-  AgentRunEventPage,
-  WorkbenchTaskIntent,
-} from '@opensoha/contracts/gen/ts/sohaapi'
-import {
-  getAIModelSettingsPath,
-  getAIOperationsPath,
-  getAIWorkbenchPathForMode,
-  getAIWorkbenchPathForSession,
-} from './navigation'
-import { displayWorkbenchSessionTitle } from './model'
+import '../copilot-pages.css'
+import { evaluationLifecycleApi } from '../evaluation-lifecycle/api'
 import { observeKeys } from '../observe/keys'
+import { observeQueries } from '../observe/queries'
 import {
   agentRunReplayMessage,
   agentRunTimestamp,
   isDurableAgentRun,
-  isNativeAgentRun,
-  isFinalAgentRunMessage,
   isExternalAgentRunReplayMessage,
+  isFinalAgentRunMessage,
+  isNativeAgentRun,
   isRunningAgentRun,
   messageAgentRunRefs,
   sortedAgentRunReplayEvents,
 } from './agent-run-replay'
+import { agentUnavailableReason, taskAgentUnavailableReason } from './agent-selection'
+import { workbenchApi } from './api'
 import {
   artifactContextLinks,
   artifactMeta,
   artifactSnapshotText,
   artifactTitle,
+  graphNodeLabel,
   isStaticArtifact,
   staticArtifactLabel,
-  graphNodeLabel,
   type ArtifactContextLink,
   type WorkbenchArtifactEntry,
 } from './artifacts'
+import './assistant.css'
+import { AnimatedAssistantIcon } from './components/animated-icon'
+import { AssistantAvatar } from './components/assistant-avatar'
+import { AssistantChatResult, UserMessageContent } from './components/assistant-chat-result'
+import { AssistantPanel, type AssistantTab } from './components/assistant-panel'
+import { ChatMemory } from './components/chat-memory'
+import { WorkbenchComposer } from './components/composer'
+import { ChatContextSelection, ChatContextTags } from './components/context-selection'
+import { LazyWorkbenchGraphView } from './components/graph-view-loader'
+import { WorkbenchMarkdown, safeSourceURL } from './components/markdown'
+import { MessageActivity } from './components/message-activity'
+import { MessageProgress } from './components/message-progress'
+import { MessageSearch, rememberChatVisit } from './components/message-search'
+import { PersonalFeed } from './components/personal-feed'
+import { SessionReferenceReader } from './components/session-reference-reader'
+import { MobileAssistantNav, WorkbenchPanel, WorkbenchShell } from './components/shell'
+import { StaticArtifactView } from './components/static-artifact'
+import { CHAT_STARTERS } from './composer-commands'
+import { contextSnapshotSummary } from './context-selection'
 import {
-  bubbleItems,
   assistantReactionForMessage,
+  bubbleItems,
   isLegacyPlatformContextMessage,
   mergeConversationMessages,
   modelStatusDetail,
@@ -108,7 +106,8 @@ import {
   type ConversationMessage,
   type WorkbenchBubbleStatus,
 } from './conversation'
-import { LazyWorkbenchGraphView } from './components/graph-view-loader'
+import { useChatDraft } from './hooks/use-chat-draft'
+import { useNativeRequestRecovery } from './hooks/use-native-request-recovery'
 import { useWorkbenchRouteState } from './hooks/use-workbench-route-state'
 import { workbenchKeys } from './keys'
 import {
@@ -117,13 +116,25 @@ import {
   modeDescription,
   modeLabel,
 } from './mode'
+import { displayWorkbenchSessionTitle } from './model'
 import { workbenchMutations } from './mutations'
+import {
+  getAIModelSettingsPath,
+  getAIOperationsPath,
+  getAIWorkbenchPathForMode,
+  getAIWorkbenchPathForSession,
+} from './navigation'
 import { workbenchQueries } from './queries'
-import { MobileAssistantNav, WorkbenchPanel, WorkbenchShell } from './components/shell'
-import { AnimatedAssistantIcon } from './components/animated-icon'
-import { WorkbenchComposer } from './components/composer'
-import { SessionReferenceReader } from './components/session-reference-reader'
-import { CHAT_STARTERS } from './composer-commands'
+import { PINNED_SESSION_TAG, sessionTagsWithPin } from './session-organization'
+import {
+  canonicalWorkbenchAgentStatus,
+  createWorkbenchStreamState,
+  isTerminalWorkbenchAgentStatus,
+  reduceWorkbenchStreamState,
+  streamWorkbenchMessage,
+  workbenchStreamEventKey,
+  type WorkbenchStreamState,
+} from './stream'
 import {
   WorkbenchStreamEventError,
   agentStatusLabel,
@@ -151,16 +162,7 @@ import {
   recommendedAdapterIds,
   scopeOverrideState,
 } from './toolset'
-import {
-  canonicalWorkbenchAgentStatus,
-  createWorkbenchStreamState,
-  isTerminalWorkbenchAgentStatus,
-  reduceWorkbenchStreamState,
-  streamWorkbenchMessage,
-  workbenchStreamEventKey,
-  type WorkbenchStreamState,
-} from './stream'
-import type { WorkbenchMode, WorkbenchSessionScope } from './types'
+import type { AssistantChatTask, WorkbenchMode, WorkbenchSessionScope } from './types'
 
 const { Paragraph, Text } = Typography
 
@@ -168,11 +170,20 @@ function combineNativeEventPages(
   results: Array<{
     data?: { runId: string; afterSequence: number; page: AgentRunEventPage }
     isError: boolean
+    error: Error | null
+    isFetching: boolean
+    refetch: () => Promise<unknown>
   }>,
 ) {
   return {
-    pages: results.flatMap((result) => (result.data ? [result.data] : [])),
+    pages: results.flatMap((result) => {
+      const data = readableQueryData(result)
+      return data ? [data] : []
+    }),
     isError: results.some((result) => result.isError),
+    error: results.find((result) => result.isError)?.error ?? null,
+    isFetching: results.some((result) => result.isFetching),
+    refetch: () => Promise.all(results.map((result) => result.refetch())),
   }
 }
 
@@ -344,6 +355,7 @@ export function AIWorkbenchController() {
     setPersonalArtifactEntry(undefined)
     setSelectedArtifactKey(key)
   }
+  const selectedGraphScope = useRef<string | null>(null)
   const [selectedGraphNodeId, setSelectedGraphNodeId] = useState<string | null>(null)
   const [senderResetVersion, setSenderResetVersion] = useState(0)
   const [localMessages, setLocalMessages] = useState<ConversationMessage[]>([])
@@ -365,12 +377,14 @@ export function AIWorkbenchController() {
     terminalRunRefreshRef.current = {}
   }, [requestedSessionId])
 
-  const sessionsQuery = useQuery({
+  const sessionsQueryResult = useQuery({
     ...workbenchQueries.sessions.all(canUseChat, personal, owner),
     refetchInterval: 5000,
   })
-  const catalogQuery = useQuery({ ...workbenchQueries.catalog(), refetchInterval: 15000 })
-  const metricCatalogQuery = useQuery({
+  const sessionsQuery = { ...sessionsQueryResult, data: readableQueryData(sessionsQueryResult) }
+  const catalogQueryResult = useQuery({ ...workbenchQueries.catalog(), refetchInterval: 15000 })
+  const catalogQuery = { ...catalogQueryResult, data: readableQueryData(catalogQueryResult) }
+  const metricCatalogQueryResult = useQuery({
     ...observabilitySignalQueries.metricCatalog(),
     enabled:
       analysisOpen &&
@@ -378,7 +392,11 @@ export function AIWorkbenchController() {
       canViewMonitoring &&
       analysisCapabilities.includes('performance'),
   })
-  const inspectionRunsQuery = useQuery({
+  const metricCatalogQuery = {
+    ...metricCatalogQueryResult,
+    data: readableQueryData(metricCatalogQueryResult),
+  }
+  const inspectionRunsQueryResult = useQuery({
     ...observeQueries.operations.runs(),
     enabled:
       analysisOpen &&
@@ -386,7 +404,17 @@ export function AIWorkbenchController() {
       canViewAI &&
       analysisCapabilities.includes('inspection_review'),
   })
-  const sessionDetailQuery = useQuery(workbenchQueries.sessions.detail(requestedSessionId, owner))
+  const inspectionRunsQuery = {
+    ...inspectionRunsQueryResult,
+    data: readableQueryData(inspectionRunsQueryResult),
+  }
+  const sessionDetailQueryResult = useQuery(
+    workbenchQueries.sessions.detail(requestedSessionId, owner),
+  )
+  const sessionDetailQuery = {
+    ...sessionDetailQueryResult,
+    data: readableQueryData(sessionDetailQueryResult),
+  }
   const matchesWorkspace = Boolean(
     sessionDetailQuery.data?.data &&
     personal ===
@@ -397,42 +425,76 @@ export function AIWorkbenchController() {
     requestedSessionId,
     canUseChat && matchesWorkspace && !currentStreamPending,
   )
-  const messagesQuery = useQuery({
+  const messagesQueryResult = useQuery({
     ...workbenchQueries.sessions.messages(requestedSessionId, owner),
     enabled: matchesWorkspace && !!requestedSessionId && !messageAnchor,
   })
-  const messageWindowQuery = useQuery(
+  const messagesQuery = { ...messagesQueryResult, data: readableQueryData(messagesQueryResult) }
+  const messageWindowQueryResult = useQuery(
     workbenchQueries.messageWindow(
       owner,
       matchesWorkspace ? requestedSessionId : undefined,
       messageAnchor,
     ),
   )
-  const feedReferenceQuery = useQuery(
+  const messageWindowQuery = {
+    ...messageWindowQueryResult,
+    data: readableQueryData(messageWindowQueryResult),
+  }
+  const feedReferenceQueryResult = useQuery(
     workbenchQueries.feedItem(owner, contextSelection.feedItemId || ''),
   )
-  const historyWindows = history.key === historyKey ? history : undefined
+  const feedReferenceQuery = {
+    ...feedReferenceQueryResult,
+    data: readableQueryData(feedReferenceQueryResult),
+  }
+  const conversationDenied =
+    queryAccessDenied(sessionDetailQuery) ||
+    queryAccessDenied(messagesQuery) ||
+    queryAccessDenied(messageWindowQuery)
+  useEffect(() => {
+    if (!conversationDenied) return
+    Object.values(streamAbortRef.current).forEach((controller) => controller.abort())
+    setHistory({ key: historyKey, before: [], after: [] })
+    setLocalMessages([])
+    setMemoryDraft(undefined)
+    setRenameOpen(false)
+    setRenameValue('')
+    setSideOpen(false)
+    setSideTitle('')
+    updateDraft({ value: '', context: {} })
+  }, [conversationDenied, historyKey])
+  useEffect(() => {
+    setMemoryDraft(undefined)
+  }, [owner])
+  const historyWindows = !conversationDenied && history.key === historyKey ? history : undefined
   const beforeCursor = historyWindows?.before.length
     ? historyWindows.before[0].beforeCursor
     : messageWindowQuery.data?.data?.beforeCursor
   const afterCursor = historyWindows?.after.length
     ? historyWindows.after.at(-1)?.afterCursor
     : messageWindowQuery.data?.data?.afterCursor
-  const windowMutation = useMutation({
-    ...workbenchMutations.messageWindow(),
-    onSuccess: (response, input) =>
-      setHistory((current) => {
-        if (input.historyKey !== historyKey) return current
-        const base =
-          current.key === historyKey ? current : { key: historyKey, before: [], after: [] }
-        if (!response.data) return base
-        return input.selector.before
-          ? { ...base, before: [response.data, ...base.before] }
-          : { ...base, after: [...base.after, response.data] }
-      }),
-    onError: (error) => void message.error(error.message || '历史消息加载失败'),
-  })
-  const agentRunsQuery = useQuery({
+  const windowMutation = useOperationMutation(
+    {
+      ...workbenchMutations.messageWindow(),
+      onSuccess: (response, input) =>
+        setHistory((current) => {
+          if (input.historyKey !== historyKey) return current
+          const base =
+            current.key === historyKey ? current : { key: historyKey, before: [], after: [] }
+          if (!response.data) return base
+          return input.selector.before
+            ? { ...base, before: [response.data, ...base.before] }
+            : { ...base, after: [...base.after, response.data] }
+        }),
+    },
+    {
+      label: ['读取历史消息', 'Read message history'],
+      target: (input) => input.sessionId,
+      readOnly: true,
+    },
+  )
+  const agentRunsQueryResult = useQuery({
     ...workbenchQueries.agentRuns.session(requestedSessionId),
     enabled: matchesWorkspace && Boolean(requestedSessionId),
     refetchInterval: (query) => {
@@ -444,6 +506,7 @@ export function AIWorkbenchController() {
         : false
     },
   })
+  const agentRunsQuery = { ...agentRunsQueryResult, data: readableQueryData(agentRunsQueryResult) }
 
   const visibleSessions = useMemo(() => sessionsQuery.data?.data ?? [], [sessionsQuery.data?.data])
   const currentSession =
@@ -668,36 +731,61 @@ export function AIWorkbenchController() {
     void queryClient.invalidateQueries({ queryKey: systemKeys.audit.all })
   }, [agentRunsQuery.data?.data, finalAgentRunIds, queryClient, requestedSessionId])
 
-  const mainSessionQuery = useQuery(
+  const mainSessionQueryResult = useQuery(
     workbenchQueries.sessions.main(
       defaultAgentProviderId,
       owner,
       canUseChat && !personal && !catalogQuery.isPending,
     ),
   )
-  const assistantQuery = useQuery(workbenchQueries.assistant(owner, canUseChat && personal))
-  const personalMainQuery = useQuery(
+  const mainSessionQuery = {
+    ...mainSessionQueryResult,
+    data: readableQueryData(mainSessionQueryResult),
+  }
+  const assistantQueryResult = useQuery(workbenchQueries.assistant(owner, canUseChat && personal))
+  const assistantQuery = { ...assistantQueryResult, data: readableQueryData(assistantQueryResult) }
+  const personalMainQueryResult = useQuery(
     workbenchQueries.sessions.detail(
       personal ? assistantQuery.data?.data?.mainSessionId : undefined,
       owner,
     ),
   )
+  const personalMainQuery = {
+    ...personalMainQueryResult,
+    data: readableQueryData(personalMainQueryResult),
+  }
   const mainSession = personal ? personalMainQuery.data?.data : mainSessionQuery.data?.data
-  const personalTasksQuery = useQuery(workbenchQueries.personalTasks(owner, canUseChat && personal))
-  const personalEnvironmentQuery = useQuery(
+  const personalTasksQueryResult = useQuery(
+    workbenchQueries.personalTasks(owner, canUseChat && personal),
+  )
+  const personalTasksQuery = {
+    ...personalTasksQueryResult,
+    data: readableQueryData(personalTasksQueryResult),
+  }
+  const personalEnvironmentQueryResult = useQuery(
     workbenchQueries.personalEnvironment(
       owner,
       assistantQuery.data?.data?.id,
       canUseChat && personal && panel === 'assistant' && assistantTab === 'identity',
     ),
   )
-  const personalArtifactsQuery = useQuery(
+  const personalEnvironmentQuery = {
+    ...personalEnvironmentQueryResult,
+    data: queryAccessDenied(assistantQuery)
+      ? undefined
+      : readableQueryData(personalEnvironmentQueryResult),
+  }
+  const personalArtifactsQueryResult = useQuery(
     workbenchQueries.personalArtifacts(
       owner,
       canUseChat && personal && panel === 'assistant' && assistantTab === 'results',
     ),
   )
-  const environmentTemplatesQuery = useQuery(
+  const personalArtifactsQuery = {
+    ...personalArtifactsQueryResult,
+    data: readableQueryData(personalArtifactsQueryResult),
+  }
+  const environmentTemplatesQueryResult = useQuery(
     workbenchQueries.personalEnvironmentTemplates(
       owner,
       assistantQuery.data?.data?.id,
@@ -709,6 +797,10 @@ export function AIWorkbenchController() {
         personalEnvironmentQuery.data?.data?.state === 'unprovisioned',
     ),
   )
+  const environmentTemplatesQuery = {
+    ...environmentTemplatesQueryResult,
+    data: readableQueryData(environmentTemplatesQueryResult),
+  }
   const [deletionReconciled, setDeletionReconciled] = useState('')
   const environmentMutation = useMutation({
     mutationFn: (input: Parameters<typeof workbenchApi.assistant.changeEnvironment>[1]) =>
@@ -718,10 +810,15 @@ export function AIWorkbenchController() {
       if (input.action === 'reconcile' && result.data?.state === 'deletion_unknown') {
         setDeletionReconciled(`${result.data.assistantId}:${result.data.version}`)
       }
+      if (
+        input.action === 'reconcile' &&
+        result.data?.assistantId === assistantQuery.data?.data?.id
+      ) {
+        environmentDeletion.reset()
+      }
     },
     onSettled: () =>
       queryClient.invalidateQueries({ queryKey: workbenchKeys.personalEnvironmentRoot() }),
-    onError: () => void message.error('环境操作未确认，请核对最新状态；不会自动重试。'),
   })
   const environmentDeletion = useMutation({
     mutationFn: workbenchApi.assistant.deleteEnvironmentData,
@@ -732,7 +829,6 @@ export function AIWorkbenchController() {
         queryClient.invalidateQueries({ queryKey: workbenchKeys.assistant(owner) }),
       ])
     },
-    onError: () => void message.error('数据删除结果未确认，请核对最新状态；不会自动重试。'),
   })
   const environmentExportAbort = useRef<AbortController | null>(null)
   useEffect(
@@ -751,7 +847,6 @@ export function AIWorkbenchController() {
     },
     onSettled: () =>
       queryClient.invalidateQueries({ queryKey: workbenchKeys.personalEnvironmentRoot() }),
-    onError: () => void message.error('数据导出未完成，请核对环境后再试；不会自动重试。'),
   })
 
   const hasScopedEntry = Boolean(
@@ -784,29 +879,41 @@ export function AIWorkbenchController() {
     setDraftMode(pathMode)
   }, [pathMode])
 
-  const patchSessionMutation = useMutation({
-    ...workbenchMutations.sessions.patch(),
-    onSuccess: async (_response, payload) => {
-      await queryClient.invalidateQueries({ queryKey: workbenchKeys.sessions.all(personal) })
-      await queryClient.invalidateQueries({
-        queryKey: workbenchKeys.sessions.detail(payload.sessionId, owner),
-      })
+  const patchSessionMutation = useOperationMutation(
+    {
+      ...workbenchMutations.sessions.patch(),
+      onSuccess: async (_response, payload) => {
+        await queryClient.invalidateQueries({ queryKey: workbenchKeys.sessions.all(personal) })
+        await queryClient.invalidateQueries({
+          queryKey: workbenchKeys.sessions.detail(payload.sessionId, owner),
+        })
+      },
     },
-    onError: (err: Error) => void message.error(err.message),
-  })
+    { label: ['保存会话', 'Save session'], target: (input) => input.sessionId },
+  )
 
-  const createSessionMutation = useMutation({
-    ...workbenchMutations.sessions.create(),
-    mutationFn: personal ? workbenchApi.personalAgent.create : workbenchApi.sessions.create,
-    onSuccess: async (response) => {
-      await queryClient.invalidateQueries({ queryKey: workbenchKeys.sessions.all(personal) })
-      navigate(getAIWorkbenchPathForSession(response.data))
-      setSideOpen(false)
-      setSideTitle('')
-      void message.success('旁聊已开启')
+  const createSessionMutation = useOperationMutation(
+    {
+      ...workbenchMutations.sessions.create(),
+      mutationFn: personal ? workbenchApi.personalAgent.create : workbenchApi.sessions.create,
+      onSuccess: async (response) => {
+        await queryClient.invalidateQueries({ queryKey: workbenchKeys.sessions.all(personal) })
+        navigate(getAIWorkbenchPathForSession(response.data))
+        setSideOpen(false)
+        setSideTitle('')
+      },
     },
-    onError: (err: Error) => void message.error(err.message),
-  })
+    { label: ['开启旁聊', 'Open side conversation'], target: (input) => input.title || '旁聊' },
+  )
+  const messageFeedbackMutation = useOperationMutation(
+    {
+      mutationFn: evaluationLifecycleApi.feedback.create,
+    },
+    {
+      label: ['记录消息反馈', 'Record message feedback'],
+      target: (input) => input.messageId || input.id,
+    },
+  )
   const submitMessageFeedback = (
     messageId: string,
     traceRef: string,
@@ -819,14 +926,17 @@ export function AIWorkbenchController() {
       okText: '提交反馈',
       cancelText: '取消',
       onOk: async () => {
-        await evaluationLifecycleApi.feedback.create({
-          id: crypto.randomUUID(),
-          traceRef,
-          sessionId: currentSession.id,
-          messageId,
-          disposition,
-        })
-        void message.success('反馈已关联到评测记录。')
+        try {
+          await messageFeedbackMutation.mutateAsync({
+            id: crypto.randomUUID(),
+            traceRef,
+            sessionId: currentSession.id,
+            messageId,
+            disposition,
+          })
+        } catch {
+          /* Keep the persistent failure visible outside the confirmation. */
+        }
       },
     })
   }
@@ -856,7 +966,7 @@ export function AIWorkbenchController() {
     })
   }
   const createSession = (payload?: { title?: string; scope?: WorkbenchSessionScope }) => {
-    if (catalogQuery.isPending) return
+    if (catalogQuery.isPending || createSessionMutation.blocked) return
     createSessionMutation.mutate({
       title: payload?.title?.trim() || '新的旁聊',
       mode: 'general',
@@ -882,7 +992,7 @@ export function AIWorkbenchController() {
       requestedSessionId ||
       !canUseChat ||
       catalogQuery.isPending ||
-      createSessionMutation.isPending ||
+      createSessionMutation.blocked ||
       autoSessionScopeKeyRef.current === scopeKey
     ) {
       return
@@ -911,17 +1021,18 @@ export function AIWorkbenchController() {
     requestedSessionId,
   ])
 
-  const deleteSessionMutation = useMutation({
-    ...workbenchMutations.sessions.archive(),
-    onSuccess: async (_response, sessionId) => {
-      if (requestedSessionId === sessionId) {
-        updateSearchParams({ session: undefined })
-      }
-      await queryClient.invalidateQueries({ queryKey: workbenchKeys.sessions.all(personal) })
-      void message.success('会话已归档')
+  const deleteSessionMutation = useOperationMutation(
+    {
+      ...workbenchMutations.sessions.archive(),
+      onSuccess: async (_response, sessionId) => {
+        if (requestedSessionId === sessionId) {
+          updateSearchParams({ session: undefined })
+        }
+        await queryClient.invalidateQueries({ queryKey: workbenchKeys.sessions.all(personal) })
+      },
     },
-    onError: (err: Error) => void message.error(err.message),
-  })
+    { label: ['归档会话', 'Archive session'], target: (id) => id },
+  )
 
   const buildWorkbenchStreamRequest = (
     content: string,
@@ -1235,7 +1346,6 @@ export function AIWorkbenchController() {
         queryKey: workbenchKeys.sessions.messages(sessionId, owner),
       })
     },
-    onError: (error: Error) => void message.error(error.message),
   })
   const cancelMessageStream = () => {
     const sessionId = requestedSessionId
@@ -1259,15 +1369,16 @@ export function AIWorkbenchController() {
     })
   }
 
-  const createInspectionFromSessionMutation = useMutation({
-    ...workbenchMutations.sessions.createInspectionTask(),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: observeKeys.operations.tasks() })
-      void message.success('已从当前会话生成巡检任务')
-      navigate(getAIOperationsPath(location.search))
+  const createInspectionFromSessionMutation = useOperationMutation(
+    {
+      ...workbenchMutations.sessions.createInspectionTask(),
+      onSuccess: async () => {
+        await queryClient.invalidateQueries({ queryKey: observeKeys.operations.tasks() })
+        navigate(getAIOperationsPath(location.search))
+      },
     },
-    onError: (err: Error) => void message.error(err.message),
-  })
+    { label: ['生成巡检任务', 'Create inspection task'], target: (input) => input.sessionId },
+  )
   const createInspectionFromSession = () => {
     if (!requestedSessionId) return
     createInspectionFromSessionMutation.mutate({
@@ -1383,12 +1494,6 @@ export function AIWorkbenchController() {
   const chainAgentStatus = metadataAgentStatus(chainArtifactEntry?.message.metadata)
   const chainToolCallSummary = toolCallSummaryText(toolCalls)
   const activeGraph = activeArtifact?.graph
-  const queryError =
-    sessionsQuery.error ||
-    sessionDetailQuery.error ||
-    messagesQuery.error ||
-    messageWindowQuery.error ||
-    catalogQuery.error
   const activeMode = pathMode
   const latestAssistantMessage = [...messages].reverse().find((item) => item.role === 'assistant')
   const promptItems = CHAT_STARTERS.map((item) => ({
@@ -1464,7 +1569,7 @@ export function AIWorkbenchController() {
                     aria-label={`归档 ${title}`}
                     className="soha-ai-workbench__conversation-action soha-ai-workbench__conversation-action--danger"
                     danger
-                    disabled={deleteSessionMutation.isPending && !isArchiving}
+                    disabled={deleteSessionMutation.blocked}
                     icon={<DeleteOutlined />}
                     loading={isArchiving}
                     size="small"
@@ -1570,13 +1675,24 @@ export function AIWorkbenchController() {
   )
   const graphFitKey = useMemo(
     () =>
-      `${activeGraph?.nodes?.map((item) => item.id).join(',') || ''}::${activeGraph?.edges?.map((item) => item.id).join(',') || ''}`,
-    [activeGraph?.edges, activeGraph?.nodes],
+      `${requestedSessionId}::${activeGraph?.nodes?.map((item) => item.id).join(',') || ''}::${activeGraph?.edges?.map((item) => item.id).join(',') || ''}`,
+    [activeGraph?.edges, activeGraph?.nodes, requestedSessionId],
   )
 
   useEffect(() => {
-    setSelectedGraphNodeId(activeGraph?.focusNodeId ?? activeGraph?.nodes?.[0]?.id ?? null)
-  }, [activeGraph?.focusNodeId, activeGraph?.nodes])
+    const nodes = activeGraph?.nodes
+    if (!nodes?.length) {
+      setSelectedGraphNodeId(null)
+      return
+    }
+    const changedScope = selectedGraphScope.current !== (requestedSessionId ?? '')
+    selectedGraphScope.current = requestedSessionId ?? ''
+    setSelectedGraphNodeId((current) =>
+      !changedScope && (current === null || nodes.some((node) => node.id === current))
+        ? current
+        : (activeGraph?.focusNodeId ?? nodes[0]?.id ?? null),
+    )
+  }, [activeGraph?.focusNodeId, activeGraph?.nodes, requestedSessionId])
 
   const hasAnalysisParameters = Object.values(analysisIntent).some(
     (value) => value !== undefined && value !== '',
@@ -1765,9 +1881,7 @@ export function AIWorkbenchController() {
           agentProviderId: selectedAgentProviderId || defaultAgentProviderId,
         },
       },
-      {
-        onSuccess: () => void message.success('已更新会话级工具装配'),
-      },
+      {},
     )
   }
   const applyRecommendedToolset = () => {
@@ -1921,6 +2035,27 @@ export function AIWorkbenchController() {
     )
   }
 
+  if (conversationDenied)
+    return (
+      <>
+        <ReadFeedback query={sessionDetailQuery} label="当前会话" />
+        <ReadFeedback query={messagesQuery} label="会话消息" />
+        <ReadFeedback query={messageWindowQuery} label="消息窗口" />
+        <ReadFeedback query={agentRunsQuery} label="任务运行记录" />
+        <ReadFeedback
+          query={{
+            ...nativeEventPages,
+            data: nativeEventPages.pages.length ? nativeEventPages.pages : undefined,
+          }}
+          label="任务事件"
+        />
+        <ManagementState
+          title="当前会话内容不可访问"
+          description="已隐藏保护内容。恢复访问后再打开会话。"
+        />
+      </>
+    )
+
   if (
     currentSession &&
     personal !== Boolean(currentSession.metadata?.conversationKind?.startsWith('personal_'))
@@ -2063,7 +2198,7 @@ export function AIWorkbenchController() {
                 size="small"
                 aria-label="新增旁聊"
                 icon={<PlusOutlined />}
-                disabled={!canUseChat || createSessionMutation.isPending}
+                disabled={!canUseChat || createSessionMutation.blocked}
                 onClick={() => setSideOpen(true)}
               />
             </div>
@@ -2090,6 +2225,36 @@ export function AIWorkbenchController() {
         }
         alerts={
           <>
+            <ReadFeedback query={sessionDetailQuery} label="当前会话" />
+            <ReadFeedback query={messagesQuery} label="会话消息" />
+            <ReadFeedback query={messageWindowQuery} label="消息窗口" />
+            <ReadFeedback query={agentRunsQuery} label="任务运行记录" />
+            <ReadFeedback
+              query={{
+                ...nativeEventPages,
+                data: nativeEventPages.pages.length ? nativeEventPages.pages : undefined,
+              }}
+              label="任务事件"
+            />
+            <ReadFeedback query={sessionsQuery} label="会话目录" />
+            <ReadFeedback query={catalogQuery} label="模型目录" />
+            <ReadFeedback query={feedReferenceQuery} label="动态引用" />
+            {!renameOpen && panel !== 'toolset' ? patchSessionMutation.feedback : null}
+            {deleteSessionMutation.feedback}
+            {createInspectionFromSessionMutation.feedback}
+            {messageFeedbackMutation.feedback}
+            {!sideOpen ? createSessionMutation.feedback : null}
+            {windowMutation.feedback}
+            <MutationFeedback
+              operations={[
+                {
+                  mutation: cancelAgentRunsMutation,
+                  label: '停止任务',
+                  target: cancelAgentRunsMutation.variables,
+                  receipt: { message: '取消请求已返回，请核对任务终态。' },
+                },
+              ]}
+            />
             {requestRecovery.pending && !currentStreamPending ? (
               <Alert
                 type="warning"
@@ -2115,31 +2280,11 @@ export function AIWorkbenchController() {
                 action={<Button onClick={cancelMessageStream}>重试停止</Button>}
               />
             ) : null}
-            {assistantQuery.isError ? (
-              <Alert
-                type="error"
-                title="个人助手加载失败"
-                action={<Button onClick={() => void assistantQuery.refetch()}>重试</Button>}
-              />
-            ) : null}
             {!canUseChat ? (
               <Alert
                 type="warning"
                 showIcon
                 title="当前账号缺少 observe.ai.chat 权限，无法发送消息或创建会话。"
-              />
-            ) : null}
-
-            {queryError ? (
-              <Alert
-                type="error"
-                showIcon
-                title="工作台数据加载失败"
-                description={
-                  queryError instanceof Error
-                    ? queryError.message
-                    : '请检查当前 API 服务和权限快照。'
-                }
               />
             ) : null}
 
@@ -2350,6 +2495,8 @@ export function AIWorkbenchController() {
                               />
                             )}
                             <MessageActivity
+                              feedbackBlocked={messageFeedbackMutation.blocked}
+                              branchBlocked={createSessionMutation.blocked}
                               onFeedback={
                                 hasPermission(
                                   permissionSnapshotQuery.data?.data,
@@ -2722,7 +2869,33 @@ export function AIWorkbenchController() {
             />
           }
         >
+          <ReadFeedback query={assistantQuery} label="个人助手" />
+          <ReadFeedback query={personalTasksQuery} label="个人任务" />
+          <ReadFeedback query={personalEnvironmentQuery} label="个人环境" />
+          <ReadFeedback query={environmentTemplatesQuery} label="环境模板" />
           <AssistantPanel
+            environmentFeedback={
+              <MutationFeedback
+                operations={[
+                  {
+                    mutation: environmentMutation,
+                    label: '环境操作',
+                    target: assistantQuery.data?.data?.id,
+                  },
+                  {
+                    mutation: environmentDeletion,
+                    label: '删除环境数据',
+                    target: environmentDeletion.variables?.assistantId,
+                  },
+                  {
+                    mutation: environmentExport,
+                    label: '导出环境数据',
+                    target: environmentExport.variables?.assistantId,
+                    readOnly: true,
+                  },
+                ]}
+              />
+            }
             assistant={assistantQuery.data?.data}
             connectionState={
               catalogQuery.isPaused ||
@@ -2749,6 +2922,10 @@ export function AIWorkbenchController() {
               environmentMutation.isPending ||
               environmentDeletion.isPending ||
               environmentExport.isPending
+            }
+            environmentUncertain={
+              writeOutcomeUnknown(environmentMutation.error) ||
+              writeOutcomeUnknown(environmentDeletion.error)
             }
             environmentExporting={environmentExport.isPending}
             onExportEnvironment={(input) => environmentExport.mutate(input)}
@@ -2939,7 +3116,11 @@ export function AIWorkbenchController() {
                 <Button
                   title={createInspectionTitle}
                   onClick={createInspectionFromSession}
-                  disabled={!currentSession || !canCreateInspectionTask}
+                  disabled={
+                    !currentSession ||
+                    !canCreateInspectionTask ||
+                    createInspectionFromSessionMutation.blocked
+                  }
                 >
                   生成巡检任务
                 </Button>
@@ -3061,6 +3242,7 @@ export function AIWorkbenchController() {
               ) : null}
               <div className="soha-ai-workbench__graph-layout">
                 <LazyWorkbenchGraphView
+                  selectedNodeId={selectedGraphNodeId}
                   fitKey={graphFitKey}
                   graph={activeGraph}
                   onSelectNode={setSelectedGraphNodeId}
@@ -3220,7 +3402,9 @@ export function AIWorkbenchController() {
         <WorkbenchPanel
           title="会话级工具集"
           open={panel === 'toolset'}
-          onClose={() => setPanel(null)}
+          onClose={() => {
+            if (!patchSessionMutation.blocked) setPanel(null)
+          }}
           extra={
             <Tag color={currentSession ? 'blue' : 'default'}>
               {currentSession ? currentSessionTitle : '未选择会话'}
@@ -3229,10 +3413,16 @@ export function AIWorkbenchController() {
           footer={
             <Flex justify="space-between" gap={12} wrap="wrap">
               <Space wrap>
-                <Button onClick={clearToolset} disabled={!currentSession}>
+                <Button
+                  onClick={clearToolset}
+                  disabled={!currentSession || patchSessionMutation.blocked}
+                >
                   恢复自动选择
                 </Button>
-                <Button onClick={applyRecommendedToolset} disabled={!currentSession}>
+                <Button
+                  onClick={applyRecommendedToolset}
+                  disabled={!currentSession || patchSessionMutation.blocked}
+                >
                   应用推荐预设
                 </Button>
               </Space>
@@ -3240,13 +3430,14 @@ export function AIWorkbenchController() {
                 type="primary"
                 loading={patchSessionMutation.isPending}
                 onClick={saveToolset}
-                disabled={!currentSession}
+                disabled={!currentSession || patchSessionMutation.blocked}
               >
                 保存会话级装配
               </Button>
             </Flex>
           }
         >
+          {patchSessionMutation.feedback}
           {!currentSession ? (
             <ManagementState
               bordered={false}
@@ -3283,6 +3474,7 @@ export function AIWorkbenchController() {
               <Card size="small" title="Agent Provider">
                 <Space orientation="vertical" size={12} style={{ width: '100%' }}>
                   <Select
+                    disabled={patchSessionMutation.blocked}
                     value={selectedAgentProviderId || defaultAgentProviderId}
                     options={providerOptions}
                     onChange={(value: string) => setSelectedAgentProviderId(value)}
@@ -3309,6 +3501,7 @@ export function AIWorkbenchController() {
               <Card size="small" title="Adapters 与工具">
                 <Space orientation="vertical" size={12} style={{ width: '100%' }}>
                   <Select
+                    disabled={patchSessionMutation.blocked}
                     mode="multiple"
                     allowClear
                     maxTagCount="responsive"
@@ -3322,6 +3515,7 @@ export function AIWorkbenchController() {
                     }))}
                   />
                   <Select
+                    disabled={patchSessionMutation.blocked}
                     mode="multiple"
                     allowClear
                     maxTagCount="responsive"
@@ -3379,7 +3573,9 @@ export function AIWorkbenchController() {
                         <Tag.CheckableTag
                           key={item.id}
                           checked={selectedSkillIds.includes(item.id)}
+                          aria-disabled={patchSessionMutation.blocked}
                           onChange={(checked) => {
+                            if (patchSessionMutation.blocked) return
                             setSelectedSkillIds((current) =>
                               checked
                                 ? [...new Set([...current, item.id])]
@@ -3406,6 +3602,7 @@ export function AIWorkbenchController() {
                         </Text>
                       </span>
                       <InputNumber
+                        disabled={patchSessionMutation.blocked}
                         min={0}
                         suffix={field.suffix}
                         value={budgetOverrides[field.key]}
@@ -3425,31 +3622,37 @@ export function AIWorkbenchController() {
                     description={`当前会话范围：${buildScopeSummary(currentSession.metadata?.scope)}`}
                   />
                   <Input
+                    disabled={patchSessionMutation.blocked}
                     placeholder="Override cluster"
                     value={scopeOverrides.clusterId || ''}
                     onChange={(event) => setScopeOverrideValue('clusterId', event.target.value)}
                   />
                   <Input
+                    disabled={patchSessionMutation.blocked}
                     placeholder="Override namespace"
                     value={scopeOverrides.namespace || ''}
                     onChange={(event) => setScopeOverrideValue('namespace', event.target.value)}
                   />
                   <Input
+                    disabled={patchSessionMutation.blocked}
                     placeholder="Override workload"
                     value={scopeOverrides.workload || ''}
                     onChange={(event) => setScopeOverrideValue('workload', event.target.value)}
                   />
                   <Input
+                    disabled={patchSessionMutation.blocked}
                     placeholder="Override service"
                     value={scopeOverrides.service || ''}
                     onChange={(event) => setScopeOverrideValue('service', event.target.value)}
                   />
                   <Input
+                    disabled={patchSessionMutation.blocked}
                     placeholder="Override alert ID"
                     value={scopeOverrides.alertId || ''}
                     onChange={(event) => setScopeOverrideValue('alertId', event.target.value)}
                   />
                   <InputNumber
+                    disabled={patchSessionMutation.blocked}
                     min={0}
                     suffix="minutes"
                     placeholder="Override time range"
@@ -3787,24 +3990,38 @@ export function AIWorkbenchController() {
       <Modal
         title="开启旁聊"
         open={sideOpen}
-        onCancel={() => setSideOpen(false)}
+        onCancel={() => {
+          if (!createSessionMutation.blocked) setSideOpen(false)
+        }}
+        closable={!createSessionMutation.blocked}
+        keyboard={!createSessionMutation.blocked}
+        mask={{ closable: !createSessionMutation.blocked }}
+        cancelButtonProps={{ disabled: createSessionMutation.blocked }}
         okText="开启旁聊"
         cancelText="取消"
         confirmLoading={createSessionMutation.isPending}
-        okButtonProps={{ disabled: !sideTitle.trim() || !canUseChat || catalogQuery.isPending }}
+        okButtonProps={{
+          disabled:
+            createSessionMutation.blocked ||
+            !sideTitle.trim() ||
+            !canUseChat ||
+            catalogQuery.isPending,
+        }}
         onOk={() => createSession({ title: sideTitle, scope: {} })}
       >
+        {createSessionMutation.feedback}
         <Paragraph type="secondary">
           给这个独立话题取个名字。你可以随时在主要聊天与旁聊之间切换。
         </Paragraph>
         <Input
           aria-label="旁聊名称"
+          disabled={createSessionMutation.blocked}
           placeholder="例如：发布方案、一个新想法"
           maxLength={120}
           value={sideTitle}
           onChange={(event) => setSideTitle(event.target.value)}
           onPressEnter={() => {
-            if (sideTitle.trim() && !createSessionMutation.isPending)
+            if (sideTitle.trim() && !createSessionMutation.blocked)
               createSession({ title: sideTitle, scope: {} })
           }}
         />
@@ -3812,30 +4029,47 @@ export function AIWorkbenchController() {
       <Modal
         title="重命名会话"
         open={renameOpen}
-        onCancel={() => setRenameOpen(false)}
+        onCancel={() => {
+          if (!patchSessionMutation.blocked) setRenameOpen(false)
+        }}
+        closable={!patchSessionMutation.blocked}
+        keyboard={!patchSessionMutation.blocked}
+        mask={{ closable: !patchSessionMutation.blocked }}
+        confirmLoading={patchSessionMutation.isPending}
+        okButtonProps={{ disabled: patchSessionMutation.blocked }}
+        cancelButtonProps={{ disabled: patchSessionMutation.blocked }}
         onOk={() => {
-          if (!renameTargetId) return
-          patchSessionMutation.mutate({
-            sessionId: renameTargetId,
-            body: {
-              title: renameValue,
-              tags: sessionTagsWithPin(
-                visibleSessions.find((item) => item.id === renameTargetId)?.metadata?.tags,
-                renamePinned,
-              ),
+          if (!renameTargetId || patchSessionMutation.blocked) return
+          patchSessionMutation.mutate(
+            {
+              sessionId: renameTargetId,
+              body: {
+                title: renameValue,
+                tags: sessionTagsWithPin(
+                  visibleSessions.find((item) => item.id === renameTargetId)?.metadata?.tags,
+                  renamePinned,
+                ),
+              },
             },
-          })
-          setRenameOpen(false)
+            { onSuccess: () => setRenameOpen(false) },
+          )
         }}
       >
+        {patchSessionMutation.feedback}
         <Space orientation="vertical" style={{ width: '100%' }}>
           <Input
             aria-label="会话名称"
+            disabled={patchSessionMutation.blocked}
             value={renameValue}
             onChange={(event) => setRenameValue(event.target.value)}
           />
           <Space>
-            <Switch aria-label="置顶会话" checked={renamePinned} onChange={setRenamePinned} />
+            <Switch
+              disabled={patchSessionMutation.blocked}
+              aria-label="置顶会话"
+              checked={renamePinned}
+              onChange={setRenamePinned}
+            />
             置顶会话
           </Space>
         </Space>

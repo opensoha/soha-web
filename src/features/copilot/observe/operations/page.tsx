@@ -1,5 +1,15 @@
-import { useEffect, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { AdminTable } from '@/components/admin-table'
+import { ManagementIconButton } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { AISettingsPage } from '@/features/settings'
+import { ApiError } from '@/services/api-error'
+import { useAuthStore } from '@/stores/auth-store'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import { tableColumnPresets } from '@/utils/table-columns'
+import { createUUID } from '@/utils/uuid'
 import {
   DeleteOutlined,
   EditOutlined,
@@ -7,6 +17,7 @@ import {
   PlusOutlined,
   RobotOutlined,
 } from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Alert,
   App,
@@ -23,31 +34,23 @@ import {
   Tabs,
   Typography,
 } from 'antd'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AdminTable } from '@/components/admin-table'
-import { ManagementIconButton } from '@/components/management-list'
-import { MetadataTag, StatusTag } from '@/components/status-tag'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
-import { AISettingsPage } from '@/features/settings'
-import { tableColumnPresets } from '@/utils/table-columns'
-import { getAIWorkbenchPathForMode, getAIWorkbenchPathForSession } from '../../workbench/navigation'
-import { observeKeys } from '../keys'
+import { useEffect, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { capabilityTaskMutations } from '../../capability-tasks/mutations'
-import { createUUID } from '@/utils/uuid'
-import { useAuthStore } from '@/stores/auth-store'
-import { ApiError } from '@/services/api-error'
+import '../../copilot-pages.css'
+import { getAIWorkbenchPathForMode, getAIWorkbenchPathForSession } from '../../workbench/navigation'
 import { observeApi } from '../api'
-import { observeMutations, policyFormValuesFromRecord, inspectionTaskPayload } from '../mutations'
+import { observeKeys } from '../keys'
+import { inspectionTaskPayload, observeMutations, policyFormValuesFromRecord } from '../mutations'
 import { observeQueries } from '../queries'
 import type {
   AnalysisProfile,
   AutomationPolicy,
   AutomationPolicyFormValues,
+  InspectionRun,
   InspectionTask,
   InspectionTaskFormValues,
-  InspectionRun,
 } from '../types'
-import '../../copilot-pages.css'
 
 const { Text } = Typography
 
@@ -136,15 +139,25 @@ function AIOperationsContent({ userId }: { userId: string }) {
   const [searchParams] = useSearchParams()
   const [taskForm] = Form.useForm<InspectionTaskFormValues>()
   const [policyForm] = Form.useForm<AutomationPolicyFormValues>()
-  const planValidation = useMutation(capabilityTaskMutations.validate())
+  const planValidation = useOperationMutation(capabilityTaskMutations.validate(), {
+    label: ['校验巡检计划', 'Validate inspection plan'],
+    target: () => '当前巡检计划',
+    readOnly: true,
+  })
   const permissionSnapshotQuery = usePermissionSnapshot()
-  const canViewAI = hasPermission(permissionSnapshotQuery.data?.data, 'observe.ai.view')
-  const canUseChat = hasPermission(permissionSnapshotQuery.data?.data, 'observe.ai.chat')
+  const canViewAI = hasPermission(
+    readableQueryData(permissionSnapshotQuery)?.data,
+    'observe.ai.view',
+  )
+  const canUseChat = hasPermission(
+    readableQueryData(permissionSnapshotQuery)?.data,
+    'observe.ai.chat',
+  )
   const canRunInspection = hasPermission(
-    permissionSnapshotQuery.data?.data,
+    readableQueryData(permissionSnapshotQuery)?.data,
     'observe.ai.inspection.run',
   )
-  const permissionSnapshot = permissionSnapshotQuery.data?.data
+  const permissionSnapshot = readableQueryData(permissionSnapshotQuery)?.data
   const canCreateInspection = hasPermission(permissionSnapshot, 'observe.ai.inspection.create')
   const canUpdateInspection = hasPermission(permissionSnapshot, 'observe.ai.inspection.update')
   const canDeleteInspection = hasPermission(permissionSnapshot, 'observe.ai.inspection.delete')
@@ -169,91 +182,141 @@ function AIOperationsContent({ userId }: { userId: string }) {
   const runsQuery = useQuery(observeQueries.operations.runs())
   const policiesQuery = useQuery(observeQueries.operations.policies(canUpdateAISettings))
   const catalogQuery = useQuery(observeQueries.operations.catalog())
-  const createSessionMutation = useMutation({
-    ...observeMutations.operations.createSession(),
-    onSuccess: (response) => {
-      void message.success('已从巡检运行创建 AI 会话')
-      void queryClient.invalidateQueries({ queryKey: observeKeys.overview.sessions() })
-      navigate(getAIWorkbenchPathForSession(response))
+  const createSessionMutation = useOperationMutation(
+    {
+      ...observeMutations.operations.createSession(),
+      onSuccess: (response) => {
+        void queryClient.invalidateQueries({ queryKey: observeKeys.overview.sessions() })
+        navigate(getAIWorkbenchPathForSession(response))
+      },
     },
-    onError: (err: Error) => void message.error(err.message),
-  })
-  const createTaskMutation = useMutation({
-    ...observeMutations.operations.createTask(),
-    onSuccess: async () => {
-      void message.success('巡检任务已创建')
-      await queryClient.invalidateQueries({ queryKey: observeKeys.operations.tasks() })
-      setTaskModalOpen(false)
-      setEditingTask(null)
-      taskForm.resetFields()
+    { label: ['创建复盘会话', 'Create review session'], target: (id) => id },
+  )
+  const createTaskMutation = useOperationMutation(
+    {
+      ...observeMutations.operations.createTask(),
+      onSuccess: async () => {
+        await queryClient.invalidateQueries({ queryKey: observeKeys.operations.tasks() })
+        setTaskModalOpen(false)
+        setEditingTask(null)
+        taskForm.resetFields()
+      },
     },
-    onError: (err: Error) => void message.error(err.message),
-  })
-  const updateTaskMutation = useMutation({
-    ...observeMutations.operations.updateTask(),
-    onSuccess: async () => {
-      void message.success('巡检任务已更新')
-      await queryClient.invalidateQueries({ queryKey: observeKeys.operations.tasks() })
-      setTaskModalOpen(false)
-      setEditingTask(null)
-      taskForm.resetFields()
+    {
+      label: ['创建巡检任务', 'Create inspection task'],
+      target: (v) => v.title || v.id || '当前巡检任务',
     },
-    onError: (err: Error) => void message.error(err.message),
-  })
-  const deleteTaskMutation = useMutation({
-    ...observeMutations.operations.deleteTask(),
-    onSuccess: async () => {
-      void message.success('巡检任务已删除')
-      await queryClient.invalidateQueries({ queryKey: observeKeys.operations.tasks() })
-      await queryClient.invalidateQueries({ queryKey: observeKeys.operations.runs() })
+  )
+  const updateTaskMutation = useOperationMutation(
+    {
+      ...observeMutations.operations.updateTask(),
+      onSuccess: async () => {
+        await queryClient.invalidateQueries({ queryKey: observeKeys.operations.tasks() })
+        setTaskModalOpen(false)
+        setEditingTask(null)
+        taskForm.resetFields()
+      },
     },
-    onError: (err: Error) => void message.error(err.message),
-  })
-  const createPolicyMutation = useMutation({
-    ...observeMutations.operations.createPolicy(),
-    onSuccess: async () => {
-      void message.success('自动化策略已创建')
-      await queryClient.invalidateQueries({ queryKey: observeKeys.operations.policies() })
-      setPolicyModalOpen(false)
-      setEditingPolicy(null)
-      policyForm.resetFields()
+    { label: ['更新巡检任务', 'Update inspection task'], target: (v) => v.taskId },
+  )
+  const deleteTaskMutation = useOperationMutation(
+    {
+      ...observeMutations.operations.deleteTask(),
+      onSuccess: async () => {
+        await queryClient.invalidateQueries({ queryKey: observeKeys.operations.tasks() })
+        await queryClient.invalidateQueries({ queryKey: observeKeys.operations.runs() })
+      },
     },
-    onError: (err: Error) => void message.error(err.message),
-  })
-  const updatePolicyMutation = useMutation({
-    ...observeMutations.operations.updatePolicy(),
-    onSuccess: async () => {
-      void message.success('自动化策略已更新')
-      await queryClient.invalidateQueries({ queryKey: observeKeys.operations.policies() })
-      setPolicyModalOpen(false)
-      setEditingPolicy(null)
-      policyForm.resetFields()
+    { label: ['删除巡检任务', 'Delete inspection task'], target: (id) => id },
+  )
+  const createPolicyMutation = useOperationMutation(
+    {
+      ...observeMutations.operations.createPolicy(),
+      onSuccess: async () => {
+        await queryClient.invalidateQueries({ queryKey: observeKeys.operations.policies() })
+        setPolicyModalOpen(false)
+        setEditingPolicy(null)
+        policyForm.resetFields()
+      },
     },
-    onError: (err: Error) => void message.error(err.message),
-  })
-  const deletePolicyMutation = useMutation({
-    ...observeMutations.operations.deletePolicy(),
-    onSuccess: async () => {
-      void message.success('自动化策略已删除')
-      await queryClient.invalidateQueries({ queryKey: observeKeys.operations.policies() })
+    {
+      label: ['创建自动化策略', 'Create automation policy'],
+      target: (v) => v.name || '当前自动化策略',
     },
-    onError: (err: Error) => void message.error(err.message),
-  })
-  const executeMutation = useMutation({
-    ...observeMutations.operations.executeTask(),
-    onSuccess: () => {
-      void message.success('巡检请求已接收；请查看运行记录及目标证据')
-      void queryClient.invalidateQueries({ queryKey: observeKeys.operations.runs() })
-      void queryClient.invalidateQueries({ queryKey: observeKeys.operations.tasks() })
+  )
+  const updatePolicyMutation = useOperationMutation(
+    {
+      ...observeMutations.operations.updatePolicy(),
+      onSuccess: async () => {
+        await queryClient.invalidateQueries({ queryKey: observeKeys.operations.policies() })
+        setPolicyModalOpen(false)
+        setEditingPolicy(null)
+        policyForm.resetFields()
+      },
     },
-    onError: (err: Error) => void message.error(err.message),
-  })
+    { label: ['更新自动化策略', 'Update automation policy'], target: (v) => v.policyId },
+  )
+  const deletePolicyMutation = useOperationMutation(
+    {
+      ...observeMutations.operations.deletePolicy(),
+      onSuccess: async () => {
+        await queryClient.invalidateQueries({ queryKey: observeKeys.operations.policies() })
+      },
+    },
+    { label: ['删除自动化策略', 'Delete automation policy'], target: (id) => id },
+  )
+  const executeMutation = useOperationMutation(
+    {
+      ...observeMutations.operations.executeTask(),
+      onSuccess: () => {
+        void queryClient.invalidateQueries({ queryKey: observeKeys.operations.runs() })
+        void queryClient.invalidateQueries({ queryKey: observeKeys.operations.tasks() })
+      },
+    },
+    {
+      label: ['执行巡检', 'Run inspection'],
+      target: (v) => (typeof v === 'string' ? v : v.taskId),
+    },
+  )
 
-  const tasks = tasksQuery.data ?? []
-  const runs = runsQuery.data ?? []
-  const policies = policiesQuery.data ?? []
-  const profiles: AnalysisProfile[] = catalogQuery.data?.analysisProfiles ?? []
-  const agentProviders = catalogQuery.data?.agentProviders ?? []
+  const blocked = [
+    createSessionMutation,
+    createTaskMutation,
+    updateTaskMutation,
+    deleteTaskMutation,
+    createPolicyMutation,
+    updatePolicyMutation,
+    deletePolicyMutation,
+    executeMutation,
+    planValidation,
+  ].some((m) => m.blocked)
+  const tasksDenied =
+    queryAccessDenied(tasksQuery) ||
+    queryAccessDenied(createTaskMutation) ||
+    queryAccessDenied(updateTaskMutation)
+  const policiesDenied =
+    queryAccessDenied(policiesQuery) ||
+    queryAccessDenied(createPolicyMutation) ||
+    queryAccessDenied(updatePolicyMutation)
+  useEffect(() => {
+    if (tasksDenied || !(editingTask ? canUpdateInspection : canCreateInspection)) {
+      setTaskModalOpen(false)
+      setEditingTask(null)
+      taskForm.resetFields()
+    }
+  }, [tasksDenied, editingTask, canUpdateInspection, canCreateInspection, taskForm])
+  useEffect(() => {
+    if (policiesDenied || !canUpdateAISettings) {
+      setPolicyModalOpen(false)
+      setEditingPolicy(null)
+      policyForm.resetFields()
+    }
+  }, [policiesDenied, canUpdateAISettings, policyForm])
+  const tasks = readableQueryData(tasksQuery) ?? []
+  const runs = readableQueryData(runsQuery) ?? []
+  const policies = readableQueryData(policiesQuery) ?? []
+  const profiles: AnalysisProfile[] = readableQueryData(catalogQuery)?.analysisProfiles ?? []
+  const agentProviders = readableQueryData(catalogQuery)?.agentProviders ?? []
   const profileOptions = profiles
     .filter((item) => item.enabled)
     .map((item) => ({ value: item.id, label: `${item.name} (${item.mode})` }))
@@ -267,7 +330,7 @@ function AIOperationsContent({ userId }: { userId: string }) {
   const watchedInspectionMode = Form.useWatch('mode', taskForm)
   const watchedTriggerKind = Form.useWatch('triggerKind', taskForm)
   async function executeInspection(task: InspectionTask) {
-    if (executeMutation.isPending || !canRunInspection) return
+    if (blocked || tasksDenied || !canRunInspection) return
     if (!task.capabilityPlan) {
       executeMutation.mutate(task.id)
       return
@@ -324,6 +387,9 @@ function AIOperationsContent({ userId }: { userId: string }) {
   }, [requestedInspectionRunId, requestedView])
 
   const openCreateTask = async () => {
+    if (blocked || tasksDenied || !canCreateInspection) return
+    createTaskMutation.reset()
+    updateTaskMutation.reset()
     try {
       if (!userId) throw new Error('缺少当前用户，请重新登录')
       const pendingKey = `soha:inspection-create:${userId}`
@@ -352,6 +418,9 @@ function AIOperationsContent({ userId }: { userId: string }) {
     }
   }
   const openEditTask = (task: InspectionTask) => {
+    if (blocked || tasksDenied || !canUpdateInspection) return
+    createTaskMutation.reset()
+    updateTaskMutation.reset()
     setEditingTask(task)
     planValidation.reset()
     taskForm.resetFields()
@@ -382,11 +451,13 @@ function AIOperationsContent({ userId }: { userId: string }) {
     setTaskModalOpen(true)
   }
   const closeTaskModal = () => {
+    if (blocked) return
     setTaskModalOpen(false)
     setEditingTask(null)
     taskForm.resetFields()
   }
   const submitTaskForm = async () => {
+    if (blocked || tasksDenied) return
     try {
       const values = await taskForm.validateFields()
       const payload = {
@@ -410,23 +481,31 @@ function AIOperationsContent({ userId }: { userId: string }) {
     }
   }
   const openCreatePolicy = () => {
-    if (!canUpdateAISettings) return
+    if (blocked || policiesDenied || !canUpdateAISettings) return
+    createPolicyMutation.reset()
+    updatePolicyMutation.reset()
+    policyForm.resetFields()
     setEditingPolicy(null)
     policyForm.setFieldsValue(defaultAutomationPolicyValues())
     setPolicyModalOpen(true)
   }
   const openEditPolicy = (policy: AutomationPolicy) => {
-    if (!canUpdateAISettings) return
+    if (blocked || policiesDenied || !canUpdateAISettings) return
+    createPolicyMutation.reset()
+    updatePolicyMutation.reset()
+    policyForm.resetFields()
     setEditingPolicy(policy)
     policyForm.setFieldsValue(policyFormValuesFromRecord(policy))
     setPolicyModalOpen(true)
   }
   const closePolicyModal = () => {
+    if (blocked) return
     setPolicyModalOpen(false)
     setEditingPolicy(null)
     policyForm.resetFields()
   }
   const submitPolicyForm = async () => {
+    if (blocked || policiesDenied || !canUpdateAISettings) return
     const values = await policyForm.validateFields()
     if (editingPolicy) {
       updatePolicyMutation.mutate({ policyId: editingPolicy.id, values })
@@ -437,6 +516,24 @@ function AIOperationsContent({ userId }: { userId: string }) {
 
   return (
     <div className="soha-page">
+      {!taskModalOpen && (
+        <>
+          {createTaskMutation.feedback}
+          {updateTaskMutation.feedback}
+          {planValidation.feedback}
+        </>
+      )}
+      {!policyModalOpen && (
+        <>
+          {createPolicyMutation.feedback}
+          {updatePolicyMutation.feedback}
+        </>
+      )}
+      {deleteTaskMutation.feedback}
+      {deletePolicyMutation.feedback}
+      {executeMutation.feedback}
+      {createSessionMutation.feedback}
+      <ReadFeedback query={catalogQuery} label="AI 能力目录" />
       <Tabs
         activeKey={activeView}
         className="soha-resource-tabs is-header-only"
@@ -458,7 +555,7 @@ function AIOperationsContent({ userId }: { userId: string }) {
               type="primary"
               icon={<PlusOutlined />}
               onClick={openCreateTask}
-              disabled={!canCreateInspection}
+              disabled={blocked || !canCreateInspection}
               title={canCreateInspection ? undefined : '缺少 observe.ai.inspection.create 权限'}
             >
               新建任务
@@ -470,6 +567,9 @@ function AIOperationsContent({ userId }: { userId: string }) {
           rowKey="id"
           dataSource={tasks}
           loading={tasksQuery.isLoading}
+          error={tasksQuery.error}
+          hasReadData={readableQueryData(tasksQuery) !== undefined}
+          onRetry={() => void tasksQuery.refetch()}
           tableSize="small"
           pageSize={10}
           columns={[
@@ -518,7 +618,7 @@ function AIOperationsContent({ userId }: { userId: string }) {
                     tooltip="编辑"
                     icon={<EditOutlined />}
                     onClick={() => openEditTask(record)}
-                    disabled={!canUpdateInspection}
+                    disabled={blocked || !canUpdateInspection}
                     title={
                       canUpdateInspection ? undefined : '缺少 observe.ai.inspection.update 权限'
                     }
@@ -530,10 +630,11 @@ function AIOperationsContent({ userId }: { userId: string }) {
                     icon={<PlayCircleOutlined />}
                     loading={executeMutation.isPending}
                     onClick={() => void executeInspection(record)}
-                    disabled={!canRunInspection}
+                    disabled={blocked || !canRunInspection}
                     title={canRunInspection ? undefined : '缺少 observe.ai.inspection.run 权限'}
                   />
                   <Popconfirm
+                    disabled={blocked}
                     title="确认删除巡检任务？"
                     description={
                       record.capabilityPlan
@@ -549,7 +650,7 @@ function AIOperationsContent({ userId }: { userId: string }) {
                       tooltip="删除"
                       icon={<DeleteOutlined />}
                       danger
-                      disabled={!canDeleteInspection}
+                      disabled={blocked || !canDeleteInspection}
                       title={
                         canDeleteInspection ? undefined : '缺少 observe.ai.inspection.delete 权限'
                       }
@@ -565,17 +666,25 @@ function AIOperationsContent({ userId }: { userId: string }) {
       <Modal
         title={editingTask ? '编辑巡检任务' : '新建巡检任务'}
         open={taskModalOpen}
+        closable={!blocked}
+        keyboard={!blocked}
+        mask={{ closable: !blocked }}
+        cancelButtonProps={{ disabled: blocked }}
         onCancel={closeTaskModal}
         onOk={submitTaskForm}
         okText={editingTask ? '更新' : '创建'}
         cancelText="取消"
         confirmLoading={taskSaving}
         okButtonProps={{
-          disabled: editingTask ? !canUpdateInspection : !canCreateInspection,
+          disabled:
+            blocked || tasksDenied || (editingTask ? !canUpdateInspection : !canCreateInspection),
         }}
         width={640}
       >
-        <Form form={taskForm} layout="vertical" preserve={false}>
+        {createTaskMutation.feedback}
+        {updateTaskMutation.feedback}
+        {planValidation.feedback}
+        <Form disabled={blocked || tasksDenied} form={taskForm} layout="vertical" preserve={false}>
           <Form.Item name="id" hidden>
             <Input />
           </Form.Item>
@@ -682,6 +791,7 @@ function AIOperationsContent({ userId }: { userId: string }) {
                 />
               </Form.Item>
               <Button
+                disabled={blocked}
                 loading={planValidation.isPending}
                 onClick={() =>
                   void validateInspectionPlan(taskForm.getFieldsValue()).catch((error: unknown) =>
@@ -773,7 +883,7 @@ function AIOperationsContent({ userId }: { userId: string }) {
               <Button
                 size="small"
                 onClick={() => navigate(getAIWorkbenchPathForMode('inspection_review'))}
-                disabled={!canUseChat}
+                disabled={blocked || !canUseChat}
               >
                 进入巡检复盘工作台
               </Button>
@@ -784,6 +894,9 @@ function AIOperationsContent({ userId }: { userId: string }) {
             rowKey="id"
             dataSource={runs}
             loading={runsQuery.isLoading}
+            error={runsQuery.error}
+            hasReadData={readableQueryData(runsQuery) !== undefined}
+            onRetry={() => void runsQuery.refetch()}
             tableSize="small"
             pageSize={10}
             columns={[
@@ -822,6 +935,7 @@ function AIOperationsContent({ userId }: { userId: string }) {
                 render: (_: unknown, record: InspectionRun) =>
                   typeof record.report?.capabilityTaskId === 'string' ? (
                     <Button
+                      disabled={blocked}
                       type="link"
                       onClick={() =>
                         navigate(
@@ -846,7 +960,7 @@ function AIOperationsContent({ userId }: { userId: string }) {
                     tooltip="创建 AI 会话"
                     icon={<RobotOutlined />}
                     onClick={() => createSessionMutation.mutate(value)}
-                    disabled={!canCreateSessionFromRun}
+                    disabled={blocked || !canCreateSessionFromRun}
                     title={
                       canCreateSessionFromRun
                         ? undefined
@@ -881,7 +995,7 @@ function AIOperationsContent({ userId }: { userId: string }) {
                 type="primary"
                 icon={<PlusOutlined />}
                 onClick={openCreatePolicy}
-                disabled={!canUpdateAISettings}
+                disabled={blocked || !canUpdateAISettings}
                 title={canUpdateAISettings ? undefined : '缺少 settings.ai.update 权限'}
               >
                 新建策略
@@ -893,6 +1007,9 @@ function AIOperationsContent({ userId }: { userId: string }) {
             rowKey="id"
             dataSource={policies}
             loading={policiesQuery.isLoading}
+            error={policiesQuery.error}
+            hasReadData={readableQueryData(policiesQuery) !== undefined}
+            onRetry={() => void policiesQuery.refetch()}
             tableSize="small"
             pageSize={10}
             columns={[
@@ -941,10 +1058,11 @@ function AIOperationsContent({ userId }: { userId: string }) {
                       tooltip="编辑"
                       icon={<EditOutlined />}
                       onClick={() => openEditPolicy(record)}
-                      disabled={!canUpdateAISettings}
+                      disabled={blocked || !canUpdateAISettings}
                       title={canUpdateAISettings ? undefined : '缺少 settings.ai.update 权限'}
                     />
                     <Popconfirm
+                      disabled={blocked}
                       title="确认删除自动化策略？"
                       description="删除后不会再由该策略触发新的 AI 分析。"
                       onConfirm={() => deletePolicyMutation.mutate(record.id)}
@@ -956,7 +1074,7 @@ function AIOperationsContent({ userId }: { userId: string }) {
                         tooltip="删除"
                         icon={<DeleteOutlined />}
                         danger
-                        disabled={!canUpdateAISettings}
+                        disabled={blocked || !canUpdateAISettings}
                         title={canUpdateAISettings ? undefined : '缺少 settings.ai.update 权限'}
                       />
                     </Popconfirm>
@@ -973,15 +1091,26 @@ function AIOperationsContent({ userId }: { userId: string }) {
       <Modal
         title={editingPolicy ? '编辑自动化策略' : '新建自动化策略'}
         open={policyModalOpen}
+        closable={!blocked}
+        keyboard={!blocked}
+        mask={{ closable: !blocked }}
+        cancelButtonProps={{ disabled: blocked }}
         onCancel={closePolicyModal}
-        onOk={submitPolicyForm}
+        onOk={() => void submitPolicyForm().catch(() => undefined)}
         okText={editingPolicy ? '更新' : '创建'}
         cancelText="取消"
         confirmLoading={policySaving}
-        okButtonProps={{ disabled: !canUpdateAISettings }}
+        okButtonProps={{ disabled: blocked || policiesDenied || !canUpdateAISettings }}
         width={680}
       >
-        <Form form={policyForm} layout="vertical" preserve={false}>
+        {createPolicyMutation.feedback}
+        {updatePolicyMutation.feedback}
+        <Form
+          disabled={blocked || policiesDenied}
+          form={policyForm}
+          layout="vertical"
+          preserve={false}
+        >
           <Form.Item
             name="name"
             label="策略名称"

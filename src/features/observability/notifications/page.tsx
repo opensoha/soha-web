@@ -1,4 +1,12 @@
-import { useMemo, useState } from 'react'
+import { AdminTable } from '@/components/admin-table'
+import { ManagementIconButton } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
+import { BooleanTag, MetadataTag, StatusTag } from '@/components/status-tag'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import { tableColumnPresets } from '@/utils/table-columns'
+import { formatDateTime } from '@/utils/time'
 import {
   BellOutlined,
   EditOutlined,
@@ -6,6 +14,8 @@ import {
   NotificationOutlined,
   PlusOutlined,
 } from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TableProps } from 'antd'
 import {
   App,
   Button,
@@ -19,14 +29,7 @@ import {
   Tabs,
   Typography,
 } from 'antd'
-import type { TableProps } from 'antd'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AdminTable } from '@/components/admin-table'
-import { ManagementIconButton } from '@/components/management-list'
-import { BooleanTag, MetadataTag, StatusTag } from '@/components/status-tag'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
-import { tableColumnPresets } from '@/utils/table-columns'
-import { formatDateTime } from '@/utils/time'
+import { useEffect, useMemo, useState } from 'react'
 import '../observability-pages.css'
 import {
   buildNotificationChannelPayload,
@@ -49,7 +52,6 @@ import type {
   NotificationMatchers,
   NotificationPolicy,
   NotificationPolicyFormValues,
-  NotificationPreviewItem,
   NotificationRoute,
   NotificationRouteFormValues,
   NotificationSilence,
@@ -85,7 +87,6 @@ export function NotificationsPage() {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewPolicy, setPreviewPolicy] = useState<NotificationPolicy | null>(null)
   const [previewEventId, setPreviewEventId] = useState('')
-  const [previewItems, setPreviewItems] = useState<NotificationPreviewItem[]>([])
 
   const channelsQuery = useQuery(observabilityNotificationQueries.channels())
   const alertEventsQuery = useQuery(observabilityNotificationQueries.previewEvents())
@@ -96,75 +97,218 @@ export function NotificationsPage() {
   const oncallSchedulesQuery = useQuery(observabilityNotificationQueries.oncallSchedules())
   const oncallPoliciesQuery = useQuery(observabilityNotificationQueries.oncallPolicies())
 
-  const mutationError = (error: Error) => message.error(error.message)
-  const createPolicy = useMutation({
-    ...observabilityNotificationMutations.createPolicy(queryClient),
-    onError: mutationError,
-  })
-  const updatePolicy = useMutation({
-    ...observabilityNotificationMutations.updatePolicy(queryClient),
-    onError: mutationError,
-  })
-  const createTemplate = useMutation({
-    ...observabilityNotificationMutations.createTemplate(queryClient),
-    onError: mutationError,
-  })
-  const updateTemplate = useMutation({
-    ...observabilityNotificationMutations.updateTemplate(queryClient),
-    onError: mutationError,
-  })
-  const createChannel = useMutation({
-    ...observabilityNotificationMutations.createChannel(queryClient),
-    onError: mutationError,
-  })
-  const updateChannel = useMutation({
-    ...observabilityNotificationMutations.updateChannel(queryClient),
-    onError: mutationError,
-  })
-  const createRoute = useMutation({
-    ...observabilityNotificationMutations.createRoute(queryClient),
-    onError: mutationError,
-  })
-  const updateRoute = useMutation({
-    ...observabilityNotificationMutations.updateRoute(queryClient),
-    onError: mutationError,
-  })
-  const createSilence = useMutation({
-    ...observabilityNotificationMutations.createSilence(queryClient),
-    onError: mutationError,
-  })
-  const updateSilence = useMutation({
-    ...observabilityNotificationMutations.updateSilence(queryClient),
-    onError: mutationError,
-  })
-  const previewMutation = useMutation({
-    ...observabilityNotificationMutations.preview(),
-    onError: mutationError,
-  })
+  const createPolicy = useOperationMutation(
+    observabilityNotificationMutations.createPolicy(queryClient),
+    {
+      label: ['创建通知策略', 'Create notification policy'],
+      target: (input) => input.name,
+      receipt: () => ({ message: '通知策略记录已保存' }),
+    },
+  )
+  const updatePolicy = useOperationMutation(
+    observabilityNotificationMutations.updatePolicy(queryClient),
+    {
+      label: ['更新通知策略', 'Update notification policy'],
+      target: ({ id }) => id,
+      receipt: () => ({ message: '通知策略记录已保存' }),
+    },
+  )
+  const createTemplate = useOperationMutation(
+    observabilityNotificationMutations.createTemplate(queryClient),
+    {
+      label: ['创建通知模板', 'Create notification template'],
+      target: (input) => input.name,
+      receipt: () => ({ message: '通知模板记录已保存' }),
+    },
+  )
+  const updateTemplate = useOperationMutation(
+    observabilityNotificationMutations.updateTemplate(queryClient),
+    {
+      label: ['更新通知模板', 'Update notification template'],
+      target: ({ id }) => id,
+      receipt: () => ({ message: '通知模板记录已保存' }),
+    },
+  )
+  const createChannel = useOperationMutation(
+    observabilityNotificationMutations.createChannel(queryClient),
+    {
+      label: ['创建通知渠道', 'Create notification channel'],
+      target: (input) => input.name,
+      receipt: () => ({ message: '通知渠道记录已保存' }),
+    },
+  )
+  const updateChannel = useOperationMutation(
+    observabilityNotificationMutations.updateChannel(queryClient),
+    {
+      label: ['更新通知渠道', 'Update notification channel'],
+      target: ({ id }) => id,
+      receipt: () => ({ message: '通知渠道记录已保存' }),
+    },
+  )
+  const createRoute = useOperationMutation(
+    observabilityNotificationMutations.createRoute(queryClient),
+    {
+      label: ['创建路由规则', 'Create notification route'],
+      target: (input) => input.name,
+      receipt: () => ({ message: '路由规则记录已保存' }),
+    },
+  )
+  const updateRoute = useOperationMutation(
+    observabilityNotificationMutations.updateRoute(queryClient),
+    {
+      label: ['更新路由规则', 'Update notification route'],
+      target: ({ id }) => id,
+      receipt: () => ({ message: '路由规则记录已保存' }),
+    },
+  )
+  const createSilence = useOperationMutation(
+    observabilityNotificationMutations.createSilence(queryClient),
+    {
+      label: ['创建静默规则', 'Create notification silence'],
+      target: (input) => input.name,
+      receipt: () => ({ message: '静默规则记录已保存' }),
+    },
+  )
+  const updateSilence = useOperationMutation(
+    observabilityNotificationMutations.updateSilence(queryClient),
+    {
+      label: ['更新静默规则', 'Update notification silence'],
+      target: ({ id }) => id,
+      receipt: () => ({ message: '静默规则记录已保存' }),
+    },
+  )
+  const previewQuery = useQuery(
+    observabilityNotificationQueries.preview(
+      previewPolicy?.id ?? '',
+      previewEventId,
+      previewOpen && !queryAccessDenied(policiesQuery) && !queryAccessDenied(alertEventsQuery),
+    ),
+  )
+  const policyDenied = queryAccessDenied(policiesQuery)
+  const policyWriteBlocked = createPolicy.blocked || updatePolicy.blocked
+  const policyBlocked =
+    policyWriteBlocked ||
+    policyDenied ||
+    !readableQueryData(channelsQuery) ||
+    !readableQueryData(oncallSchedulesQuery) ||
+    !readableQueryData(oncallPoliciesQuery)
+  function closePolicyEditor() {
+    if (policyWriteBlocked) return
+    setPolicyOpen(false)
+    setEditingPolicy(null)
+    policyForm.resetFields()
+  }
+  useEffect(() => {
+    if (policyDenied || queryAccessDenied(createPolicy) || queryAccessDenied(updatePolicy)) {
+      setPolicyOpen(false)
+      setEditingPolicy(null)
+      policyForm.resetFields()
+    }
+  }, [policyDenied, createPolicy.error, updatePolicy.error, policyForm])
+  const templateDenied = queryAccessDenied(templatesQuery)
+  const templateWriteBlocked = createTemplate.blocked || updateTemplate.blocked
+  const templateBlocked = templateWriteBlocked || templateDenied
+  function closeTemplateEditor() {
+    if (templateWriteBlocked) return
+    setTemplateOpen(false)
+    setEditingTemplate(null)
+    templateForm.resetFields()
+  }
+  useEffect(() => {
+    if (templateDenied || queryAccessDenied(createTemplate) || queryAccessDenied(updateTemplate)) {
+      setTemplateOpen(false)
+      setEditingTemplate(null)
+      templateForm.resetFields()
+    }
+  }, [templateDenied, createTemplate.error, updateTemplate.error, templateForm])
+  const channelDenied = queryAccessDenied(channelsQuery)
+  const channelWriteBlocked = createChannel.blocked || updateChannel.blocked
+  const channelBlocked = channelWriteBlocked || channelDenied
+  function closeChannelEditor() {
+    if (channelWriteBlocked) return
+    setChannelOpen(false)
+    setEditingChannel(null)
+    channelForm.resetFields()
+  }
+  useEffect(() => {
+    if (channelDenied || queryAccessDenied(createChannel) || queryAccessDenied(updateChannel)) {
+      setChannelOpen(false)
+      setEditingChannel(null)
+      channelForm.resetFields()
+    }
+  }, [channelDenied, createChannel.error, updateChannel.error, channelForm])
+  const routeDenied = queryAccessDenied(routesQuery)
+  const routeWriteBlocked = createRoute.blocked || updateRoute.blocked
+  const routeBlocked = routeWriteBlocked || routeDenied || !readableQueryData(channelsQuery)
+  function closeRouteEditor() {
+    if (routeWriteBlocked) return
+    setRouteOpen(false)
+    setEditingRoute(null)
+    routeForm.resetFields()
+  }
+  useEffect(() => {
+    if (routeDenied || queryAccessDenied(createRoute) || queryAccessDenied(updateRoute)) {
+      setRouteOpen(false)
+      setEditingRoute(null)
+      routeForm.resetFields()
+    }
+  }, [routeDenied, createRoute.error, updateRoute.error, routeForm])
+  const silenceDenied = queryAccessDenied(silencesQuery)
+  const silenceWriteBlocked = createSilence.blocked || updateSilence.blocked
+  const silenceBlocked = silenceWriteBlocked || silenceDenied
+  function closeSilenceEditor() {
+    if (silenceWriteBlocked) return
+    setSilenceOpen(false)
+    setEditingSilence(null)
+    silenceForm.resetFields()
+  }
+  useEffect(() => {
+    if (silenceDenied || queryAccessDenied(createSilence) || queryAccessDenied(updateSilence)) {
+      setSilenceOpen(false)
+      setEditingSilence(null)
+      silenceForm.resetFields()
+    }
+  }, [silenceDenied, createSilence.error, updateSilence.error, silenceForm])
 
   const channelNamesById = useMemo(
-    () => Object.fromEntries((channelsQuery.data ?? []).map((item) => [item.id, item.name])),
-    [channelsQuery.data],
+    () =>
+      Object.fromEntries(
+        (readableQueryData(channelsQuery) ?? []).map((item) => [item.id, item.name]),
+      ),
+    [channelsQuery.data, channelsQuery.error],
   )
   const oncallOptions = useMemo(
     () => [
-      ...(oncallSchedulesQuery.data ?? []).map((item) => ({
+      ...(readableQueryData(oncallSchedulesQuery) ?? []).map((item) => ({
         value: item.id,
         label: `值班表 · ${item.name}`,
       })),
-      ...(oncallPoliciesQuery.data ?? []).map((item) => ({
+      ...(readableQueryData(oncallPoliciesQuery) ?? []).map((item) => ({
         value: item.id,
         label: `升级策略 · ${item.name}`,
       })),
     ],
-    [oncallPoliciesQuery.data, oncallSchedulesQuery.data],
+    [
+      oncallPoliciesQuery.data,
+      oncallPoliciesQuery.error,
+      oncallSchedulesQuery.data,
+      oncallSchedulesQuery.error,
+    ],
   )
   const channelOptions = useMemo(
-    () => (channelsQuery.data ?? []).map((item) => ({ value: item.id, label: item.name })),
-    [channelsQuery.data],
+    () =>
+      (readableQueryData(channelsQuery) ?? []).map((item) => ({
+        value: item.id,
+        label: item.name,
+      })),
+    [channelsQuery.data, channelsQuery.error],
   )
 
   function openPolicyEditor(record: NotificationPolicy | null) {
+    if (policyWriteBlocked || policyDenied) return
+    createPolicy.reset()
+    updatePolicy.reset()
+    policyForm.resetFields()
     setEditingPolicy(record)
     setPolicyOpen(true)
     policyForm.setFieldsValue(
@@ -189,6 +333,10 @@ export function NotificationsPage() {
   }
 
   function openTemplateEditor(record: NotificationTemplate | null) {
+    if (templateWriteBlocked || templateDenied) return
+    createTemplate.reset()
+    updateTemplate.reset()
+    templateForm.resetFields()
     setEditingTemplate(record)
     setTemplateOpen(true)
     templateForm.setFieldsValue(
@@ -213,6 +361,10 @@ export function NotificationsPage() {
   }
 
   function openChannelEditor(record: NotificationChannel | null) {
+    if (channelWriteBlocked || channelDenied) return
+    createChannel.reset()
+    updateChannel.reset()
+    channelForm.resetFields()
     setEditingChannel(record)
     setChannelOpen(true)
     channelForm.setFieldsValue(
@@ -228,6 +380,10 @@ export function NotificationsPage() {
   }
 
   function openRouteEditor(record: NotificationRoute | null) {
+    if (routeWriteBlocked || routeDenied) return
+    createRoute.reset()
+    updateRoute.reset()
+    routeForm.resetFields()
     setEditingRoute(record)
     setRouteOpen(true)
     routeForm.setFieldsValue(
@@ -247,6 +403,10 @@ export function NotificationsPage() {
   }
 
   function openSilenceEditor(record: NotificationSilence | null) {
+    if (silenceWriteBlocked || silenceDenied) return
+    createSilence.reset()
+    updateSilence.reset()
+    silenceForm.resetFields()
     setEditingSilence(record)
     setSilenceOpen(true)
     const now = Date.now()
@@ -264,35 +424,35 @@ export function NotificationsPage() {
     )
   }
 
-  function closePolicy(messageText: string) {
-    message.success(messageText)
+  function closePolicy() {
     setPolicyOpen(false)
     setEditingPolicy(null)
+    policyForm.resetFields()
   }
 
   function submitPolicy(values: NotificationPolicyFormValues) {
+    if (policyBlocked || !(editingPolicy ? canUpdateNotification : canCreateNotification)) return
     try {
       const payload = buildNotificationPolicyPayload(values)
       if (editingPolicy?.id) {
-        updatePolicy.mutate(
-          { id: editingPolicy.id, payload },
-          { onSuccess: () => closePolicy('通知策略已更新') },
-        )
+        updatePolicy.mutate({ id: editingPolicy.id, payload }, { onSuccess: () => closePolicy() })
         return
       }
-      createPolicy.mutate(payload, { onSuccess: () => closePolicy('通知策略已保存') })
+      createPolicy.mutate(payload, { onSuccess: () => closePolicy() })
     } catch (error) {
       message.error(error instanceof Error ? error.message : '保存失败')
     }
   }
 
   function submitTemplate(values: NotificationTemplateFormValues) {
+    if (templateBlocked || !(editingTemplate ? canUpdateNotification : canCreateNotification))
+      return
     try {
       const payload = buildNotificationTemplatePayload(values)
       const onSuccess = () => {
-        message.success(editingTemplate ? '通知模板已更新' : '通知模板已保存')
         setTemplateOpen(false)
         setEditingTemplate(null)
+        templateForm.resetFields()
       }
       if (editingTemplate?.id) {
         updateTemplate.mutate({ id: editingTemplate.id, payload }, { onSuccess })
@@ -305,12 +465,13 @@ export function NotificationsPage() {
   }
 
   function submitChannel(values: NotificationChannelFormValues) {
+    if (channelBlocked || !(editingChannel ? canUpdateNotification : canCreateNotification)) return
     try {
       const payload = buildNotificationChannelPayload(values)
       const onSuccess = () => {
-        message.success(editingChannel ? '通知渠道已更新' : '通知渠道已保存')
         setChannelOpen(false)
         setEditingChannel(null)
+        channelForm.resetFields()
       }
       if (editingChannel?.id) {
         updateChannel.mutate({ id: editingChannel.id, payload }, { onSuccess })
@@ -323,12 +484,13 @@ export function NotificationsPage() {
   }
 
   function submitRoute(values: NotificationRouteFormValues) {
+    if (routeBlocked || !(editingRoute ? canUpdateNotification : canCreateNotification)) return
     try {
       const payload = buildNotificationRoutePayload(values)
       const onSuccess = () => {
-        message.success(editingRoute ? '路由规则已更新' : '路由规则已保存')
         setRouteOpen(false)
         setEditingRoute(null)
+        routeForm.resetFields()
       }
       if (editingRoute?.id) {
         updateRoute.mutate({ id: editingRoute.id, payload }, { onSuccess })
@@ -341,12 +503,13 @@ export function NotificationsPage() {
   }
 
   function submitSilence(values: NotificationSilenceFormValues) {
+    if (silenceBlocked || !(editingSilence ? canUpdateNotification : canCreateNotification)) return
     try {
       const payload = buildNotificationSilencePayload(values)
       const onSuccess = () => {
-        message.success(editingSilence ? '静默规则已更新' : '静默规则已保存')
         setSilenceOpen(false)
         setEditingSilence(null)
+        silenceForm.resetFields()
       }
       if (editingSilence?.id) {
         updateSilence.mutate({ id: editingSilence.id, payload }, { onSuccess })
@@ -356,23 +519,6 @@ export function NotificationsPage() {
     } catch (error) {
       message.error(error instanceof Error ? error.message : '保存失败')
     }
-  }
-
-  function previewPolicyForEvent(policy: NotificationPolicy, eventId: string) {
-    if (!eventId) {
-      setPreviewItems([])
-      setPreviewOpen(true)
-      return
-    }
-    previewMutation.mutate(
-      { policyId: policy.id, eventId },
-      {
-        onSuccess: (items) => {
-          setPreviewItems(items)
-          setPreviewOpen(true)
-        },
-      },
-    )
   }
 
   const channelColumns: TableProps<NotificationChannel>['columns'] = [
@@ -408,6 +554,7 @@ export function NotificationsPage() {
         canUpdateNotification ? (
           <ManagementIconButton
             aria-label="编辑通知渠道"
+            disabled={channelWriteBlocked || channelDenied}
             icon={<BellOutlined />}
             size="small"
             tooltip="编辑"
@@ -505,6 +652,7 @@ export function NotificationsPage() {
         canUpdateNotification ? (
           <ManagementIconButton
             aria-label="编辑静默规则"
+            disabled={silenceWriteBlocked || silenceDenied}
             icon={<EditOutlined />}
             size="small"
             tooltip="编辑"
@@ -564,6 +712,7 @@ export function NotificationsPage() {
           {canUpdateNotification ? (
             <ManagementIconButton
               aria-label="编辑通知策略"
+              disabled={policyWriteBlocked || policyDenied}
               icon={<EditOutlined />}
               size="small"
               tooltip="编辑"
@@ -576,10 +725,10 @@ export function NotificationsPage() {
             size="small"
             tooltip="预览"
             onClick={() => {
-              const firstEvent = alertEventsQuery.data?.[0]?.id || ''
+              const firstEvent = readableQueryData(alertEventsQuery)?.[0]?.id || ''
               setPreviewPolicy(record)
               setPreviewEventId(firstEvent)
-              previewPolicyForEvent(record, firstEvent)
+              setPreviewOpen(true)
             }}
           />
         </Space>
@@ -608,6 +757,7 @@ export function NotificationsPage() {
         canUpdateNotification ? (
           <ManagementIconButton
             aria-label="编辑通知模板"
+            disabled={templateWriteBlocked || templateDenied}
             icon={<EditOutlined />}
             size="small"
             tooltip="编辑"
@@ -619,6 +769,36 @@ export function NotificationsPage() {
 
   return (
     <div className="soha-page">
+      {!policyOpen ? (
+        <>
+          {createPolicy.feedback}
+          {updatePolicy.feedback}
+        </>
+      ) : null}
+      {!templateOpen ? (
+        <>
+          {createTemplate.feedback}
+          {updateTemplate.feedback}
+        </>
+      ) : null}
+      {!channelOpen ? (
+        <>
+          {createChannel.feedback}
+          {updateChannel.feedback}
+        </>
+      ) : null}
+      {!routeOpen ? (
+        <>
+          {createRoute.feedback}
+          {updateRoute.feedback}
+        </>
+      ) : null}
+      {!silenceOpen ? (
+        <>
+          {createSilence.feedback}
+          {updateSilence.feedback}
+        </>
+      ) : null}
       <Tabs
         items={[
           {
@@ -628,6 +808,7 @@ export function NotificationsPage() {
               <AdminTable
                 enableDensity
                 error={policiesQuery.error}
+                hasReadData={policiesQuery.data !== undefined}
                 refreshing={policiesQuery.isFetching}
                 onRefresh={() => void policiesQuery.refetch()}
                 columnSettingPlacement="header"
@@ -638,6 +819,7 @@ export function NotificationsPage() {
                     <Button
                       icon={<PlusOutlined />}
                       type="primary"
+                      disabled={policyWriteBlocked || policyDenied}
                       onClick={() => openPolicyEditor(null)}
                     >
                       新建策略
@@ -658,6 +840,7 @@ export function NotificationsPage() {
               <AdminTable
                 enableDensity
                 error={templatesQuery.error}
+                hasReadData={templatesQuery.data !== undefined}
                 refreshing={templatesQuery.isFetching}
                 onRefresh={() => void templatesQuery.refetch()}
                 columnSettingPlacement="header"
@@ -668,6 +851,7 @@ export function NotificationsPage() {
                     <Button
                       icon={<PlusOutlined />}
                       type="primary"
+                      disabled={templateWriteBlocked || templateDenied}
                       onClick={() => openTemplateEditor(null)}
                     >
                       新建模板
@@ -688,6 +872,7 @@ export function NotificationsPage() {
               <AdminTable
                 enableDensity
                 error={channelsQuery.error}
+                hasReadData={channelsQuery.data !== undefined}
                 refreshing={channelsQuery.isFetching}
                 onRefresh={() => void channelsQuery.refetch()}
                 columnSettingPlacement="header"
@@ -698,6 +883,7 @@ export function NotificationsPage() {
                     <Button
                       icon={<PlusOutlined />}
                       type="primary"
+                      disabled={channelWriteBlocked || channelDenied}
                       onClick={() => openChannelEditor(null)}
                     >
                       新建渠道
@@ -705,7 +891,7 @@ export function NotificationsPage() {
                   ) : null
                 }
                 columns={channelColumns}
-                dataSource={channelsQuery.data ?? []}
+                dataSource={readableQueryData(channelsQuery) ?? []}
                 rowKey="id"
                 loading={channelsQuery.isLoading}
               />
@@ -718,6 +904,7 @@ export function NotificationsPage() {
               <AdminTable
                 enableDensity
                 error={routesQuery.error}
+                hasReadData={routesQuery.data !== undefined}
                 refreshing={routesQuery.isFetching}
                 onRefresh={() => void routesQuery.refetch()}
                 columnSettingPlacement="header"
@@ -736,6 +923,7 @@ export function NotificationsPage() {
                       <Button
                         type="primary"
                         icon={<PlusOutlined />}
+                        disabled={routeWriteBlocked || routeDenied}
                         onClick={() => openRouteEditor(null)}
                       >
                         新建路由
@@ -753,6 +941,7 @@ export function NotificationsPage() {
               <AdminTable
                 enableDensity
                 error={silencesQuery.error}
+                hasReadData={silencesQuery.data !== undefined}
                 refreshing={silencesQuery.isFetching}
                 onRefresh={() => void silencesQuery.refetch()}
                 columnSettingPlacement="header"
@@ -763,6 +952,7 @@ export function NotificationsPage() {
                     <Button
                       icon={<PlusOutlined />}
                       type="primary"
+                      disabled={silenceWriteBlocked || silenceDenied}
                       onClick={() => openSilenceEditor(null)}
                     >
                       新建静默
@@ -787,12 +977,22 @@ export function NotificationsPage() {
           header: 'soha-observability-modal-header',
         }}
         title={editingPolicy ? '编辑通知策略' : '新建通知策略'}
-        open={policyOpen}
-        onCancel={() => setPolicyOpen(false)}
+        open={policyOpen && !policyDenied}
+        closable={!policyWriteBlocked}
+        keyboard={!policyWriteBlocked}
+        mask={{ closable: false }}
+        onCancel={closePolicyEditor}
         footer={
           <Space>
-            <Button onClick={() => setPolicyOpen(false)}>取消</Button>
-            <Button type="primary" onClick={() => policyForm.submit()}>
+            <Button disabled={policyWriteBlocked} onClick={closePolicyEditor}>
+              取消
+            </Button>
+            <Button
+              type="primary"
+              loading={createPolicy.isPending || updatePolicy.isPending}
+              disabled={policyBlocked}
+              onClick={() => policyForm.submit()}
+            >
               保存
             </Button>
           </Space>
@@ -800,8 +1000,14 @@ export function NotificationsPage() {
         destroyOnHidden
         width={760}
       >
+        {createPolicy.feedback}
+        {updatePolicy.feedback}
+        <ReadFeedback label="通知渠道选项" query={channelsQuery} />
+        <ReadFeedback label="值班表选项" query={oncallSchedulesQuery} />
+        <ReadFeedback label="升级策略选项" query={oncallPoliciesQuery} />
         <Form
           layout="vertical"
+          disabled={policyBlocked}
           form={policyForm}
           onFinish={submitPolicy}
           initialValues={{ sendResolved: false, cooldownSeconds: 0, enabled: true }}
@@ -847,12 +1053,22 @@ export function NotificationsPage() {
           header: 'soha-observability-modal-header',
         }}
         title={editingTemplate ? '编辑通知模板' : '新建通知模板'}
-        open={templateOpen}
-        onCancel={() => setTemplateOpen(false)}
+        open={templateOpen && !templateDenied}
+        closable={!templateWriteBlocked}
+        keyboard={!templateWriteBlocked}
+        mask={{ closable: false }}
+        onCancel={closeTemplateEditor}
         footer={
           <Space>
-            <Button onClick={() => setTemplateOpen(false)}>取消</Button>
-            <Button type="primary" onClick={() => templateForm.submit()}>
+            <Button disabled={templateWriteBlocked} onClick={closeTemplateEditor}>
+              取消
+            </Button>
+            <Button
+              type="primary"
+              loading={createTemplate.isPending || updateTemplate.isPending}
+              disabled={templateBlocked}
+              onClick={() => templateForm.submit()}
+            >
               保存
             </Button>
           </Space>
@@ -860,8 +1076,11 @@ export function NotificationsPage() {
         destroyOnHidden
         width={860}
       >
+        {createTemplate.feedback}
+        {updateTemplate.feedback}
         <Form
           layout="vertical"
+          disabled={templateBlocked}
           form={templateForm}
           onFinish={submitTemplate}
           initialValues={{
@@ -913,13 +1132,19 @@ export function NotificationsPage() {
           header: 'soha-observability-modal-header',
         }}
         title={editingChannel ? '编辑通知渠道' : '新建通知渠道'}
-        open={channelOpen}
-        onCancel={() => setChannelOpen(false)}
+        open={channelOpen && !channelDenied}
+        closable={!channelWriteBlocked}
+        keyboard={!channelWriteBlocked}
+        mask={{ closable: false }}
+        onCancel={closeChannelEditor}
         footer={
           <Space>
-            <Button onClick={() => setChannelOpen(false)}>取消</Button>
+            <Button disabled={channelWriteBlocked} onClick={closeChannelEditor}>
+              取消
+            </Button>
             <Button
               type="primary"
+              disabled={channelBlocked}
               onClick={() => channelForm.submit()}
               loading={createChannel.isPending || updateChannel.isPending}
             >
@@ -930,8 +1155,11 @@ export function NotificationsPage() {
         destroyOnHidden
         width={760}
       >
+        {createChannel.feedback}
+        {updateChannel.feedback}
         <Form
           layout="vertical"
+          disabled={channelBlocked}
           form={channelForm}
           onFinish={submitChannel}
           initialValues={{ channelType: 'webhook', enabled: true }}
@@ -964,13 +1192,19 @@ export function NotificationsPage() {
           header: 'soha-observability-modal-header',
         }}
         title={editingRoute ? '编辑路由规则' : '新建路由规则'}
-        open={routeOpen}
-        onCancel={() => setRouteOpen(false)}
+        open={routeOpen && !routeDenied}
+        closable={!routeWriteBlocked}
+        keyboard={!routeWriteBlocked}
+        mask={{ closable: false }}
+        onCancel={closeRouteEditor}
         footer={
           <Space>
-            <Button onClick={() => setRouteOpen(false)}>取消</Button>
+            <Button disabled={routeWriteBlocked} onClick={closeRouteEditor}>
+              取消
+            </Button>
             <Button
               type="primary"
+              disabled={routeBlocked}
               onClick={() => routeForm.submit()}
               loading={createRoute.isPending || updateRoute.isPending}
             >
@@ -981,8 +1215,12 @@ export function NotificationsPage() {
         destroyOnHidden
         width={760}
       >
+        {createRoute.feedback}
+        {updateRoute.feedback}
+        <ReadFeedback label="通知渠道选项" query={channelsQuery} />
         <Form
           layout="vertical"
+          disabled={routeBlocked}
           form={routeForm}
           onFinish={submitRoute}
           initialValues={{ enabled: true }}
@@ -1010,13 +1248,19 @@ export function NotificationsPage() {
           header: 'soha-observability-modal-header',
         }}
         title={editingSilence ? '编辑静默规则' : '新建静默规则'}
-        open={silenceOpen}
-        onCancel={() => setSilenceOpen(false)}
+        open={silenceOpen && !silenceDenied}
+        closable={!silenceWriteBlocked}
+        keyboard={!silenceWriteBlocked}
+        mask={{ closable: false }}
+        onCancel={closeSilenceEditor}
         footer={
           <Space>
-            <Button onClick={() => setSilenceOpen(false)}>取消</Button>
+            <Button disabled={silenceWriteBlocked} onClick={closeSilenceEditor}>
+              取消
+            </Button>
             <Button
               type="primary"
+              disabled={silenceBlocked}
               onClick={() => silenceForm.submit()}
               loading={createSilence.isPending || updateSilence.isPending}
             >
@@ -1027,8 +1271,11 @@ export function NotificationsPage() {
         destroyOnHidden
         width={760}
       >
+        {createSilence.feedback}
+        {updateSilence.feedback}
         <Form
           layout="vertical"
+          disabled={silenceBlocked}
           form={silenceForm}
           onFinish={submitSilence}
           initialValues={{ enabled: true }}
@@ -1071,16 +1318,19 @@ export function NotificationsPage() {
         destroyOnHidden
       >
         <Space orientation="vertical" style={{ width: '100%' }} size={16}>
+          <ReadFeedback label="预览事件选项" query={alertEventsQuery} />
+          <ReadFeedback label="通知策略" query={policiesQuery} />
           <Select
+            aria-label="通知预览事件"
+            disabled={queryAccessDenied(policiesQuery) || !readableQueryData(alertEventsQuery)}
             value={previewEventId}
             onChange={(value) => {
               const next = String(value)
               setPreviewEventId(next)
-              if (previewPolicy) previewPolicyForEvent(previewPolicy, next)
             }}
             style={{ width: '100%' }}
             placeholder="选择告警事件"
-            options={(alertEventsQuery.data ?? []).map((item) => ({
+            options={(readableQueryData(alertEventsQuery) ?? []).map((item) => ({
               value: item.id,
               label: `${item.title} (${item.status})`,
             }))}
@@ -1104,7 +1354,16 @@ export function NotificationsPage() {
                 render: (value: string) => <Text code>{String(value || '')}</Text>,
               },
             ]}
-            dataSource={previewItems}
+            error={previewQuery.error}
+            hasReadData={previewQuery.data !== undefined}
+            loading={previewQuery.isLoading}
+            refreshing={previewQuery.isFetching}
+            onRefresh={() => void previewQuery.refetch()}
+            dataSource={
+              !queryAccessDenied(policiesQuery) && !queryAccessDenied(alertEventsQuery)
+                ? (readableQueryData(previewQuery) ?? [])
+                : []
+            }
             rowKey={(record) =>
               `${record.channelId || 'channel'}:${record.templateId || 'template'}:${record.url || 'url'}`
             }

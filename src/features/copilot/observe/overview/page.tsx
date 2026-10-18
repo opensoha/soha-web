@@ -1,4 +1,13 @@
-import { Link } from 'react-router-dom'
+import { ManagementState } from '@/components/management-list'
+import {
+  OverviewChip,
+  OverviewMetricCard,
+  type OverviewChipItem,
+  type OverviewMetricItem,
+} from '@/components/overview-visuals'
+import { ReadFeedback } from '@/components/request-feedback'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { readableQueryData } from '@/utils/query-feedback'
 import {
   ApiOutlined,
   AuditOutlined,
@@ -10,21 +19,14 @@ import {
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { Button } from 'antd'
-import { ManagementState } from '@/components/management-list'
-import {
-  OverviewChip,
-  OverviewMetricCard,
-  type OverviewChipItem,
-  type OverviewMetricItem,
-} from '@/components/overview-visuals'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { Link } from 'react-router-dom'
+import '../../copilot-pages.css'
 import { evaluationQueries } from '../../evaluation/queries'
 import { gatewayQueries } from '../../gateway/queries'
 import { knowledgeQueries } from '../../knowledge/queries'
 import { aiProductionOperationsQueries } from '../../production-operations/queries'
 import { getAIWorkbenchPathForMode } from '../../workbench/navigation'
 import { workbenchQueries } from '../../workbench/queries'
-import '../../copilot-pages.css'
 
 const pendingApprovalFilters = {
   id: '',
@@ -58,7 +60,7 @@ function operationalSummary(
 
 export function AIObserveOverviewPage() {
   const permissionQuery = usePermissionSnapshot()
-  const snapshot = permissionQuery.data?.data
+  const snapshot = readableQueryData(permissionQuery)?.data
   const canChat = hasPermission(snapshot, 'observe.ai.chat')
   const canObserve = hasPermission(snapshot, 'observe.ai.view')
   const canKnowledge = hasPermission(snapshot, 'ai.knowledge.view')
@@ -83,15 +85,15 @@ export function AIObserveOverviewPage() {
     enabled: canOperations,
   })
 
-  const sessions = sessionsQuery.data?.data ?? []
-  const catalog = catalogQuery.data?.data
-  const runs = runsQuery.data?.data ?? []
-  const bases = basesQuery.data?.data ?? []
-  const manifest = manifestQuery.data?.data
-  const relay = relayQuery.data?.data
-  const evaluations = evaluationsQuery.data?.data ?? []
-  const approvals = approvalsQuery.data?.data ?? []
-  const operations = operationsQuery.data?.data ?? []
+  const sessions = readableQueryData(sessionsQuery)?.data ?? []
+  const catalog = readableQueryData(catalogQuery)?.data
+  const runs = readableQueryData(runsQuery)?.data ?? []
+  const bases = readableQueryData(basesQuery)?.data ?? []
+  const manifest = readableQueryData(manifestQuery)?.data
+  const relay = readableQueryData(relayQuery)?.data
+  const evaluations = readableQueryData(evaluationsQuery)?.data ?? []
+  const approvals = readableQueryData(approvalsQuery)?.data ?? []
+  const operations = readableQueryData(operationsQuery)?.data ?? []
   const interactionAllowed = canChat || canObserve
   const interactionError = sessionsQuery.isError || runsQuery.isError
   const gatewayAllowed = canGateway || canRelay
@@ -114,7 +116,7 @@ export function AIObserveOverviewPage() {
       key: 'interaction',
       label: '会话 / Agent Runs',
       value: interactionAllowed
-        ? `${canChat ? sessions.length : '-'} / ${canObserve ? runs.length : '-'}`
+        ? `${canChat && readableQueryData(sessionsQuery) ? sessions.length : '-'} / ${canObserve && readableQueryData(runsQuery) ? runs.length : '-'}`
         : '-',
       helper: domainHelper(
         interactionAllowed,
@@ -135,7 +137,7 @@ export function AIObserveOverviewPage() {
     {
       key: 'knowledge',
       label: '知识库',
-      value: canKnowledge ? bases.length : '-',
+      value: canKnowledge && readableQueryData(basesQuery) ? bases.length : '-',
       helper: domainHelper(
         canKnowledge,
         basesQuery.isError,
@@ -150,7 +152,7 @@ export function AIObserveOverviewPage() {
     {
       key: 'providers',
       label: 'Agent Providers',
-      value: canObserve ? (catalog?.agentProviders?.length ?? 0) : '-',
+      value: canObserve ? (catalog?.agentProviders?.length ?? '-') : '-',
       helper: domainHelper(
         canObserve,
         catalogQuery.isError,
@@ -260,6 +262,15 @@ export function AIObserveOverviewPage() {
   if (permissionQuery.isError) {
     return (
       <div className="soha-page soha-overview-page soha-ai-unified-overview">
+        <ReadFeedback query={sessionsQuery} canRead={canChat} label="会话" />
+        <ReadFeedback query={runsQuery} canRead={canObserve} label="Agent 运行" />
+        <ReadFeedback query={catalogQuery} canRead={canObserve} label="能力目录" />
+        <ReadFeedback query={basesQuery} canRead={canKnowledge} label="知识库" />
+        <ReadFeedback query={manifestQuery} canRead={canGateway} label="Gateway 工具" />
+        <ReadFeedback query={relayQuery} canRead={canRelay} label="调用指标" />
+        <ReadFeedback query={evaluationsQuery} canRead={canEvaluate} label="评测" />
+        <ReadFeedback query={approvalsQuery} canRead={canApprovals} label="审批" />
+        <ReadFeedback query={operationsQuery} canRead={canOperations} label="生产操作" />
         <ManagementState
           kind="error"
           actions={<Button onClick={() => void permissionQuery.refetch()}>重试</Button>}

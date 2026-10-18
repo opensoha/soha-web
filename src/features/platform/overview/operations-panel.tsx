@@ -1,17 +1,19 @@
-import { useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Button, Card, Progress, Space, Spin, Typography } from 'antd'
+import { ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
+import { StatusTag } from '@/components/status-tag'
+import { useAIGlobalAssistant } from '@/features/copilot'
+import { useKubernetesResourceStream } from '@/features/platform/shared/resource-stream'
+import { ResourceStreamStatus } from '@/features/platform/shared/resource-stream-status'
+import { systemQueries } from '@/features/system'
+import { readableQueryData } from '@/utils/query-feedback'
+import { formatDateTime } from '@/utils/time'
 import { ArrowRightOutlined, RobotOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
-import { ManagementState } from '@/components/management-list'
-import { StatusTag } from '@/components/status-tag'
-import { ResourceStreamStatus } from '@/features/platform/shared/resource-stream-status'
-import { useKubernetesResourceStream } from '@/features/platform/shared/resource-stream'
-import { systemQueries } from '@/features/system'
-import { useAIGlobalAssistant } from '@/features/copilot'
-import { formatDateTime } from '@/utils/time'
-import { clusterQueries } from '../clusters/queries'
+import { Button, Card, Progress, Space, Spin, Typography } from 'antd'
+import { useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { nodeQueries } from '../cluster-resources/queries'
+import { clusterQueries } from '../clusters/queries'
 import { configurationQueries } from '../configuration/shared/queries'
 import type { ConfigurationResourceRecord } from '../configuration/shared/types'
 import { networkCoreQueries } from '../network/resources/queries'
@@ -78,31 +80,50 @@ export function PlatformOperationsPanel({
     ...nodeQueries.list(scope),
     enabled: permissions.nodes && Boolean(clusterId),
   })
+  const visibleNodesQueryData =
+    permissions.nodes && Boolean(clusterId) ? readableQueryData(nodesQuery) : undefined
   const eventsQuery = useQuery(platformOverviewQueries.events(clusterId, permissions.events, 12))
+  const visibleEventsQueryData =
+    permissions.events && Boolean(clusterId) ? readableQueryData(eventsQuery) : undefined
   const auditQuery = useQuery({
     ...systemQueries.audit('system', { clusterId: clusterId ?? undefined, limit: 8 }),
     enabled: permissions.audit && Boolean(clusterId),
   })
+  const visibleAuditQueryData =
+    permissions.audit && Boolean(clusterId) ? readableQueryData(auditQuery) : undefined
   const operationQuery = useQuery({
     ...systemQueries.operationLogs({ clusterId: clusterId ?? undefined, limit: 8 }),
     enabled: permissions.operations && Boolean(clusterId),
   })
+  const visibleOperationQueryData =
+    permissions.operations && Boolean(clusterId) ? readableQueryData(operationQuery) : undefined
   const capabilitiesQuery = useQuery({
     ...clusterQueries.capabilities(),
     enabled: Boolean(clusterId),
   })
+  const visibleCapabilitiesQueryData = clusterId ? readableQueryData(capabilitiesQuery) : undefined
   const networkPoliciesQuery = useQuery({
     ...networkCoreQueries.list<NetworkPolicy>('networkpolicies', scope),
     enabled: permissions.networkPolicies && Boolean(clusterId),
   })
+  const visibleNetworkPoliciesQueryData =
+    permissions.networkPolicies && Boolean(clusterId)
+      ? readableQueryData(networkPoliciesQuery)
+      : undefined
   const hpasQuery = useQuery({
     ...configurationQueries.list<ConfigurationResourceRecord>('hpas', scope),
     enabled: permissions.hpas && Boolean(clusterId),
   })
+  const visibleHpasQueryData =
+    permissions.hpas && Boolean(clusterId) ? readableQueryData(hpasQuery) : undefined
   const pdbsQuery = useQuery({
     ...configurationQueries.list<ConfigurationResourceRecord>('poddisruptionbudgets', scope),
     enabled: permissions.podDisruptionBudgets && Boolean(clusterId),
   })
+  const visiblePdbsQueryData =
+    permissions.podDisruptionBudgets && Boolean(clusterId)
+      ? readableQueryData(pdbsQuery)
+      : undefined
   const mutatingWebhooksQuery = useQuery({
     ...configurationQueries.list<ConfigurationResourceRecord>(
       'mutatingwebhookconfigurations',
@@ -110,6 +131,10 @@ export function PlatformOperationsPanel({
     ),
     enabled: permissions.mutatingWebhooks && Boolean(clusterId),
   })
+  const visibleMutatingWebhooksQueryData =
+    permissions.mutatingWebhooks && Boolean(clusterId)
+      ? readableQueryData(mutatingWebhooksQuery)
+      : undefined
   const validatingWebhooksQuery = useQuery({
     ...configurationQueries.list<ConfigurationResourceRecord>(
       'validatingwebhookconfigurations',
@@ -117,6 +142,10 @@ export function PlatformOperationsPanel({
     ),
     enabled: permissions.validatingWebhooks && Boolean(clusterId),
   })
+  const visibleValidatingWebhooksQueryData =
+    permissions.validatingWebhooks && Boolean(clusterId)
+      ? readableQueryData(validatingWebhooksQuery)
+      : undefined
   const streamKinds = useMemo(
     () => [permissions.nodes ? 'Node' : '', permissions.events ? 'Event' : ''].filter(Boolean),
     [permissions.events, permissions.nodes],
@@ -138,19 +167,22 @@ export function PlatformOperationsPanel({
       ]),
   })
 
-  const capacity = useMemo(() => summarizeNodeCapacity(nodesQuery.data ?? []), [nodesQuery.data])
+  const capacity = useMemo(
+    () => summarizeNodeCapacity(visibleNodesQueryData ?? []),
+    [visibleNodesQueryData],
+  )
   const governance = useMemo(
-    () => summarizeCapabilityGovernance(capabilitiesQuery.data ?? [], connectionMode),
-    [capabilitiesQuery.data, connectionMode],
+    () => summarizeCapabilityGovernance(visibleCapabilitiesQueryData ?? [], connectionMode),
+    [visibleCapabilitiesQueryData, connectionMode],
   )
   const timeline = useMemo(
     () =>
       buildActivityTimeline(
-        eventsQuery.data ?? [],
-        auditQuery.data ?? [],
-        operationQuery.data ?? [],
+        visibleEventsQueryData ?? [],
+        visibleAuditQueryData ?? [],
+        visibleOperationQueryData ?? [],
       ),
-    [auditQuery.data, eventsQuery.data, operationQuery.data],
+    [visibleAuditQueryData, visibleEventsQueryData, visibleOperationQueryData],
   )
   const canViewTimeline = permissions.events || permissions.audit || permissions.operations
   const admissionLoading =
@@ -163,7 +195,7 @@ export function PlatformOperationsPanel({
     {
       key: 'network-policy',
       label: 'NetworkPolicy',
-      count: permissions.networkPolicies ? networkPoliciesQuery.data?.length : undefined,
+      count: permissions.networkPolicies ? visibleNetworkPoliciesQueryData?.length : undefined,
       path: '/network/networkpolicies',
     },
     {
@@ -173,7 +205,8 @@ export function PlatformOperationsPanel({
         (permissions.mutatingWebhooks || permissions.validatingWebhooks) &&
         !admissionLoading &&
         !admissionError
-          ? (mutatingWebhooksQuery.data?.length ?? 0) + (validatingWebhooksQuery.data?.length ?? 0)
+          ? (visibleMutatingWebhooksQueryData?.length ?? 0) +
+            (visibleValidatingWebhooksQueryData?.length ?? 0)
           : undefined,
       path: permissions.validatingWebhooks
         ? '/configuration/validatingwebhookconfigurations'
@@ -182,13 +215,13 @@ export function PlatformOperationsPanel({
     {
       key: 'pdb',
       label: 'PodDisruptionBudget',
-      count: permissions.podDisruptionBudgets ? pdbsQuery.data?.length : undefined,
+      count: permissions.podDisruptionBudgets ? visiblePdbsQueryData?.length : undefined,
       path: '/configuration/poddisruptionbudgets',
     },
     {
       key: 'hpa',
       label: 'HorizontalPodAutoscaler',
-      count: permissions.hpas ? hpasQuery.data?.length : undefined,
+      count: permissions.hpas ? visibleHpasQueryData?.length : undefined,
       path: '/configuration/hpas',
     },
   ]
@@ -237,10 +270,15 @@ export function PlatformOperationsPanel({
       >
         <div className="soha-platform-ops-split">
           <section className="soha-platform-ops-section" aria-label="capacity">
+            {nodesQuery.isError && readableQueryData(nodesQuery) !== undefined ? (
+              <ReadFeedback canRead={nodesQuery.isEnabled} query={nodesQuery} label="节点容量" />
+            ) : null}
             <div className="soha-platform-ops-row-head">
               <Text strong>{localeCode === 'zh_CN' ? '最高节点压力' : 'Peak Node Pressure'}</Text>
               <Text type="secondary" className="text-xs">
-                {capacity.readyNodes}/{capacity.totalNodes}{' '}
+                {visibleNodesQueryData === undefined
+                  ? '—'
+                  : `${capacity.readyNodes}/${capacity.totalNodes}`}{' '}
                 {localeCode === 'zh_CN' ? '就绪' : 'Ready'}
               </Text>
             </div>
@@ -255,13 +293,8 @@ export function PlatformOperationsPanel({
               <div className="soha-platform-ops-loading">
                 <Spin size="small" />
               </div>
-            ) : nodesQuery.isError ? (
-              <ManagementState
-                bordered={false}
-                compact
-                kind="error"
-                title={localeCode === 'zh_CN' ? '节点容量加载失败' : 'Failed to load capacity'}
-              />
+            ) : nodesQuery.isError && readableQueryData(nodesQuery) === undefined ? (
+              <ReadFeedback canRead={nodesQuery.isEnabled} query={nodesQuery} label="节点容量" />
             ) : (
               <div className="soha-platform-ops-capacity-list">
                 <CapacityMetric label="CPU" value={capacity.cpuPercent} />
@@ -285,26 +318,36 @@ export function PlatformOperationsPanel({
           </section>
 
           <section className="soha-platform-ops-section" aria-label="governance">
+            {capabilitiesQuery.isError && readableQueryData(capabilitiesQuery) !== undefined ? (
+              <ReadFeedback
+                canRead={capabilitiesQuery.isEnabled}
+                query={capabilitiesQuery}
+                label="治理能力"
+              />
+            ) : null}
             <div className="soha-platform-ops-row-head">
               <Text strong>
                 {localeCode === 'zh_CN' ? '高风险与审批能力' : 'Risk & Approval Capabilities'}
               </Text>
               <Text type="secondary" className="text-xs">
                 {localeCode === 'zh_CN'
-                  ? `共 ${governance.approvalRequired} 项能力需审批`
-                  : `${governance.approvalRequired} approval-gated`}
+                  ? visibleCapabilitiesQueryData === undefined
+                    ? '—'
+                    : `共 ${governance.approvalRequired} 项能力需审批`
+                  : visibleCapabilitiesQueryData === undefined
+                    ? '—'
+                    : `${governance.approvalRequired} approval-gated`}
               </Text>
             </div>
             {capabilitiesQuery.isLoading ? (
               <div className="soha-platform-ops-loading">
                 <Spin size="small" />
               </div>
-            ) : capabilitiesQuery.isError ? (
-              <ManagementState
-                bordered={false}
-                compact
-                kind="error"
-                title={localeCode === 'zh_CN' ? '治理能力加载失败' : 'Failed to load governance'}
+            ) : capabilitiesQuery.isError && readableQueryData(capabilitiesQuery) === undefined ? (
+              <ReadFeedback
+                canRead={capabilitiesQuery.isEnabled}
+                query={capabilitiesQuery}
+                label="治理能力"
               />
             ) : (
               <div className="soha-platform-ops-risk-list">
@@ -335,6 +378,29 @@ export function PlatformOperationsPanel({
           </section>
         </div>
 
+        <div className="soha-detail-stack">
+          <ReadFeedback
+            canRead={networkPoliciesQuery.isEnabled}
+            query={networkPoliciesQuery}
+            label="NetworkPolicy"
+          />
+          <ReadFeedback canRead={hpasQuery.isEnabled} query={hpasQuery} label="HPA" />
+          <ReadFeedback
+            canRead={pdbsQuery.isEnabled}
+            query={pdbsQuery}
+            label="PodDisruptionBudget"
+          />
+          <ReadFeedback
+            canRead={mutatingWebhooksQuery.isEnabled}
+            query={mutatingWebhooksQuery}
+            label="变更 Webhook"
+          />
+          <ReadFeedback
+            canRead={validatingWebhooksQuery.isEnabled}
+            query={validatingWebhooksQuery}
+            label="校验 Webhook"
+          />
+        </div>
         <div className="soha-platform-governance-coverage">
           {governanceCoverage.map((item) => (
             <button
@@ -399,6 +465,9 @@ export function PlatformOperationsPanel({
           </Space>
         }
       >
+        <ReadFeedback canRead={eventsQuery.isEnabled} query={eventsQuery} label="资源事件" />
+        <ReadFeedback canRead={auditQuery.isEnabled} query={auditQuery} label="审计记录" />
+        <ReadFeedback canRead={operationQuery.isEnabled} query={operationQuery} label="操作记录" />
         {!canViewTimeline ? (
           <ManagementState
             bordered={false}
@@ -410,7 +479,10 @@ export function PlatformOperationsPanel({
           <div className="soha-platform-ops-loading">
             <Spin size="small" />
           </div>
-        ) : timeline.length === 0 ? (
+        ) : timeline.length === 0 &&
+          [eventsQuery, auditQuery, operationQuery].some(
+            (query) => query.isEnabled && query.isError,
+          ) ? null : timeline.length === 0 ? (
           <ManagementState
             bordered={false}
             compact

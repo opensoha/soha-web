@@ -1,12 +1,14 @@
-import { useState } from 'react'
-import { Card } from 'antd'
-import { useQuery } from '@tanstack/react-query'
-import { useParams } from 'react-router-dom'
 import { ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
 import { StatusTag } from '@/components/status-tag'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
+import { readableQueryData } from '@/utils/query-feedback'
+import { useQuery } from '@tanstack/react-query'
+import { Card } from 'antd'
+import { useState } from 'react'
+import { useParams } from 'react-router-dom'
 import { NetworkDetailShell } from '../shared/detail-shell'
 import { ConditionsSection, GatewaysSection } from './detail-sections'
 import { gatewayAPIQueries } from './queries'
@@ -21,7 +23,8 @@ export function GatewayClassDetailPage() {
   const query = useQuery(
     gatewayAPIQueries.detail<GatewayClassDetail>('gatewayclasses', scope, name, true),
   )
-  const detail = query.data
+  const visibleQueryData = readableQueryData(query)
+  const detail = visibleQueryData
 
   if (!clusterId)
     return (
@@ -44,25 +47,28 @@ export function GatewayClassDetailPage() {
     )
 
   return (
-    <NetworkDetailShell
-      activeTabKey={activeTabKey}
-      clusterScoped
-      detail={detail}
-      kind="gatewayclasses"
-      label="GatewayClass"
-      onTabChange={setActiveTabKey}
-      overviewExtra={[
-        { key: 'Controller', value: detail.controllerName || '-' },
-        { key: 'Accepted', value: detail.accepted ? <StatusTag value={detail.accepted} /> : '-' },
-        { key: 'Parameters', value: detail.parametersRef || '-' },
-      ]}
-      overviewContent={
-        <>
-          <GatewaysSection gateways={detail.gateways} />
-          <ConditionsSection conditions={detail.conditions} />
-        </>
-      }
-      target={{ scope, name }}
-    />
+    <>
+      <ReadFeedback canRead={query.isEnabled} query={query} label="资源记录" />
+      <NetworkDetailShell
+        activeTabKey={activeTabKey}
+        clusterScoped
+        detail={detail}
+        kind="gatewayclasses"
+        label="GatewayClass"
+        onTabChange={setActiveTabKey}
+        overviewExtra={[
+          { key: 'Controller', value: detail.controllerName || '-' },
+          { key: 'Accepted', value: detail.accepted ? <StatusTag value={detail.accepted} /> : '-' },
+          { key: 'Parameters', value: detail.parametersRef || '-' },
+        ]}
+        overviewContent={
+          <>
+            <GatewaysSection gateways={detail.gateways} />
+            <ConditionsSection conditions={detail.conditions} />
+          </>
+        }
+        target={{ scope, name }}
+      />
+    </>
   )
 }

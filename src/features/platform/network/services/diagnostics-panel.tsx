@@ -1,12 +1,15 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Alert, Button, Select, Space, Spin, Typography } from 'antd'
-import { PlayCircleOutlined } from '@ant-design/icons'
-import { useMutation, useQuery } from '@tanstack/react-query'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { usePlatformMutation } from '@/features/platform/shared/use-platform-mutation'
+import { useI18n } from '@/i18n'
 import { api } from '@/services/api-client'
 import { toScopeKey, type ApiResponse } from '@/types'
-import { useI18n } from '@/i18n'
+import { readableQueryData } from '@/utils/query-feedback'
+import { PlayCircleOutlined } from '@ant-design/icons'
+import { useQuery } from '@tanstack/react-query'
+import { Alert, Button, Select, Space, Spin, Typography } from 'antd'
+import { useEffect, useMemo, useState } from 'react'
 import { buildServiceDiagnosticCommand } from './diagnostics-model'
 import { serviceKeys } from './keys'
 import type { ServicePortMapping } from './types'
@@ -49,6 +52,7 @@ export function ServiceDiagnosticsPanel({
     },
     enabled: canExec,
   })
+  const visiblePodsQueryData = canExec ? readableQueryData(podsQuery) : undefined
   const ports = useMemo(
     () => (portMappings ?? []).filter((item) => Number.isInteger(item.port) && item.port > 0),
     [portMappings],
@@ -56,25 +60,32 @@ export function ServiceDiagnosticsPanel({
   const [podName, setPodName] = useState<string>()
   const [port, setPort] = useState<number>()
   useEffect(() => {
-    if (!podName && podsQuery.data?.[0]) setPodName(podsQuery.data[0].name)
-  }, [podName, podsQuery.data])
+    if (!podName && visiblePodsQueryData?.[0]) setPodName(visiblePodsQueryData[0].name)
+  }, [podName, visiblePodsQueryData])
   useEffect(() => {
     if (!port && ports[0]) setPort(ports[0].port)
   }, [port, ports])
 
-  const probe = useMutation({
-    mutationFn: async () => {
-      if (!podName || !port) throw new Error('Source Pod and Service port are required')
-      const response = await api.post<ApiResponse<PodExecResult>>(
-        `/clusters/${encodeURIComponent(clusterId)}/workloads/pods/${encodeURIComponent(podName)}/exec?namespace=${encodeURIComponent(namespace)}`,
-        {
-          command: buildServiceDiagnosticCommand({ serviceName, namespace, port }),
-          timeoutSeconds: 15,
-        },
-      )
-      return response.data
+  const probe = usePlatformMutation(
+    {
+      mutationFn: async () => {
+        if (!podName || !port) throw new Error('Source Pod and Service port are required')
+        const response = await api.post<ApiResponse<PodExecResult>>(
+          `/clusters/${encodeURIComponent(clusterId)}/workloads/pods/${encodeURIComponent(podName)}/exec?namespace=${encodeURIComponent(namespace)}`,
+          {
+            command: buildServiceDiagnosticCommand({ serviceName, namespace, port }),
+            timeoutSeconds: 15,
+          },
+        )
+        return response.data
+      },
     },
-  })
+    {
+      label: ['连通性探测', 'Connectivity probe'],
+      target: () => [clusterId, namespace, podName, port].filter(Boolean).join(' / '),
+      readOnly: true,
+    },
+  )
 
   if (!canExec) {
     return <ManagementState compact kind="unsupported" description="platform.pods.exec" />
@@ -83,13 +94,20 @@ export function ServiceDiagnosticsPanel({
 
   return (
     <div className="soha-detail-stack">
+      <ReadFeedback canRead={podsQuery.isEnabled} query={podsQuery} label="Pods" />
+
+      {probe.feedback}
+
       <Space wrap>
         <Select
           aria-label={localeCode === 'zh_CN' ? '来源 Pod' : 'Source Pod'}
           placeholder={localeCode === 'zh_CN' ? '来源 Pod' : 'Source Pod'}
           style={{ minWidth: 240 }}
           value={podName}
-          options={(podsQuery.data ?? []).map((pod) => ({ label: pod.name, value: pod.name }))}
+          options={(visiblePodsQueryData ?? []).map((pod) => ({
+            label: pod.name,
+            value: pod.name,
+          }))}
           onChange={setPodName}
         />
         <Select
@@ -113,7 +131,7 @@ export function ServiceDiagnosticsPanel({
           {localeCode === 'zh_CN' ? '运行诊断' : 'Run diagnostics'}
         </Button>
       </Space>
-      {podsQuery.data?.length === 0 ? (
+      {visiblePodsQueryData?.length === 0 ? (
         <Alert
           showIcon
           type="warning"

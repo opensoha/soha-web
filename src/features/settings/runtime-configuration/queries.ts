@@ -14,7 +14,7 @@ export const runtimeConfigurationQueries = {
       queryKey: runtimeConfigurationKeys.resources(),
       queryFn: runtimeConfigurationApi.resources,
       enabled,
-      refetchInterval: 5_000,
+      refetchInterval: (query) => (query.state.status === 'error' ? false : 5_000),
       refetchIntervalInBackground: false,
     }),
   history: (enabled = true) =>
@@ -29,6 +29,7 @@ export const runtimeConfigurationQueries = {
       queryFn: () => runtimeConfigurationApi.application(id ?? ''),
       enabled: Boolean(id),
       refetchInterval: (query) => {
+        if (query.state.status === 'error') return false
         const status = query.state.data?.status
         return status === 'pending' || status === 'applying' ? 1_000 : false
       },

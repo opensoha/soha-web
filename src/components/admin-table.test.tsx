@@ -6,6 +6,7 @@ import { act } from 'react'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { AdminTable } from './admin-table'
 import { tableColumnPresets } from '@/utils/table-columns'
+import { ApiError } from '@/services/api-error'
 
 const captured = vi.hoisted(() => ({
   tableProps: null as any,
@@ -15,6 +16,7 @@ const i18n = vi.hoisted(() => ({
 }))
 
 vi.mock('@/i18n', () => ({
+  localeText: (locale: string, zh: string, en: string) => (locale === 'zh_CN' ? zh : en),
   useI18n: () => ({
     localeCode: i18n.localeCode,
     t: (_key: string, fallback = '') => fallback,
@@ -22,10 +24,22 @@ vi.mock('@/i18n', () => ({
 }))
 
 vi.mock('antd', () => ({
-  Alert: ({ description, message }: { description?: ReactNode; message?: ReactNode }) => (
+  Alert: ({
+    description,
+    message,
+    title,
+    action,
+  }: {
+    description?: ReactNode
+    message?: ReactNode
+    title?: ReactNode
+    action?: ReactNode
+  }) => (
     <div>
+      {title}
       {message}
       {description}
+      {action}
     </div>
   ),
   Button: ({ children, ...props }: { children?: ReactNode }) => (
@@ -95,6 +109,20 @@ async function renderNode(node: ReactNode) {
 }
 
 describe('AdminTable', () => {
+  it.each([401, 403])('hides cached records when HTTP %s denies the read', async (status) => {
+    const container = await renderNode(
+      <AdminTable
+        columns={[{ title: '名称', dataIndex: 'name', render: (name: string) => name }]}
+        dataSource={[{ id: 'protected', name: 'protected record' }]}
+        error={new ApiError(status, 'denied')}
+        rowKey="id"
+      />,
+    )
+    expect(container.textContent).not.toContain('protected record')
+    expect(container.textContent).toContain('denied')
+    expect(container.querySelector('[data-testid="table-proxy"]')).toBeNull()
+  })
+
   it('keeps opt-in density, refresh and column controls on one header row', async () => {
     const refresh = vi.fn()
     const container = await renderNode(
@@ -136,8 +164,43 @@ describe('AdminTable', () => {
       />,
     )
     expect(container.textContent).toContain('请求失败')
+    expect(container.textContent).not.toContain('上次读取结果')
     expect(container.querySelector('[data-testid="table-proxy"]')).toBeNull()
     expect(container.querySelector('[aria-label="刷新列表"]')).not.toBeNull()
+  })
+
+  it('keeps authorized cached rows and offers a local retry after a temporary failure', async () => {
+    const retry = vi.fn()
+    const records = [{ id: 'old', name: 'previously read record' }]
+    const container = await renderNode(
+      <AdminTable
+        columns={[{ title: '名称', dataIndex: 'name', render: (value: string) => value }]}
+        dataSource={records}
+        rowKey="id"
+        error={new ApiError(503, 'temporarily unavailable')}
+        onRetry={retry}
+      />,
+    )
+    expect(container.textContent).toContain('previously read record')
+    expect(container.querySelector('[data-testid="table-proxy"]')).not.toBeNull()
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[aria-label="重试读取列表"]')!.click(),
+    )
+    expect(retry).toHaveBeenCalledOnce()
+  })
+
+  it('recognizes a previously read empty list after a temporary failure', async () => {
+    const container = await renderNode(
+      <AdminTable
+        columns={[]}
+        dataSource={[]}
+        hasReadData
+        rowKey="id"
+        error={new ApiError(503, 'temporarily unavailable')}
+      />,
+    )
+    expect(container.textContent).toContain('上次读取结果')
+    expect(container.querySelector('[data-testid="table-proxy"]')).not.toBeNull()
   })
 
   it('forwards native pagination events when migrating an embedded table', async () => {

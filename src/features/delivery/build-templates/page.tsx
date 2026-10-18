@@ -31,6 +31,9 @@ import {
   ManagementState,
   TemplateDesignerShell,
 } from '@/components/management-list'
+import { MutationFeedback, ReadFeedback } from '@/components/request-feedback'
+import { readableQueryData, writeOutcomeUnknown } from '@/utils/query-feedback'
+import { isApiError } from '@/services/api-error'
 import { BooleanTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { formatDateTime } from '@/utils/time'
@@ -321,12 +324,13 @@ export function BuildTemplatesPage() {
   const [sourceGeneration, setSourceGeneration] = useState(0)
   const [importing, setImporting] = useState(false)
   const [formSnapshot, setFormSnapshot] = useState<BuildTemplateFormValues>({})
+  const creationBaseline = useRef<Set<string>>()
   const copiedFromRef = useRef<{ id: string; revision: number }>()
   const loadedRevisionRef = useRef<number>()
   const loadedQueryIdRef = useRef<string | null>()
 
   const templatesQuery = useQuery(deliveryQueries.buildTemplates.list())
-  const templates = templatesQuery.data ?? []
+  const templates = readableQueryData(templatesQuery) ?? []
   const selectedTemplate =
     selectedTemplateId && selectedTemplateId !== 'new'
       ? (templates.find((item) => item.id === selectedTemplateId) ?? null)
@@ -334,7 +338,7 @@ export function BuildTemplatesPage() {
   const selectedTemplateUsageQuery = useQuery(
     deliveryQueries.buildTemplates.usage(selectedTemplate?.id ?? '', Boolean(selectedTemplate?.id)),
   )
-  const selectedTemplateUsage = selectedTemplateUsageQuery.data
+  const selectedTemplateUsage = readableQueryData(selectedTemplateUsageQuery)
   const isNewDraft = selectedTemplateId === 'new'
   const source = useQuery(
     deliveryQueries.documents.source('BuildTemplate', selectedTemplate?.id ?? ''),
@@ -352,9 +356,6 @@ export function BuildTemplatesPage() {
       void createOptions.onSuccess?.(result, variables, onMutateResult, context)
       message.success('构建模板创建成功')
     },
-    onError: (err: Error) => {
-      message.error(err.message)
-    },
   })
   const updateOptions = deliveryMutations.buildTemplates.update(queryClient)
   const updateMutation = useMutation({
@@ -362,9 +363,6 @@ export function BuildTemplatesPage() {
     onSuccess: (result, variables, onMutateResult, context) => {
       void updateOptions.onSuccess?.(result, variables, onMutateResult, context)
       message.success('构建模板更新成功')
-    },
-    onError: (err: Error) => {
-      message.error(err.message)
     },
   })
   const publishOptions = deliveryMutations.buildTemplates.publish(queryClient)
@@ -374,9 +372,6 @@ export function BuildTemplatesPage() {
       void publishOptions.onSuccess?.(result, variables, onMutateResult, context)
       loadTemplate(result)
       message.success(`已发布 v${result.publishedVersion}`)
-    },
-    onError: (err: Error) => {
-      message.error(err.message)
     },
   })
   const deleteOptions = deliveryMutations.buildTemplates.delete(queryClient)
@@ -398,10 +393,40 @@ export function BuildTemplatesPage() {
         }
       }
     },
-    onError: (err: Error) => {
-      message.error(err.message)
-    },
   })
+
+  const submitting = useRef(false)
+  const locked = [createMutation, updateMutation, publishMutation, deleteMutation].some(
+    (mutation) => mutation.isPending || writeOutcomeUnknown(mutation.error),
+  )
+  const changePublication = async (action: 'publish' | 'deprecate') => {
+    if (
+      submitting.current ||
+      locked ||
+      !selectedTemplate ||
+      templatesQuery.isError ||
+      source.isError
+    )
+      return
+    if (
+      (action === 'publish' && (!canUpdate || !loadedRevisionRef.current)) ||
+      (action === 'deprecate' && !canDelete)
+    )
+      return
+    submitting.current = true
+    try {
+      if (action === 'publish')
+        await publishMutation.mutateAsync({
+          id: selectedTemplate.id,
+          expectedRevision: loadedRevisionRef.current!,
+        })
+      else await deleteMutation.mutateAsync(selectedTemplate.id)
+    } catch {
+      /* The mutation receipt retains the original target. */
+    } finally {
+      submitting.current = false
+    }
+  }
 
   const updateTemplateSearchParam = useCallback(
     (templateId?: string) => {
@@ -601,7 +626,8 @@ export function BuildTemplatesPage() {
   }
 
   const handleSave = async () => {
-    if (sourceDirty || !canSave) return
+    if (submitting.current || locked || sourceDirty || !canSave) return
+    submitting.current = true
     try {
       const values = { ...formSnapshot, ...(await form.validateFields()) }
       const payload = buildBuildTemplatePayloadFromDesigner(values)
@@ -615,6 +641,9 @@ export function BuildTemplatesPage() {
         setIsDirty(false)
         return
       }
+      creationBaseline.current = templatesQuery.isSuccess
+        ? new Set(templates.map((item) => item.id))
+        : undefined
       const createdTemplate = await createMutation.mutateAsync({
         ...payload,
         publish: false,
@@ -629,9 +658,9 @@ export function BuildTemplatesPage() {
         updateTemplateSearchParam(createdTemplate.id)
       }
     } catch (error) {
-      if (error instanceof Error) {
-        message.error(error.message)
-      }
+      if (error instanceof Error && !isApiError(error)) message.error(error.message)
+    } finally {
+      submitting.current = false
     }
   }
 
@@ -921,6 +950,7 @@ export function BuildTemplatesPage() {
           icon={<SaveOutlined />}
           type="primary"
           disabled={
+            locked ||
             !hasSelection ||
             !canSave ||
             sourceDirty ||
@@ -935,20 +965,17 @@ export function BuildTemplatesPage() {
         <Popconfirm
           title="发布当前草稿为新版本？"
           description="已有服务继续使用固定版本；新版本需显式选择。"
-          onConfirm={() =>
-            selectedTemplate &&
-            loadedRevisionRef.current &&
-            publishMutation.mutate({
-              id: selectedTemplate.id,
-              expectedRevision: loadedRevisionRef.current,
-            })
-          }
+          disabled={locked}
+          onConfirm={() => changePublication('publish')}
         >
           <ManagementIconButton
             aria-label="发布版本"
             tooltip="发布版本"
             icon={<UploadOutlined />}
             disabled={
+              locked ||
+              templatesQuery.isError ||
+              source.isError ||
               !selectedTemplate ||
               !canUpdate ||
               isDirty ||
@@ -971,7 +998,8 @@ export function BuildTemplatesPage() {
         />
         <Popconfirm
           title="废弃当前构建模板？已有服务与历史版本将保留。"
-          onConfirm={() => selectedTemplate && deleteMutation.mutate(selectedTemplate.id)}
+          disabled={locked}
+          onConfirm={() => changePublication('deprecate')}
         >
           <ManagementIconButton
             aria-label="废弃"
@@ -979,7 +1007,12 @@ export function BuildTemplatesPage() {
             danger
             icon={<DeleteOutlined />}
             disabled={
-              !selectedTemplate || !canDelete || selectedTemplate.publicationState === 'deprecated'
+              locked ||
+              templatesQuery.isError ||
+              source.isError ||
+              !selectedTemplate ||
+              !canDelete ||
+              selectedTemplate.publicationState === 'deprecated'
             }
             loading={deleteMutation.isPending}
           />
@@ -995,7 +1028,7 @@ export function BuildTemplatesPage() {
       emptyDescription="新建模板后，可在右侧维护 Dockerfile、命令和变量。"
       emptyTitle="暂无构建模板"
       getItemKey={(item) => item.id}
-      isError={templatesQuery.isError}
+      isError={templatesQuery.isError && !readableQueryData(templatesQuery)}
       isLoading={templatesQuery.isLoading}
       itemClassName="soha-build-template-list__item"
       items={visibleListItems}
@@ -1029,9 +1062,36 @@ export function BuildTemplatesPage() {
             loading={templatesQuery.isFetching}
             onClick={() => {
               if (confirmDiscardChanges())
-                void templatesQuery.refetch().then(({ data }) => {
-                  const fresh = data?.find((item) => item.id === selectedTemplateId)
-                  if (fresh) loadTemplate(fresh)
+                void templatesQuery.refetch().then(({ data, error }) => {
+                  if (error) return
+                  const createdMatches = writeOutcomeUnknown(createMutation.error)
+                    ? (data?.filter(
+                        (item) =>
+                          item.key === createMutation.variables?.key &&
+                          creationBaseline.current &&
+                          !creationBaseline.current.has(item.id),
+                      ) ?? [])
+                    : []
+                  const fresh =
+                    selectedTemplateId === 'new' && createdMatches.length === 1
+                      ? createdMatches[0]
+                      : data?.find((item) => item.id === selectedTemplateId)
+                  if (fresh) {
+                    loadTemplate(fresh)
+                    updateMutation.reset()
+                    if (createdMatches.length === 1 && fresh.id === createdMatches[0].id)
+                      createMutation.reset()
+                    if (
+                      fresh.id === publishMutation.variables?.id &&
+                      fresh.publicationState === 'published'
+                    )
+                      publishMutation.reset()
+                    if (
+                      fresh.id === deleteMutation.variables &&
+                      fresh.publicationState === 'deprecated'
+                    )
+                      deleteMutation.reset()
+                  }
                 })
             }}
           />
@@ -1130,6 +1190,35 @@ export function BuildTemplatesPage() {
         designer={
           <>
             {templateToolbar}
+            <ReadFeedback query={templatesQuery} label="构建模板" />
+            <ReadFeedback query={source} label="模板来源" />
+            <ReadFeedback query={selectedTemplateUsageQuery} label="引用与使用" />
+            <MutationFeedback
+              operations={[
+                {
+                  mutation: createMutation,
+                  label: '新建构建模板',
+                  target: createMutation.variables?.name,
+                },
+                {
+                  mutation: updateMutation,
+                  label: '保存构建模板',
+                  target: updateMutation.variables?.id,
+                },
+                {
+                  mutation: publishMutation,
+                  label: '发布模板版本',
+                  target: publishMutation.variables?.id,
+                  receipt: { message: '模板版本已发布，已有服务保留固定版本。' },
+                },
+                {
+                  mutation: deleteMutation,
+                  label: '废弃构建模板',
+                  target: deleteMutation.variables,
+                  receipt: { message: '模板已废弃，历史版本保留。' },
+                },
+              ]}
+            />
             {templateDesigner}
           </>
         }
@@ -1144,7 +1233,8 @@ export function BuildTemplatesPage() {
             onImported={() => {
               setSourceDirty(false)
               setIsDirty(false)
-              void templatesQuery.refetch().then(({ data }) => {
+              void templatesQuery.refetch().then(({ data, error }) => {
+                if (error) return
                 const current = data?.find((item) => item.id === selectedTemplateId)
                 if (current) loadTemplate(current)
               })

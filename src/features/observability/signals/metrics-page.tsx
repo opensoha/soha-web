@@ -1,14 +1,5 @@
-import { ManagementQueryField } from '@/components/management-list'
-import type {
-  ObservabilityMetricKey,
-  ObservabilityMetricSeries,
-} from '@opensoha/contracts/gen/ts/sohaapi'
-import { LineChart } from '@visactor/react-vchart'
-import { useMutation, useQuery } from '@tanstack/react-query'
-import { Card, Form, Select, Typography } from 'antd'
-import { useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
-import { ManagementState } from '@/components/management-list'
+import { ManagementQueryField, ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
 import {
   buildCompactChartSpec,
   compactMetricColors,
@@ -17,8 +8,18 @@ import {
 } from '@/components/resource-metrics-panel'
 import { useAIPageContext } from '@/features/copilot'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
+import { readableQueryData } from '@/utils/query-feedback'
 import { formatDateTime } from '@/utils/time'
-import { queryMetrics } from './api'
+import type {
+  ObservabilityMetricKey,
+  ObservabilityMetricQueryInput,
+  ObservabilityMetricSeries,
+} from '@opensoha/contracts/gen/ts/sohaapi'
+import { useQuery } from '@tanstack/react-query'
+import { LineChart } from '@visactor/react-vchart'
+import { Card, Form, Select, Typography } from 'antd'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { signalSearchParams } from './model'
 import { observabilitySignalQueries } from './queries'
 import { metricInput, SignalQueryForm, SignalState, type SignalFilters } from './shared'
@@ -38,9 +39,17 @@ export function ObservabilityMetricsPage({ embedded = false }: { embedded?: bool
   const [searchParams, setSearchParams] = useSearchParams()
   const [form] = Form.useForm<SignalFilters>()
   const catalog = useQuery(observabilitySignalQueries.metricCatalog())
-  const metrics = useMutation({ mutationFn: queryMetrics })
-  const runMetrics = metrics.mutate
-  const autoQueryStarted = useRef(false)
+  const [request, setRequest] = useState<ObservabilityMetricQueryInput>()
+  const metrics = useQuery(observabilitySignalQueries.metrics(request))
+  const result = readableQueryData(metrics)
+  const runMetrics = useCallback(
+    (input: ObservabilityMetricQueryInput) => {
+      if (request && JSON.stringify(input) === JSON.stringify(request)) void metrics.refetch()
+      else setRequest(input)
+    },
+    [request, metrics.refetch],
+  )
+  const appliedSearch = useRef<string | null>(null)
   const requestedClusterId = searchParams.get('cluster') || clusterId
   const requestedNamespace = searchParams.get('namespace') || namespace
   const requestedMetricKey = searchParams.get('metricKey')
@@ -48,7 +57,7 @@ export function ObservabilityMetricsPage({ embedded = false }: { embedded?: bool
     requestedMetricKey && Object.prototype.hasOwnProperty.call(metricLabels, requestedMetricKey)
       ? (requestedMetricKey as ObservabilityMetricKey)
       : 'cpu_usage'
-  const metricOptions = (catalog.data ?? []).map((item) => ({
+  const metricOptions = (readableQueryData(catalog) ?? []).map((item) => ({
     disabled: !item.available,
     label: metricLabels[item.key as ObservabilityMetricKey] ?? item.label,
     value: item.key as ObservabilityMetricKey,
@@ -69,7 +78,7 @@ export function ObservabilityMetricsPage({ embedded = false }: { embedded?: bool
         timeFrom: searchParams.get('from') || undefined,
         timeTo: searchParams.get('to') || undefined,
       },
-      pinnedData: metrics.data ? { seriesCount: metrics.data.series.length } : undefined,
+      pinnedData: result ? { seriesCount: result.series.length } : undefined,
       promptHint: '分析当前指标的趋势、异常时间段、影响范围，并给出可打开的关联证据。',
     },
     !embedded,
@@ -77,36 +86,50 @@ export function ObservabilityMetricsPage({ embedded = false }: { embedded?: bool
 
   function submit(values: SignalFilters) {
     const input = metricInput(values, requestedClusterId, requestedNamespace)
-    setSearchParams(
-      signalSearchParams(searchParams, {
-        dataSourceId: input.dataSourceId,
-        cluster: requestedClusterId,
-        namespace: requestedNamespace,
-        service: values.service,
-        workload: values.workload,
-        metricKey: values.metricKey,
-        from: input.timeFrom,
-        to: input.timeTo,
-      }),
-      { replace: true },
-    )
+    const next = signalSearchParams(searchParams, {
+      dataSourceId: input.dataSourceId,
+      cluster: requestedClusterId,
+      namespace: requestedNamespace,
+      service: values.service,
+      workload: values.workload,
+      metricKey: values.metricKey,
+      from: input.timeFrom,
+      to: input.timeTo,
+    })
+    appliedSearch.current = next.toString()
+    setSearchParams(next, { replace: true })
     runMetrics(input)
   }
 
   useEffect(() => {
+    const signature = searchParams.toString()
+    if (appliedSearch.current === signature) return
+    appliedSearch.current = signature
     const from = Date.parse(searchParams.get('from') ?? '')
     const to = Date.parse(searchParams.get('to') ?? '')
-    if (
-      autoQueryStarted.current ||
-      !requestedMetricKey ||
-      !Number.isFinite(from) ||
-      !Number.isFinite(to) ||
-      from >= to
-    )
+    if (!requestedMetricKey || !Number.isFinite(from) || !Number.isFinite(to) || from >= to) {
+      setRequest(undefined)
       return
-    autoQueryStarted.current = true
-    runMetrics(metricInput(form.getFieldsValue(true), requestedClusterId, requestedNamespace))
-  }, [form, requestedClusterId, requestedMetricKey, requestedNamespace, runMetrics, searchParams])
+    }
+    const values: SignalFilters = {
+      ...form.getFieldsValue(true),
+      metricKey: initialMetricKey,
+      dataSourceId: searchParams.get('dataSourceId') ?? undefined,
+      service: searchParams.get('service') ?? undefined,
+      workload: searchParams.get('workload') ?? undefined,
+      timeFrom: searchParams.get('from') ?? undefined,
+      timeTo: searchParams.get('to') ?? undefined,
+    }
+    form.setFieldsValue(values)
+    setRequest(metricInput(values, requestedClusterId, requestedNamespace))
+  }, [
+    form,
+    requestedClusterId,
+    requestedNamespace,
+    searchParams,
+    initialMetricKey,
+    requestedMetricKey,
+  ])
 
   return (
     <div className={`${embedded ? '' : 'soha-page '}soha-signal-page`}>
@@ -120,7 +143,7 @@ export function ObservabilityMetricsPage({ embedded = false }: { embedded?: bool
           timeFrom: searchParams.get('from') ?? undefined,
           timeTo: searchParams.get('to') ?? undefined,
         }}
-        loading={metrics.isPending}
+        loading={metrics.isFetching}
         submitLabel="查询指标"
         onFinish={submit}
       >
@@ -128,19 +151,26 @@ export function ObservabilityMetricsPage({ embedded = false }: { embedded?: bool
           <Select loading={catalog.isLoading} options={metricOptions} />
         </ManagementQueryField>
       </SignalQueryForm>
-      {catalog.error ? (
-        <ManagementState
-          bordered={false}
-          compact
-          kind="error"
-          title="指标目录加载失败"
-          description={catalog.error.message}
-        />
+      <ReadFeedback label="指标目录" query={catalog} />
+      <ReadFeedback label="指标查询" query={metrics} />
+      {request ? (
+        <Text type="secondary">
+          查询范围：
+          {[
+            request.dataSourceId,
+            request.scope?.clusterId,
+            request.scope?.namespace,
+            request.scope?.service,
+          ]
+            .filter(Boolean)
+            .join(' / ') || '默认来源'}{' '}
+          · {formatDateTime(request.timeFrom)} — {formatDateTime(request.timeTo)}
+        </Text>
       ) : null}
-      <SignalState error={metrics.error} idle={metrics.isIdle} loading={metrics.isPending} />
-      {metrics.data ? (
+      <SignalState error={null} idle={!request} loading={metrics.isFetching && !result} />
+      {result ? (
         <div className="soha-signal-metric-grid">
-          {metrics.data.series.map((series: ObservabilityMetricSeries) => {
+          {result.series.map((series: ObservabilityMetricSeries) => {
             const lines: CompactChartLine[] = [
               {
                 color: compactMetricColors.default,
@@ -153,6 +183,7 @@ export function ObservabilityMetricsPage({ embedded = false }: { embedded?: bool
             ]
             return (
               <Card
+                className="soha-signal-metric-card"
                 key={series.key}
                 size="small"
                 title={series.label}
@@ -166,13 +197,18 @@ export function ObservabilityMetricsPage({ embedded = false }: { embedded?: bool
                   区间共 {series.points.length} 个数据点
                 </Text>
                 <div aria-hidden="true" className="soha-signal-metric-chart">
-                  <LineChart spec={buildCompactChartSpec(lines, series.unit ?? '', 'zh_CN')} />
+                  <LineChart
+                    spec={{
+                      ...buildCompactChartSpec(lines, series.unit ?? '', 'zh_CN'),
+                      background: 'transparent',
+                    }}
+                  />
                 </div>
                 <MetricSeriesDataDetails series={series} />
               </Card>
             )
           })}
-          {metrics.data.series.length === 0 ? (
+          {result.series.length === 0 ? (
             <ManagementState bordered={false} compact description="当前范围暂无指标数据" />
           ) : null}
         </div>

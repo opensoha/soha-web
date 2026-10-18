@@ -9,10 +9,8 @@ export const ORG_ALL_KEY = '__all-organizations__'
 export function buildOrganizationUserCounts(items: AccessTeam[], users: AccessUser[]) {
   const teamsByID = new Map(items.map((item) => [item.id, item]))
   const userIDsByOrganization = new Map(items.map((item) => [item.id, new Set<string>()]))
-  const assignedUserIDs = new Set<string>()
   users.forEach((user) => {
     new Set(user.teams ?? []).forEach((teamID) => {
-      if (teamsByID.has(teamID)) assignedUserIDs.add(user.id)
       const visited = new Set<string>()
       let currentID: string | undefined = teamID
       while (currentID && !visited.has(currentID)) {
@@ -28,7 +26,7 @@ export function buildOrganizationUserCounts(items: AccessTeam[], users: AccessUs
       userIDs.size,
     ]),
   )
-  counts.set(ORG_ALL_KEY, assignedUserIDs.size)
+  counts.set(ORG_ALL_KEY, new Set(users.map((user) => user.id)).size)
   return counts
 }
 

@@ -1,8 +1,6 @@
-import { Alert, Tag, Typography } from 'antd'
-import { SafetyCertificateOutlined } from '@ant-design/icons'
-import { useQuery } from '@tanstack/react-query'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
 import { StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
@@ -10,7 +8,11 @@ import { useI18n } from '@/i18n'
 import { api } from '@/services/api-client'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey, type ApiResponse } from '@/types'
+import { readableQueryData } from '@/utils/query-feedback'
+import { SafetyCertificateOutlined } from '@ant-design/icons'
+import { useQuery } from '@tanstack/react-query'
 import type { TableColumnsType } from 'antd'
+import { Alert, Tag, Typography } from 'antd'
 import { accessControlKeys } from '../shared/keys'
 
 interface AccessCheck {
@@ -119,6 +121,8 @@ export function ServiceAccountEffectiveAccessPanel({
     },
     enabled: canReview && Boolean(clusterId && namespace && name),
   })
+  const visibleQueryData =
+    canReview && Boolean(clusterId && namespace && name) ? readableQueryData(query) : undefined
 
   if (!canReview) {
     return (
@@ -130,7 +134,7 @@ export function ServiceAccountEffectiveAccessPanel({
     )
   }
 
-  const rows = query.data ?? []
+  const rows = visibleQueryData ?? []
   const highRiskAllowed = rows.filter((row) => row.risk === 'high' && row.allowed).length
   const columns: TableColumnsType<EffectiveAccessRow> = [
     { title: localeCode === 'zh_CN' ? '操作' : 'Operation', dataIndex: 'label' },
@@ -165,6 +169,8 @@ export function ServiceAccountEffectiveAccessPanel({
 
   return (
     <div className="soha-detail-stack">
+      <ReadFeedback canRead={query.isEnabled} query={query} label="资源记录" />
+
       <Alert
         showIcon
         icon={<SafetyCertificateOutlined />}

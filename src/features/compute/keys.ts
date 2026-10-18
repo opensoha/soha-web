@@ -19,10 +19,16 @@ export const computeKeys = {
   providerInstances: (filters: ComputeProviderInstanceFilters = {}) =>
     [...computeKeys.providers(), 'instances', clean(filters)] as const,
   providerInstance: (domain: ComputeProviderDomain, providerKey: string, instanceRef: string) =>
-    [...computeKeys.providers(), 'instances', domain, providerKey.trim(), instanceRef.trim()] as const,
+    [
+      ...computeKeys.providers(),
+      'instances',
+      domain,
+      providerKey.trim(),
+      instanceRef.trim(),
+    ] as const,
   resources: () => [...computeKeys.all, 'resources'] as const,
   resourceRelations: (domain: ComputeDomain, kind: ComputeResourceKind, id: string) =>
-    [...computeKeys.resources(), domain, kind, id.trim(), 'relations'] as const,
+    [...computeKeys.resources(), domain, kind, id.trim(), 'relations', 'pages'] as const,
   tasks: (filters: ComputeTaskFilters = {}) =>
     [...computeKeys.all, 'tasks', clean(filters)] as const,
   task: (domain: ComputeTaskDomain, taskId: string) =>

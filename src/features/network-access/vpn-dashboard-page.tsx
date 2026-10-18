@@ -1,4 +1,27 @@
-import { useState } from 'react'
+import { AdminTable } from '@/components/admin-table'
+import {
+  ManagementIconButton,
+  ManagementQueryActions,
+  ManagementQueryField,
+} from '@/components/management-list'
+import { ReloadOutlined } from '@ant-design/icons'
+import { formatDateTime } from '@/utils/time'
+import { ManagementDataPage } from '@/components/management-data-page'
+import { ReadFeedback } from '@/components/request-feedback'
+import { buildCompactChartSpec, compactMetricColors } from '@/components/resource-metrics-panel'
+import { StatusTag } from '@/components/status-tag'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { useI18n } from '@/i18n'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import type {
+  NetworkVPNConnectionView,
+  NetworkVPNDecision,
+  NetworkVPNGatewayMetrics,
+  NetworkVPNPreviewInput,
+} from '@opensoha/contracts/gen/ts/sohaapi'
+import { useQuery } from '@tanstack/react-query'
+import { LineChart } from '@visactor/react-vchart'
 import {
   Alert,
   Button,
@@ -13,23 +36,9 @@ import {
   Timeline,
   Typography,
 } from 'antd'
-import { useMutation, useQuery } from '@tanstack/react-query'
-import { LineChart } from '@visactor/react-vchart'
-import type {
-  NetworkVPNDecision,
-  NetworkVPNPreviewInput,
-  NetworkVPNSeriesPoint,
-  NetworkVPNGatewayMetrics,
-  NetworkVPNConnectionView,
-} from '@opensoha/contracts/gen/ts/sohaapi'
-import { AdminTable } from '@/components/admin-table'
-import { ManagementDataPage } from '@/components/management-data-page'
-import { StatusTag } from '@/components/status-tag'
-import { buildCompactChartSpec, compactMetricColors } from '@/components/resource-metrics-panel'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
-import { useI18n } from '@/i18n'
+import { useState } from 'react'
 import { previewVPN, vpnDashboard, vpnDecision, vpnDocuments, vpnKeys } from './vpn-api'
-
+import './styles.css'
 export default function VPNDashboardPage() {
   const { localeCode } = useI18n()
   const text = (zh: string, en: string) => (localeCode === 'zh_CN' ? zh : en)
@@ -48,28 +57,34 @@ export default function VPNDashboardPage() {
     enabled: can('network_access.vpn_dashboard.view'),
     retry: false,
   })
+  const visibleQueryData = query.isEnabled === false ? undefined : readableQueryData(query)
   const profiles = useQuery({
     queryKey: vpnKeys.documents('profiles'),
     queryFn: () => vpnDocuments('profiles'),
     enabled: can('network_access.vpn_profiles.view'),
   })
+  const visibleProfilesData = profiles.isEnabled === false ? undefined : readableQueryData(profiles)
   const decision = useQuery({
     queryKey: vpnKeys.decision(decisionID),
     queryFn: () => vpnDecision(decisionID),
     enabled: !!decisionID,
   })
-  const simulation = useMutation({ mutationFn: previewVPN })
-  const data = query.data
+  const visibleDecisionData = decision.isEnabled === false ? undefined : readableQueryData(decision)
+  const simulation = useOperationMutation(
+    { mutationFn: previewVPN },
+    {
+      label: ['VPN 选择预览', 'Preview network policy VPN decision'],
+      target: () => 'VPN选择预览',
+      readOnly: true,
+    },
+  )
+  const operationBlocked = query.isEnabled !== false && queryAccessDenied(query)
+  const data = visibleQueryData
   const n = (value: number | undefined, unit = '') =>
     value == null
       ? text('未采集', 'Not collected')
       : `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })}${unit}`
-  const reload = () =>
-    setFilter({
-      ...filter,
-      to: new Date().toISOString(),
-      from: new Date(Date.now() - (Date.parse(filter.to) - Date.parse(filter.from))).toISOString(),
-    })
+  const reload = () => void query.refetch()
   const chart = (
     title: string,
     field:
@@ -106,7 +121,6 @@ export default function VPNDashboardPage() {
   }
   const summary = (
     <>
-      {query.isError ? <Alert type="error" showIcon description={query.error.message} /> : null}
       {data?.partial ? (
         <Alert
           type="warning"
@@ -127,7 +141,7 @@ export default function VPNDashboardPage() {
           )}
         />
       ) : null}
-      <Space wrap size="large">
+      <div className="soha-network-metrics">
         <Statistic
           title={text('在线 VPN 会话', 'Online VPN sessions')}
           value={data?.activeSessions ?? '—'}
@@ -148,10 +162,10 @@ export default function VPNDashboardPage() {
           title={text('上传 / 下载速率', 'Upload / download rate')}
           value={`${n(data?.uploadBytesPerSecond, ' B/s')} / ${n(data?.downloadBytesPerSecond, ' B/s')}`}
         />
-      </Space>
-      <Typography.Paragraph type="secondary">
-        {text('当前权限范围', 'Current permission scope')} · {data?.from} — {data?.to} · asOf{' '}
-        {data?.asOf || '—'}
+      </div>
+      <Typography.Paragraph className="soha-network-sample-time" type="secondary">
+        {text('当前权限范围', 'Current permission scope')} · {formatDateTime(data?.from)} —{' '}
+        {formatDateTime(data?.to)} · {text('采样时间', 'As of')} {formatDateTime(data?.asOf)}
       </Typography.Paragraph>
     </>
   )
@@ -208,7 +222,7 @@ export default function VPNDashboardPage() {
           key: 'loss',
           render: () => text('未采集', 'Not collected'),
         },
-        { title: text('测量时间', 'Measured at'), dataIndex: 'measuredAt' },
+        { title: text('测量时间', 'Measured at'), dataIndex: 'measuredAt', render: formatDateTime },
       ]}
     />
   )
@@ -275,25 +289,7 @@ export default function VPNDashboardPage() {
   )
   return (
     <ManagementDataPage
-      header={{
-        title: 'VPN Dashboard',
-        description: text(
-          '连接质量、入口与 Auto 决策',
-          'Connection quality, entrances and Auto decisions',
-        ),
-        actions: (
-          <Space>
-            <Button onClick={reload} loading={query.isFetching}>
-              {text('刷新', 'Refresh')}
-            </Button>
-            {can('network_access.vpn_selection_policies.preview') ? (
-              <Button onClick={() => setPreviewOpen(true)}>
-                {text('模拟选择', 'Simulate selection')}
-              </Button>
-            ) : null}
-          </Space>
-        ),
-      }}
+      className="soha-network-page soha-network-monitor"
       query={{
         form,
         onFinish: (values) => {
@@ -307,14 +303,28 @@ export default function VPNDashboardPage() {
           }
           setFilter(next)
         },
+        moreLabel: text('更多筛选', 'More filters'),
+        lessLabel: text('收起筛选', 'Fewer filters'),
         actions: (
-          <Button htmlType="submit" type="primary">
-            {text('查询', 'Query')}
-          </Button>
+          <ManagementQueryActions
+            onReset={() => {
+              form.resetFields()
+              const now = Date.now()
+              setFilter({
+                from: new Date(now - 3600000).toISOString(),
+                to: new Date(now).toISOString(),
+              })
+            }}
+          />
         ),
         children: (
           <>
-            <Form.Item name="hours" label={text('时间范围', 'Window')} initialValue="1">
+            <ManagementQueryField
+              width={240}
+              name="hours"
+              label={text('时间范围', 'Window')}
+              initialValue="1"
+            >
               <Select
                 options={[
                   { value: '1', label: text('最近 1 小时', 'Last hour') },
@@ -322,16 +332,21 @@ export default function VPNDashboardPage() {
                   { value: '168', label: text('最近 7 天', 'Last 7 days') },
                 ]}
               />
-            </Form.Item>
-            <Form.Item name="profileId" label={text('方案', 'Profile')}>
+            </ManagementQueryField>
+            <ManagementQueryField width={280} name="profileId" label={text('方案', 'Profile')}>
               <Select
+                placeholder={text('全部方案', 'All profiles')}
                 allowClear
-                options={profiles.data?.map((p) => ({ value: p.id, label: p.configuration.name }))}
+                options={visibleProfilesData?.map((p) => ({
+                  value: p.id,
+                  label: p.configuration.name,
+                }))}
               />
-            </Form.Item>
+            </ManagementQueryField>
             {(['siteId', 'gatewayId', 'providerCode', 'subjectId', 'teamId'] as const).map(
               (key, index) => (
-                <Form.Item
+                <ManagementQueryField
+                  width={280}
                   key={key}
                   name={key}
                   label={text(
@@ -340,13 +355,45 @@ export default function VPNDashboardPage() {
                   )}
                 >
                   <Input allowClear />
-                </Form.Item>
+                </ManagementQueryField>
               ),
             )}
           </>
         ),
       }}
-      beforeQuery={summary}
+      beforeQuery={
+        <>
+          <h1 className="soha-network-sr-only">VPN Dashboard</h1>
+          <div className="soha-network-monitor-actions">
+            <Typography.Text type="secondary">
+              {text(
+                '连接质量、入口与 Auto 决策',
+                'Connection quality, entrances and Auto decisions',
+              )}
+            </Typography.Text>
+            <Space>
+              <ManagementIconButton
+                aria-label={text('刷新', 'Refresh')}
+                tooltip={text('刷新', 'Refresh')}
+                icon={<ReloadOutlined />}
+                onClick={reload}
+                loading={query.isFetching}
+              />
+              {can('network_access.vpn_selection_policies.preview') ? (
+                <Button onClick={() => setPreviewOpen(true)} disabled={operationBlocked}>
+                  {text('模拟选择', 'Simulate selection')}
+                </Button>
+              ) : null}
+            </Space>
+          </div>
+          <section
+            className="soha-network-summary"
+            aria-label={text('VPN 运行概况', 'VPN runtime summary')}
+          >
+            {summary}
+          </section>
+        </>
+      }
       tableNode={
         <Tabs
           items={[
@@ -356,13 +403,7 @@ export default function VPNDashboardPage() {
               label: text('趋势', 'Trends'),
               children: (
                 <>
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fit,minmax(320px,1fr))',
-                      gap: 16,
-                    }}
-                  >
+                  <div className="soha-network-chart-grid">
                     {chart('P50 RTT', 'latencyP50Ms', 'ms')}
                     {chart('P95 RTT', 'latencyP95Ms', 'ms')}
                     {chart(text('上传量 / 小时', 'Uploaded per hour'), 'uploadBytes', 'bytes')}
@@ -373,18 +414,28 @@ export default function VPNDashboardPage() {
                   <AdminTable
                     rowKey="at"
                     dataSource={data?.series || []}
-                    columns={(
-                      [
-                        'at',
-                        'attempts',
-                        'successes',
-                        'fallbacks',
-                        'uploadBytes',
-                        'downloadBytes',
-                        'latencyP50Ms',
-                        'latencyP95Ms',
-                      ] as (keyof NetworkVPNSeriesPoint)[]
-                    ).map((key) => ({ title: key, dataIndex: key }))}
+                    columns={[
+                      {
+                        title: text('采样时间', 'Sampled at'),
+                        dataIndex: 'at',
+                        render: formatDateTime,
+                      },
+                      { title: text('连接请求（次）', 'Attempts'), dataIndex: 'attempts' },
+                      { title: text('连接成功（次）', 'Successes'), dataIndex: 'successes' },
+                      { title: text('自动回退（次）', 'Fallbacks'), dataIndex: 'fallbacks' },
+                      { title: text('上传量（B）', 'Uploaded (B)'), dataIndex: 'uploadBytes' },
+                      { title: text('下载量（B）', 'Downloaded (B)'), dataIndex: 'downloadBytes' },
+                      {
+                        title: 'P50 RTT (ms)',
+                        dataIndex: 'latencyP50Ms',
+                        render: (value?: number) => n(value),
+                      },
+                      {
+                        title: 'P95 RTT (ms)',
+                        dataIndex: 'latencyP95Ms',
+                        render: (value?: number) => n(value),
+                      },
+                    ]}
                   />
                 </>
               ),
@@ -395,32 +446,51 @@ export default function VPNDashboardPage() {
         />
       }
     >
+      {!(
+        (!!decisionID && !(query.isEnabled !== false && queryAccessDenied(query))) ||
+        (previewOpen && !(query.isEnabled !== false && queryAccessDenied(query)))
+      ) && <> {simulation.feedback} </>}
+
+      <ReadFeedback canRead={query.isEnabled} query={query} label="当前记录" />
+      <ReadFeedback canRead={profiles.isEnabled} query={profiles} label="连接方案" />
+      <ReadFeedback canRead={decision.isEnabled} query={decision} label="策略决策" />
+
       <Drawer
-        open={!!decisionID}
-        onClose={() => setDecisionID('')}
+        open={!!decisionID && !(query.isEnabled !== false && queryAccessDenied(query))}
+        onClose={() => {
+          if (!operationBlocked) (() => setDecisionID(''))()
+        }}
         title={text('连接详情', 'Connection details')}
         size={760}
       >
-        {decision.data ? (
-          <VPNDecisionDetail decision={decision.data} />
-        ) : decision.isError ? (
-          <Alert type="error" description={decision.error.message} />
-        ) : null}
+        {simulation.feedback}
+
+        {visibleDecisionData ? (
+          <VPNDecisionDetail decision={visibleDecisionData} />
+        ) : decision.isError && !visibleDecisionData ? null : null}
       </Drawer>
       <Drawer
-        open={previewOpen}
-        onClose={() => setPreviewOpen(false)}
+        open={previewOpen && !(query.isEnabled !== false && queryAccessDenied(query))}
+        onClose={() => {
+          if (!operationBlocked) (() => setPreviewOpen(false))()
+        }}
         title={text('模拟选择（不创建连接）', 'Simulate selection (no connection created)')}
         size={760}
       >
+        {simulation.feedback}
+
         <Form<NetworkVPNPreviewInput>
           layout="vertical"
           initialValues={{ selection: 'auto' }}
           onFinish={(input) => simulation.mutate(input)}
+          disabled={operationBlocked}
         >
           <Form.Item name="profileId" label={text('方案', 'Profile')} rules={[{ required: true }]}>
             <Select
-              options={profiles.data?.map((p) => ({ value: p.id, label: p.configuration.name }))}
+              options={visibleProfilesData?.map((p) => ({
+                value: p.id,
+                label: p.configuration.name,
+              }))}
             />
           </Form.Item>
           <Form.Item
@@ -447,17 +517,21 @@ export default function VPNDashboardPage() {
           >
             <Input />
           </Form.Item>
-          <Button htmlType="submit" type="primary" loading={simulation.isPending}>
+          <Button
+            htmlType="submit"
+            type="primary"
+            loading={simulation.isPending}
+            disabled={operationBlocked}
+          >
             {text('模拟', 'Simulate')}
           </Button>
         </Form>
-        {simulation.isError ? <Alert type="error" description={simulation.error.message} /> : null}
+        {simulation.isError ? null : null}
         {simulation.data ? <VPNDecisionDetail decision={simulation.data} /> : null}
       </Drawer>
     </ManagementDataPage>
   )
 }
-
 function VPNDecisionDetail({ decision: d }: { decision: NetworkVPNDecision }) {
   const { localeCode } = useI18n()
   const text = (zh: string, en: string) => (localeCode === 'zh_CN' ? zh : en)
@@ -470,9 +544,9 @@ function VPNDecisionDetail({ decision: d }: { decision: NetworkVPNDecision }) {
       <Timeline
         items={[
           {
-            content: `${d.createdAt} · ${text('请求与候选选择', 'Request and candidate selection')}`,
+            content: `${formatDateTime(d.createdAt)} · ${text('请求与候选选择', 'Request and candidate selection')}`,
           },
-          { content: `${d.updatedAt} · ${d.state} · ${d.reasonCode}` },
+          { content: `${formatDateTime(d.updatedAt)} · ${d.state} · ${d.reasonCode}` },
         ]}
       />
       <AdminTable
@@ -493,7 +567,11 @@ function VPNDecisionDetail({ decision: d }: { decision: NetworkVPNDecision }) {
             dataIndex: 'latencyMs',
             render: (value: number | undefined) => value ?? text('未采集', 'Not collected'),
           },
-          { title: text('测量时间', 'Measured at'), dataIndex: 'measuredAt' },
+          {
+            title: text('测量时间', 'Measured at'),
+            dataIndex: 'measuredAt',
+            render: formatDateTime,
+          },
         ]}
       />
     </>

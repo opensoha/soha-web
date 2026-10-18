@@ -1,12 +1,12 @@
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { useI18n } from '@/i18n'
+import { readableQueryData } from '@/utils/query-feedback'
+import { formatDateTime } from '@/utils/time'
+import type { NetworkProxyInstance } from '@opensoha/contracts/gen/ts/sohaapi'
 import { useQuery } from '@tanstack/react-query'
 import { Select, Tag, Typography } from 'antd'
 import { useSearchParams } from 'react-router-dom'
-import type { NetworkProxyInstance } from '@opensoha/contracts/gen/ts/sohaapi'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
-import { useI18n } from '@/i18n'
-import { formatDateTime } from '@/utils/time'
 import { proxyQueries } from './queries'
-
 const statusColor: Record<NetworkProxyInstance['status'], string> = {
   online: 'success',
   degraded: 'warning',
@@ -14,14 +14,16 @@ const statusColor: Record<NetworkProxyInstance['status'], string> = {
   disabled: 'default',
   unregistered: 'default',
 }
-
 export function useProxyContext(permission: string) {
   const permissions = usePermissionSnapshot()
   const allowed = hasPermission(permissions.data?.data, permission)
   const instances = useQuery(proxyQueries.instances({}, allowed))
+  const visibleInstancesData =
+    instances.isEnabled === false ? undefined : readableQueryData(instances)
   const [params, setParams] = useSearchParams()
   const requested = params.get('instanceId')
-  const selected = instances.data?.find((item) => item.id === requested) ?? instances.data?.[0]
+  const selected =
+    visibleInstancesData?.find((item) => item.id === requested) ?? visibleInstancesData?.[0]
   const select = (id: string) => {
     setParams((current) => {
       const next = new URLSearchParams(current)
@@ -31,7 +33,6 @@ export function useProxyContext(permission: string) {
   }
   return { permissions, allowed, instances, selected, select }
 }
-
 export function ProxyInstanceHeader({
   instances,
   selected,

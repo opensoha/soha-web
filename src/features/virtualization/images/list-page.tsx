@@ -1,3 +1,6 @@
+import { readableQueryData, writeOutcomeUnknown } from '@/utils/query-feedback'
+import { ReadFeedback } from '@/components/request-feedback'
+import { ComputeOperationFeedback, ComputeMutationFeedback } from '@/features/compute'
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -157,8 +160,12 @@ export function VirtualizationImagesPage({
     ),
   )
   const clustersQuery = useQuery(virtualizationQueries.clusters(virtualizationModuleEnabled))
-  const imagesPage = normalizePage(imagesQuery.data, filters.page ?? 1, filters.pageSize ?? 15)
-  const clusters = clustersQuery.data ?? []
+  const imagesPage = normalizePage(
+    readableQueryData(imagesQuery),
+    filters.page ?? 1,
+    filters.pageSize ?? 15,
+  )
+  const clusters = readableQueryData(clustersQuery) ?? []
   const afterSave = () => {
     message.success(localeText(localeCode, '镜像入口已保存', 'Image entry saved'))
     setDrawerOpen(false)
@@ -178,6 +185,9 @@ export function VirtualizationImagesPage({
   )
   const savePending = createMutation.isPending || updateMutation.isPending
   function openImageEditor(record?: VirtualizationImage) {
+    if (savePending) return
+    if (!writeOutcomeUnknown(createMutation.error)) createMutation.reset()
+    if (!writeOutcomeUnknown(updateMutation.error)) updateMutation.reset()
     setEditing(record ?? null)
     form.resetFields()
     form.setFieldsValue(imageFormValues(record))
@@ -295,6 +305,46 @@ export function VirtualizationImagesPage({
   return (
     <ManagementDataPage
       className="soha-virtualization-page"
+      beforeQuery={
+        <>
+          <ReadFeedback
+            query={imagesQuery}
+            label={localeText(
+              localeCode,
+              imageCategory === 'storage' ? '存储与卷' : '镜像与模板',
+              imageCategory === 'storage' ? 'Storage' : 'Images',
+            )}
+          />
+          <ComputeMutationFeedback
+            operations={[
+              {
+                label: localeText(localeCode, '新增资源入口', 'Create resource entry'),
+                mutation: createMutation,
+                target: createMutation.variables?.name,
+                receipt: {
+                  message: localeText(localeCode, '资源入口记录已保存', 'Resource entry saved'),
+                },
+              },
+              {
+                label: localeText(localeCode, '更新资源入口', 'Update resource entry'),
+                mutation: updateMutation,
+                target: updateMutation.variables?.id,
+                receipt: {
+                  message: localeText(localeCode, '资源入口记录已保存', 'Resource entry saved'),
+                },
+              },
+              {
+                label: localeText(localeCode, '删除资源入口', 'Delete resource entry'),
+                mutation: deleteMutation,
+                target: deleteMutation.variables,
+                receipt: {
+                  message: localeText(localeCode, '资源入口记录已删除', 'Resource entry deleted'),
+                },
+              },
+            ]}
+          />
+        </>
+      }
       query={{
         actions: (
           <ManagementQueryActions
@@ -358,6 +408,11 @@ export function VirtualizationImagesPage({
       tableNode={
         <VirtualizationAdminTable
           rowKey="id"
+          empty={
+            imagesQuery.isError
+              ? localeText(localeCode, '数据读取失败，请先重试', 'Read failed; retry first')
+              : undefined
+          }
           actions={
             canCreateImages && imageCategory === 'catalog' ? (
               <Button type="primary" icon={<PlusOutlined />} onClick={() => openImageEditor()}>
@@ -429,7 +484,9 @@ export function VirtualizationImagesPage({
               : localeText(localeCode, '新增镜像入口', 'Add image entry')
           }
           open={drawerOpen}
-          onCancel={() => setDrawerOpen(false)}
+          onCancel={() => {
+            if (!savePending) setDrawerOpen(false)
+          }}
           onOk={() => form.submit()}
           confirmLoading={savePending}
           okText={localeText(localeCode, '保存', 'Save')}
@@ -440,6 +497,18 @@ export function VirtualizationImagesPage({
           style={{ top: 32 }}
           styles={{ body: { ...scrollableModalBodyStyle, maxHeight: 'calc(100dvh - 180px)' } }}
         >
+          <ComputeOperationFeedback
+            label={localeText(localeCode, '保存资源入口', 'Save record')}
+            pending={createMutation.isPending || updateMutation.isPending}
+            error={updateMutation.error || createMutation.error}
+            target={
+              updateMutation.error ? updateMutation.variables?.id : createMutation.variables?.name
+            }
+          />
+          <ReadFeedback
+            query={clustersQuery}
+            label={localeText(localeCode, '连接选项', 'Connection options')}
+          />
           <Form<VirtualizationImageInput>
             form={form}
             layout="vertical"
@@ -478,6 +547,16 @@ export function VirtualizationImagesPage({
               >
                 <Select
                   showSearch={{ optionFilterProp: 'label' }}
+                  loading={clustersQuery.isFetching}
+                  notFoundContent={
+                    clustersQuery.isError
+                      ? localeText(
+                          localeCode,
+                          '连接选项读取失败，请重试',
+                          'Connection options could not be read; retry',
+                        )
+                      : undefined
+                  }
                   options={clusters
                     .filter((item) => !imageProvider || item.provider === imageProvider)
                     .map((item) => ({ value: item.id, label: item.name }))}

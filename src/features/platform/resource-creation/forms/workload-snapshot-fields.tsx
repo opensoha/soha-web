@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useRef } from 'react'
-import { Alert, Checkbox, Col, Form, Input, Row, Segmented, Select } from 'antd'
-import { useQuery } from '@tanstack/react-query'
+import { ReadFeedback } from '@/components/request-feedback'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { workloadQueries } from '@/features/platform/workloads/shared/queries'
 import type { WorkloadKind } from '@/features/platform/workloads/shared/types'
 import { toScopeKey } from '@/types'
+import { readableQueryData } from '@/utils/query-feedback'
+import { useQuery } from '@tanstack/react-query'
+import { Alert, Checkbox, Col, Form, Input, Row, Segmented, Select } from 'antd'
+import { useEffect, useMemo, useRef } from 'react'
 import { resourceCreationQueries } from '../queries'
 import type {
   WorkloadSnapshotInheritance,
@@ -100,6 +102,10 @@ export function WorkloadSnapshotFields({
       canViewSource &&
       Boolean(clusterId.trim() && namespace?.trim()),
   })
+  const visibleSourceListQueryData =
+    runtimeSource === 'workload' && canViewSource && Boolean(clusterId.trim() && namespace?.trim())
+      ? readableQueryData(sourceListQuery)
+      : undefined
   const previewRequest = useMemo<WorkloadSnapshotRequest | undefined>(() => {
     if (runtimeSource !== 'workload' || !namespace?.trim() || !sourceName?.trim()) return undefined
     return {
@@ -128,8 +134,12 @@ export function WorkloadSnapshotFields({
     ...previewOptions,
     enabled: canViewSource && Boolean(clusterId.trim() && previewRequest),
   })
-  const selectedImage = previewQuery.data?.containers.find(
-    (container) => container.name === previewQuery.data?.selectedContainer,
+  const visiblePreviewQueryData =
+    canViewSource && Boolean(clusterId.trim() && previewRequest)
+      ? readableQueryData(previewQuery)
+      : undefined
+  const selectedImage = visiblePreviewQueryData?.containers.find(
+    (container) => container.name === visiblePreviewQueryData?.selectedContainer,
   )?.image
 
   useEffect(() => {
@@ -146,6 +156,9 @@ export function WorkloadSnapshotFields({
 
   return (
     <>
+      <ReadFeedback canRead={sourceListQuery.isEnabled} query={sourceListQuery} label="来源资源" />
+      <ReadFeedback canRead={previewQuery.isEnabled} query={previewQuery} label="资源预览" />
+
       <Form.Item label={isChinese ? '运行环境来源' : 'Runtime source'} name="runtimeSource">
         <Segmented
           block
@@ -221,7 +234,7 @@ export function WorkloadSnapshotFields({
               >
                 <Select
                   loading={sourceListQuery.isLoading}
-                  options={(sourceListQuery.data ?? []).map((item) => ({
+                  options={(visibleSourceListQueryData ?? []).map((item) => ({
                     label: item.name,
                     value: item.name,
                   }))}
@@ -234,15 +247,15 @@ export function WorkloadSnapshotFields({
             <Select
               allowClear
               loading={previewQuery.isLoading}
-              options={(previewQuery.data?.containers ?? []).map((container) => ({
+              options={(visiblePreviewQueryData?.containers ?? []).map((container) => ({
                 label: `${container.name} · ${container.image}`,
                 value: container.name,
               }))}
               placeholder={
-                previewQuery.data?.selectedContainer
+                visiblePreviewQueryData?.selectedContainer
                   ? isChinese
-                    ? `默认使用 ${previewQuery.data.selectedContainer}`
-                    : `Default: ${previewQuery.data.selectedContainer}`
+                    ? `默认使用 ${visiblePreviewQueryData.selectedContainer}`
+                    : `Default: ${visiblePreviewQueryData.selectedContainer}`
                   : undefined
               }
             />
@@ -262,16 +275,16 @@ export function WorkloadSnapshotFields({
           {previewQuery.isError ? (
             <Alert showIcon title={previewQuery.error.message} type="error" />
           ) : null}
-          {previewQuery.data ? (
+          {visiblePreviewQueryData ? (
             <Alert
               description={
-                previewQuery.data.warnings.length
-                  ? previewQuery.data.warnings.join('\n')
+                visiblePreviewQueryData.warnings.length
+                  ? visiblePreviewQueryData.warnings.join('\n')
                   : undefined
               }
               showIcon
-              title={`${previewQuery.data.selectedContainer}${selectedImage ? ` · ${selectedImage}` : ''}`}
-              type={previewQuery.data.warnings.length ? 'warning' : 'success'}
+              title={`${visiblePreviewQueryData.selectedContainer}${selectedImage ? ` · ${selectedImage}` : ''}`}
+              type={visiblePreviewQueryData.warnings.length ? 'warning' : 'success'}
             />
           ) : null}
           <Form.Item label={isChinese ? '备注' : 'Remark'} name="description">

@@ -1,9 +1,9 @@
 /** @vitest-environment jsdom */
 
-import { act } from 'react'
-import type { ReactNode } from 'react'
-import { App as AntdApp } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { App as AntdApp } from 'antd'
+import type { ReactNode } from 'react'
+import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -27,6 +27,7 @@ vi.mock('@/stores/platform-scope-store', () => ({
 
 vi.mock('@/services/api-client', () => ({
   api: {
+    post: vi.fn(async () => ({ data: { allowed: true, reason: '', scopeMode: 'namespace' } })),
     get: vi.fn((path: string) => {
       if (!(path in testState.responses)) {
         return Promise.resolve({ data: [] })
@@ -163,11 +164,7 @@ async function renderWithProviders(node: ReactNode, route = '/network/services')
     root.render(
       <AntdApp>
         <QueryClientProvider client={queryClient}>
-          <MemoryRouter
-            initialEntries={[route]}
-          >
-            {node}
-          </MemoryRouter>
+          <MemoryRouter initialEntries={[route]}>{node}</MemoryRouter>
         </QueryClientProvider>
       </AntdApp>,
     )

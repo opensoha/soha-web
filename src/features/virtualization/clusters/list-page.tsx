@@ -1,3 +1,6 @@
+import { readableQueryData } from '@/utils/query-feedback'
+import { ReadFeedback } from '@/components/request-feedback'
+import { ComputeMutationFeedback } from '@/features/compute'
 import type { ConnectionCheckResult } from '@opensoha/contracts/gen/ts/sohaapi'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -155,7 +158,7 @@ function ConnectionDeletePreview({
 
 export function VirtualizationClustersPage() {
   const navigate = useNavigate()
-  const [capacityConnection,setCapacityConnection]=useState<VirtualizationCluster|null>(null)
+  const [capacityConnection, setCapacityConnection] = useState<VirtualizationCluster | null>(null)
   const [workerPoolConnection, setWorkerPoolConnection] = useState<VirtualizationCluster | null>(
     null,
   )
@@ -180,6 +183,7 @@ export function VirtualizationClustersPage() {
     canTestClusters,
     canSyncClusters,
     canViewTasks,
+    canViewVMOperations,
     canViewWorkerPools,
   } = useVirtualizationPermissions()
   const queryClient = useQueryClient()
@@ -187,7 +191,7 @@ export function VirtualizationClustersPage() {
   const { localeCode } = useI18n()
   const clustersQuery = useQuery(virtualizationQueries.clusters(virtualizationModuleEnabled))
   const clusterOperationsQuery = useQuery(
-    virtualizationQueries.operations({}, virtualizationModuleEnabled),
+    virtualizationQueries.operations({}, virtualizationModuleEnabled && canViewVMOperations),
   )
   const computeTasksQuery = useQuery({
     ...computeQueries.tasks({ domain: 'virtualization', limit: 100 }),
@@ -272,7 +276,7 @@ export function VirtualizationClustersPage() {
   }
 
   const clusterRows = useMemo(() => {
-    const records = clustersQuery.data ?? []
+    const records = readableQueryData(clustersQuery) ?? []
     return [...records]
       .filter((record) => !showOnlyAbnormal || riskReasons(record).length > 0)
       .filter(
@@ -286,8 +290,17 @@ export function VirtualizationClustersPage() {
         (left, right) =>
           clusterRiskScore(left) - clusterRiskScore(right) || left.name.localeCompare(right.name),
       )
-  }, [clustersQuery.data, enabledFilter, providerFilter, showNeverSynced, showOnlyAbnormal])
-  const clusterOperations = clusterOperationsQuery.data ?? []
+  }, [
+    clustersQuery.data,
+    clustersQuery.error,
+    enabledFilter,
+    providerFilter,
+    showNeverSynced,
+    showOnlyAbnormal,
+  ])
+  const clusterOperations = canViewVMOperations
+    ? (readableQueryData(clusterOperationsQuery) ?? [])
+    : []
   function operationsForConnection(connectionId?: string) {
     if (!connectionId) return []
     return clusterOperations.filter((item) => item.connectionId === connectionId)
@@ -372,7 +385,11 @@ export function VirtualizationClustersPage() {
       title: localeText(localeCode, '最近任务', 'Latest task'),
       render: (_value, record) => (
         <ResourceTaskActions
-          task={latestTaskForResource(computeTasksQuery.data?.items ?? [], 'connection', record.id)}
+          task={latestTaskForResource(
+            canViewTasks ? (readableQueryData(computeTasksQuery)?.items ?? []) : [],
+            'connection',
+            record.id,
+          )}
           resourceKind="connection"
           resourceId={record.id}
         />
@@ -384,7 +401,15 @@ export function VirtualizationClustersPage() {
       width: 168,
       render: (_value, record) => (
         <Space className="soha-row-action-icons">
-          {record.provider==='pve'?<ManagementIconButton size="small" aria-label="容量与超分" tooltip="容量与超分" icon={<ClusterOutlined/>} onClick={()=>setCapacityConnection(record)}/>:null}
+          {record.provider === 'pve' ? (
+            <ManagementIconButton
+              size="small"
+              aria-label="容量与超分"
+              tooltip="容量与超分"
+              icon={<ClusterOutlined />}
+              onClick={() => setCapacityConnection(record)}
+            />
+          ) : null}
           {canViewWorkerPools && record.provider === 'pve' ? (
             <ManagementIconButton
               size="small"
@@ -451,6 +476,93 @@ export function VirtualizationClustersPage() {
 
   return (
     <div className="soha-page soha-virtualization-page">
+      <ReadFeedback
+        query={clustersQuery}
+        label={localeText(localeCode, '集群连接', 'Cluster connections')}
+      />
+      <ReadFeedback
+        query={computeTasksQuery}
+        label={localeText(localeCode, '连接任务', 'Connection tasks')}
+      />
+      <ComputeMutationFeedback
+        operations={[
+          {
+            readOnly: true,
+            label: localeText(localeCode, '连接检查', 'Connection check'),
+            mutation: testMutation,
+            target: testMutation.variables,
+            receipt: {
+              message: localeText(
+                localeCode,
+                '连接检查结果已返回',
+                'Connection check result received',
+              ),
+            },
+          },
+          {
+            label: localeText(localeCode, '资源同步', 'Resource synchronization'),
+            mutation: syncMutation,
+            target: syncMutation.variables,
+            receipt: {
+              message: localeText(
+                localeCode,
+                '同步任务已提交，请核对任务结果',
+                'Sync task submitted; check the task result',
+              ),
+              taskId: syncMutation.data?.id,
+              domain: 'virtualization',
+              canViewTask: canViewTasks,
+            },
+          },
+          {
+            label: localeText(localeCode, '批量同步', 'Batch synchronization'),
+            mutation: batchSyncMutation,
+            target: batchSyncMutation.variables?.join(' · '),
+            receipt: {
+              message: localeText(
+                localeCode,
+                '批量同步请求已提交，请在任务中心核对结果',
+                'Batch synchronization submitted; check tasks',
+              ),
+              taskIds: batchSyncMutation.data?.map((operation) => operation.id),
+              domain: 'virtualization',
+              canViewTask: canViewTasks,
+            },
+          },
+          {
+            readOnly: true,
+            label: localeText(localeCode, '批量检查', 'Batch connection check'),
+            mutation: batchTestMutation,
+            target: batchTestMutation.variables?.join(' · '),
+            receipt: {
+              message: localeText(localeCode, '批量检查结果已返回', 'Batch check results received'),
+            },
+          },
+          {
+            label: localeText(localeCode, '删除连接', 'Delete connection'),
+            mutation: deleteMutation,
+            target: deleteMutation.variables?.id,
+            receipt: {
+              message: localeText(localeCode, '连接记录已删除', 'Connection record deleted'),
+            },
+          },
+          {
+            readOnly: true,
+            label: localeText(localeCode, '删除依赖检查', 'Deletion dependency check'),
+            mutation: deletePreviewMutation,
+            target: deletePreviewMutation.variables,
+          },
+        ]}
+      />
+      {batchSyncMutation.error ? (
+        <Typography.Text type="warning">
+          {localeText(
+            localeCode,
+            '批量请求可能已部分提交，请逐连接核对任务后再重试。',
+            'Some batch requests may have been submitted; check each connection before retrying.',
+          )}
+        </Typography.Text>
+      ) : null}
       {workerPoolConnection && (
         <WorkerPoolsDrawer
           key={workerPoolConnection.id}
@@ -458,7 +570,13 @@ export function VirtualizationClustersPage() {
           onClose={() => setWorkerPoolConnection(null)}
         />
       )}
-      {capacityConnection?<CapacityPolicyDrawer connection={capacityConnection} canUpdate={canUpdateClusters} onClose={()=>setCapacityConnection(null)}/>:null}
+      {capacityConnection ? (
+        <CapacityPolicyDrawer
+          connection={capacityConnection}
+          canUpdate={canUpdateClusters}
+          onClose={() => setCapacityConnection(null)}
+        />
+      ) : null}
       <div className="soha-vrt-query">
         <ManagementQueryPanel
           collapsible
@@ -539,6 +657,11 @@ export function VirtualizationClustersPage() {
         </ManagementQueryPanel>
       </div>
       <VirtualizationAdminTable
+        empty={
+          clustersQuery.isError
+            ? localeText(localeCode, '数据读取失败，请先重试', 'Read failed; retry first')
+            : undefined
+        }
         rowKey="id"
         actions={
           canCreateClusters ? (
@@ -612,7 +735,7 @@ export function VirtualizationClustersPage() {
         refreshing={clustersQuery.isFetching || clusterOperationsQuery.isFetching}
         onRefresh={() => {
           void clustersQuery.refetch()
-          void clusterOperationsQuery.refetch()
+          if (canViewVMOperations) void clusterOperationsQuery.refetch()
           void computeTasksQuery.refetch()
         }}
         loading={clustersQuery.isLoading || clusterOperationsQuery.isLoading}

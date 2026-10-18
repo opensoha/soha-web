@@ -1,6 +1,18 @@
-import { useMemo, useState } from 'react'
-import { App, Button, Popconfirm, Space, Typography } from 'antd'
-import type { TableColumnsType } from 'antd'
+import { AdminTable } from '@/components/admin-table'
+import {
+  ManagementDensityButton,
+  ManagementIconButton,
+  ManagementRefreshButton,
+  ManagementState,
+  ManagementTableToolbar,
+} from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { useI18n } from '@/i18n'
+import { isApiError } from '@/services/api-error'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import { tableColumnPresets } from '@/utils/table-columns'
 import {
   DeleteOutlined,
   EditOutlined,
@@ -8,23 +20,14 @@ import {
   KeyOutlined,
   PlusOutlined,
 } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AdminTable } from '@/components/admin-table'
-import {
-  ManagementIconButton,
-  ManagementDensityButton,
-  ManagementRefreshButton,
-  ManagementState,
-  ManagementTableToolbar,
-} from '@/components/management-list'
-import { MetadataTag, StatusTag } from '@/components/status-tag'
-import { useI18n } from '@/i18n'
-import { isApiError } from '@/services/api-error'
-import { tableColumnPresets } from '@/utils/table-columns'
-import { formatIdentityProviderDateTime, identityProviderTagsSummary } from '../presentation'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TableColumnsType } from 'antd'
+import { Button, Popconfirm, Space, Typography } from 'antd'
+import { useMemo, useState } from 'react'
 import { createIdentityOIDCClient, revealIdentityOIDCClientSecret } from '../api'
 import { identityProviderKeys } from '../keys'
 import { identityProviderMutations } from '../mutations'
+import { formatIdentityProviderDateTime, identityProviderTagsSummary } from '../presentation'
 import { identityProviderQueries } from '../queries'
 import type {
   IdentityOIDCClient,
@@ -34,9 +37,7 @@ import type {
 } from '../types'
 import { OIDCClientFormModal } from './oidc-client-form-modal'
 import type { IdentityOIDCSecretReveal } from './secret-reveal-modal'
-
 const { Text } = Typography
-
 interface OIDCClientsPanelProps {
   canCreate: boolean
   canUpdate: boolean
@@ -45,7 +46,6 @@ interface OIDCClientsPanelProps {
   onSecretCreated: (secret: IdentityOIDCSecretReveal) => void
   provider: IdentityProvider
 }
-
 export function OIDCClientsPanel({
   canCreate,
   canUpdate,
@@ -54,7 +54,6 @@ export function OIDCClientsPanel({
   onSecretCreated,
   provider,
 }: OIDCClientsPanelProps) {
-  const { message } = App.useApp()
   const { t } = useI18n()
   const queryClient = useQueryClient()
   const [modalOpen, setModalOpen] = useState(false)
@@ -62,82 +61,121 @@ export function OIDCClientsPanel({
   const [creatingClient, setCreatingClient] = useState(false)
   const [revealingClientId, setRevealingClientId] = useState('')
   const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
-
   const clientsQuery = useQuery(
     identityProviderQueries.oidcClients(provider.id, provider.type === 'oidc'),
   )
-  const updateMutation = useMutation(identityProviderMutations.updateOIDCClient(queryClient))
-  const deleteMutation = useMutation(identityProviderMutations.removeOIDCClient(queryClient))
-  const rotateSigningKeyMutation = useMutation(
-    identityProviderMutations.rotateSigningKey(queryClient),
+  const visibleClientsQueryData =
+    clientsQuery.isEnabled === false ? undefined : readableQueryData(clientsQuery)
+  const updateMutation = useOperationMutation(
+    identityProviderMutations.updateOIDCClient(queryClient),
+    {
+      label: ['保存 OIDC Client', 'Save OIDC client provider'],
+      target: (v) => v.providerId + ' / ' + v.clientId,
+    },
   )
-
+  const deleteMutation = useOperationMutation(
+    identityProviderMutations.removeOIDCClient(queryClient),
+    {
+      label: ['删除 OIDC Client', 'Delete OIDC client provider'],
+      target: (v) => v.providerId + ' / ' + v.clientId,
+    },
+  )
+  const rotateSigningKeyMutation = useOperationMutation(
+    identityProviderMutations.rotateSigningKey(queryClient),
+    {
+      label: ['轮换签名密钥', 'Rotate signing key provider'],
+      target: (v) => v,
+      receipt: (key) => ({ message: '签名密钥已轮换', evidence: `kid: ${key.kid}` }),
+    },
+  )
   const closeModal = () => {
     setModalOpen(false)
     setEditing(null)
   }
-
   const openCreate = () => {
+    if (operationBlocked) return
     setEditing(null)
     setModalOpen(true)
   }
-
   const openEdit = (client: IdentityOIDCClient) => {
+    if (operationBlocked) return
     setEditing(client)
     setModalOpen(true)
   }
-
+  const createClientMutation = useOperationMutation(
+    {
+      gcTime: 0,
+      mutationFn: async (input: IdentityOIDCClientInput) => {
+        const result = await createIdentityOIDCClient({ providerId: provider.id, input })
+        if (result.clientSecret)
+          onSecretCreated({ clientId: result.client.clientId, clientSecret: result.clientSecret })
+        return result.client
+      },
+      onSuccess: () =>
+        queryClient.invalidateQueries({ queryKey: identityProviderKeys.oidcClients(provider.id) }),
+    },
+    {
+      label: ['创建 OIDC Client', 'Create OIDC client'],
+      target: (input) => provider.id + ' / ' + input.clientId,
+    },
+  )
+  const revealMutation = useOperationMutation(
+    {
+      gcTime: 0,
+      mutationFn: async (clientId: string) => {
+        const secret = await revealIdentityOIDCClientSecret(clientId)
+        onSecretCreated({ clientId: secret.clientId, clientSecret: secret.clientSecret })
+        return secret.clientId
+      },
+    },
+    {
+      label: ['读取客户端凭据', 'Read client credentials'],
+      target: (id) => id,
+      readOnly: true,
+      receipt: () => ({ message: '凭据已读取', evidence: '敏感值仅在原有专用窗口临时展示。' }),
+    },
+  )
   const revealSecret = async (client: IdentityOIDCClient) => {
     setRevealingClientId(client.id)
     try {
-      const secret = await revealIdentityOIDCClientSecret(client.id)
-      onSecretCreated({ clientId: secret.clientId, clientSecret: secret.clientSecret })
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : String(error))
+      await revealMutation.mutateAsync(client.id)
+    } catch {
+      /* The inline receipt owns the read error. */
     } finally {
       setRevealingClientId('')
     }
   }
-
   const createClient = async (input: IdentityOIDCClientInput) => {
     setCreatingClient(true)
     try {
-      const result = await createIdentityOIDCClient({ providerId: provider.id, input })
-      await queryClient.invalidateQueries({
-        queryKey: identityProviderKeys.oidcClients(provider.id),
-      })
-      message.success(`已创建 OIDC client ${result.client.clientId}`)
+      await createClientMutation.mutateAsync(input)
       closeModal()
-      if (result.clientSecret) {
-        onSecretCreated({
-          clientId: result.client.clientId,
-          clientSecret: result.clientSecret,
-        })
-      }
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : String(error))
+    } catch {
+      /* Keep the draft and the original operation feedback. */
     } finally {
       setCreatingClient(false)
     }
   }
-
+  const operationBlocked =
+    updateMutation.blocked ||
+    deleteMutation.blocked ||
+    rotateSigningKeyMutation.blocked ||
+    createClientMutation.blocked ||
+    (clientsQuery.isEnabled !== false && queryAccessDenied(clientsQuery))
   const submitForm = (input: IdentityOIDCClientInput) => {
     if (editing) {
       updateMutation.mutate(
         { providerId: provider.id, clientId: editing.id, input },
         {
-          onSuccess: (client) => {
-            message.success(`已更新 OIDC client ${client.clientId}`)
+          onSuccess: () => {
             closeModal()
           },
-          onError: (error: Error) => message.error(error.message),
         },
       )
       return
     }
     void createClient(input)
   }
-
   const columns = useMemo<TableColumnsType<IdentityOIDCClient>>(
     () => [
       {
@@ -223,11 +261,15 @@ export function OIDCClientsPanel({
               cancelText="取消"
               description="查看操作会记录到审计日志。"
               disabled={
+                operationBlocked ||
                 !canUpdate ||
                 record.clientType === 'public' ||
                 record.clientSecretAvailable === false
               }
-              okButtonProps={{ loading: revealingClientId === record.id }}
+              okButtonProps={{
+                ...{ loading: revealingClientId === record.id },
+                disabled: operationBlocked,
+              }}
               okText="查看"
               title={`查看 ${record.clientId} 的 Client Secret`}
               onConfirm={() => void revealSecret(record)}
@@ -250,24 +292,21 @@ export function OIDCClientsPanel({
               />
             </Popconfirm>
             <ManagementIconButton
-              disabled={!canUpdate}
+              disabled={operationBlocked || !canUpdate}
               icon={<EditOutlined />}
               onClick={() => openEdit(record)}
               tooltip="编辑"
             />
             <Popconfirm
               cancelText="取消"
-              disabled={!canDelete}
-              okButtonProps={{ danger: true, loading: deleteMutation.isPending }}
+              disabled={operationBlocked || !canDelete}
+              okButtonProps={{
+                ...{ danger: true, loading: deleteMutation.isPending },
+                disabled: operationBlocked,
+              }}
               okText="删除"
               onConfirm={() =>
-                deleteMutation.mutate(
-                  { providerId: provider.id, clientId: record.id },
-                  {
-                    onSuccess: () => message.success('OIDC client 已删除'),
-                    onError: (error: Error) => message.error(error.message),
-                  },
-                )
+                deleteMutation.mutate({ providerId: provider.id, clientId: record.id })
               }
               title={`删除 ${record.clientId}`}
             >
@@ -281,7 +320,6 @@ export function OIDCClientsPanel({
       canDelete,
       canUpdate,
       deleteMutation,
-      message,
       onSecretCreated,
       provider.id,
       queryClient,
@@ -290,7 +328,6 @@ export function OIDCClientsPanel({
       t,
     ],
   )
-
   if (provider.type !== 'oidc') {
     return (
       <ManagementState
@@ -301,8 +338,7 @@ export function OIDCClientsPanel({
       />
     )
   }
-
-  if (clientsQuery.isError) {
+  if (clientsQuery.isError && !visibleClientsQueryData) {
     return (
       <ManagementState
         kind={
@@ -312,13 +348,33 @@ export function OIDCClientsPanel({
         }
         title={t('identity.providers.client.loadError')}
         description={clientsQuery.error.message}
-        actions={<Button onClick={() => void clientsQuery.refetch()}>{t('common.retry')}</Button>}
+        actions={
+          <Button
+            onClick={() =>
+              void (clientsQuery.isEnabled === false ? undefined : clientsQuery.refetch())
+            }
+          >
+            {t('common.retry')}
+          </Button>
+        }
       />
     )
   }
-
   return (
     <div className="soha-identity-oidc-panel">
+      {!(modalOpen && !(clientsQuery.isEnabled !== false && queryAccessDenied(clientsQuery))) && (
+        <>
+          {' '}
+          {createClientMutation.feedback}
+          {revealMutation.feedback}
+          {updateMutation.feedback}
+          {deleteMutation.feedback}
+          {rotateSigningKeyMutation.feedback}{' '}
+        </>
+      )}
+
+      <ReadFeedback canRead={clientsQuery.isEnabled} query={clientsQuery} label="OIDC Clients" />
+
       <AdminTable
         shellClassName="soha-management-table-shell"
         columnSettingPlacement="header"
@@ -326,7 +382,7 @@ export function OIDCClientsPanel({
         tableSize={tableSize}
         rowKey="id"
         columns={columns}
-        dataSource={clientsQuery.data ?? []}
+        dataSource={visibleClientsQueryData ?? []}
         empty={
           <ManagementState
             description="创建 client 后可接入下游 OIDC 应用。"
@@ -340,15 +396,13 @@ export function OIDCClientsPanel({
             <Popconfirm
               cancelText="取消"
               description="旧公钥会保留 24 小时，之后使用旧密钥签发的令牌将无法验证。"
-              disabled={!canRotate}
-              okButtonProps={{ loading: rotateSigningKeyMutation.isPending }}
+              disabled={operationBlocked || !canRotate}
+              okButtonProps={{
+                ...{ loading: rotateSigningKeyMutation.isPending },
+                disabled: operationBlocked,
+              }}
               okText="轮换"
-              onConfirm={() =>
-                rotateSigningKeyMutation.mutate(provider.id, {
-                  onSuccess: (key) => message.success(`签名密钥已轮换，kid: ${key.kid}`),
-                  onError: (error: Error) => message.error(error.message),
-                })
-              }
+              onConfirm={() => rotateSigningKeyMutation.mutate(provider.id)}
               title="轮换 OIDC 签名密钥"
             >
               <ManagementIconButton
@@ -359,7 +413,7 @@ export function OIDCClientsPanel({
               />
             </Popconfirm>
             <Button
-              disabled={!canCreate}
+              disabled={operationBlocked || !canCreate}
               icon={<PlusOutlined />}
               onClick={openCreate}
               size="small"
@@ -376,17 +430,28 @@ export function OIDCClientsPanel({
               aria-label={t('common.refresh')}
               tooltip={t('common.refresh')}
               loading={clientsQuery.isFetching}
-              onClick={() => void clientsQuery.refetch()}
+              onClick={() =>
+                void (clientsQuery.isEnabled === false ? undefined : clientsQuery.refetch())
+              }
             />
           </ManagementTableToolbar>
         }
       />
 
       <OIDCClientFormModal
+        blocked={operationBlocked}
+        feedback={
+          <>
+            {createClientMutation.feedback}
+            {updateMutation.feedback}
+          </>
+        }
         editing={editing}
-        onCancel={closeModal}
+        onCancel={() => {
+          if (!operationBlocked) closeModal()
+        }}
         onSubmit={submitForm}
-        open={modalOpen}
+        open={modalOpen && !(clientsQuery.isEnabled !== false && queryAccessDenied(clientsQuery))}
         providerId={provider.id}
         submitting={creatingClient || updateMutation.isPending}
       />

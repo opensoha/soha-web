@@ -1,15 +1,22 @@
-import { lazy, Suspense, useState } from 'react'
-import type { ReactNode } from 'react'
-import { App, Card, Spin, Tabs, Typography } from 'antd'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useParams, useSearchParams } from 'react-router-dom'
-import { useYamlDraft } from '@/components/use-yaml-draft'
 import { ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
+import { useYamlDraft } from '@/components/use-yaml-draft'
 import { useAIPageContext } from '@/features/copilot'
 import { useClusterCapability } from '@/features/platform/cluster-capabilities'
+import {
+  platformResourceTarget,
+  usePlatformMutation,
+} from '@/features/platform/shared/use-platform-mutation'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
+import { readableQueryData } from '@/utils/query-feedback'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { TabsProps } from 'antd'
+import { App, Card, Spin, Tabs, Typography } from 'antd'
+import type { ReactNode } from 'react'
+import { lazy, Suspense, useState } from 'react'
+import { useParams, useSearchParams } from 'react-router-dom'
+import '../styles.css'
 import { accessControlMutations } from './mutations'
 import { accessControlQueries } from './queries'
 import {
@@ -18,7 +25,6 @@ import {
   resolveAccessControlNamespace,
 } from './scope'
 import type { AccessControlDetailBase, AccessControlKind, AccessControlTarget } from './types'
-import '../styles.css'
 
 const ACCESS_CONTROL_ENTITY_KINDS: Record<AccessControlKind, string> = {
   serviceaccounts: 'ServiceAccount',
@@ -42,14 +48,19 @@ function AccessControlYAMLTab({
   kind: AccessControlKind
   target: AccessControlTarget
 }) {
-  const { t, localeCode } = useI18n()
+  const { localeCode } = useI18n()
   const { message } = App.useApp()
   const queryClient = useQueryClient()
   const yamlQuery = useQuery(accessControlQueries.yaml(kind, target.scope, target.name))
-  const updateMutation = useMutation(accessControlMutations.updateYAML(kind, queryClient))
+  const visibleYamlQueryData = readableQueryData(yamlQuery)
+  const updateMutation = usePlatformMutation(accessControlMutations.updateYAML(kind, queryClient), {
+    label: ['更新资源', 'Update resource'],
+    target: platformResourceTarget,
+  })
+  const platformWriteBlocked = updateMutation.blocked
   const yamlState = useYamlDraft(
     JSON.stringify([kind, target.scope.clusterId, target.scope.namespace, target.name]),
-    yamlQuery.data?.content,
+    visibleYamlQueryData?.content,
   )
   const { value: draft, setValue: setDraft } = yamlState
 
@@ -61,37 +72,41 @@ function AccessControlYAMLTab({
         </Card>
       }
     >
-      <K8sYamlEditor
-        key={yamlState.resourceKey}
-        value={draft}
-        original={yamlState.original}
-        serverChanged={yamlState.serverChanged}
-        onCompareLatest={yamlState.compareLatest}
-        loading={yamlQuery.isPending}
-        error={yamlQuery.error}
-        onApply={() =>
-          updateMutation.mutate(
-            { ...target, content: draft },
-            {
-              onSuccess: (yaml) => {
-                yamlState.applied(yaml.content)
-                void message.success(t('yamlEditor.applySuccess', 'YAML applied'))
+      <ReadFeedback canRead={yamlQuery.isEnabled} query={yamlQuery} label="YAML" />
+
+      {updateMutation.feedback}
+
+      {yamlQuery.isError && visibleYamlQueryData === undefined ? null : (
+        <K8sYamlEditor
+          key={yamlState.resourceKey}
+          value={draft}
+          original={yamlState.original}
+          serverChanged={yamlState.serverChanged}
+          onCompareLatest={yamlState.compareLatest}
+          loading={yamlQuery.isPending}
+          error={yamlQuery.error}
+          onApply={() =>
+            updateMutation.mutate(
+              { ...target, content: draft },
+              {
+                onSuccess: (yaml) => {
+                  yamlState.applied(yaml.content)
+                },
               },
-              onError: (error) => void message.error(error.message),
-            },
-          )
-        }
-        onChange={setDraft}
-        onReset={yamlState.reset}
-        onSave={() =>
-          void message.info(
-            localeCode === 'zh_CN' ? '暂不支持本地草稿' : 'Local draft save disabled here',
-          )
-        }
-        applyDisabled={!draft.trim() || updateMutation.isPending}
-        applying={updateMutation.isPending}
-        saveDisabled
-      />
+            )
+          }
+          onChange={setDraft}
+          onReset={yamlState.reset}
+          onSave={() =>
+            void message.info(
+              localeCode === 'zh_CN' ? '暂不支持本地草稿' : 'Local draft save disabled here',
+            )
+          }
+          applyDisabled={platformWriteBlocked || !draft.trim() || updateMutation.isPending}
+          applying={updateMutation.isPending}
+          saveDisabled
+        />
+      )}
     </Suspense>
   )
 }
@@ -134,9 +149,10 @@ export function AccessControlResourceDetailPage<TDetail extends AccessControlDet
   const scope = accessControlScopeFromSelection(kind, clusterId, detailNamespace)
   const target = { scope, name }
   const detailQuery = useQuery(accessControlQueries.detail<TDetail>(kind, scope, name))
+  const visibleDetailQueryData = readableQueryData(detailQuery)
   const yamlCapability = useClusterCapability('resource.yaml.apply', localeCode)
   const [activeTabKey, setActiveTabKey] = useState('overview')
-  const detail = detailQuery.data
+  const detail = visibleDetailQueryData
   useAIPageContext({
     sourceWorkbench: 'platform',
     sourceTitle: label,
@@ -167,17 +183,11 @@ export function AccessControlResourceDetailPage<TDetail extends AccessControlDet
       </div>
     )
   }
-  if (detailQuery.isError) {
-    return (
-      <div className="soha-page">
-        <ManagementState
-          description={detailQuery.error.message}
-          kind="error"
-          title={localeCode === 'zh_CN' ? 'RBAC 资源暂时不可用' : 'RBAC resource unavailable'}
-        />
-      </div>
-    )
+  if (detailQuery.isError && visibleDetailQueryData === undefined) {
+    return <ReadFeedback canRead={detailQuery.isEnabled} query={detailQuery} label="资源记录" />
   }
+  if (detailQuery.isError && !detail)
+    return <ReadFeedback canRead={detailQuery.isEnabled} query={detailQuery} label="资源详情" />
   if (!detail) {
     return (
       <div className="soha-page">
@@ -237,6 +247,8 @@ export function AccessControlResourceDetailPage<TDetail extends AccessControlDet
 
   return (
     <div className="soha-page soha-workload-detail-page">
+      <ReadFeedback canRead={detailQuery.isEnabled} query={detailQuery} label="资源详情" />
+
       <Tabs
         activeKey={activeTabKey}
         className="soha-resource-tabs soha-workload-detail-tabs"

@@ -1,11 +1,13 @@
 /** @vitest-environment jsdom */
 
-import { act, type ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ClusterDetailPage } from './detail-page'
+import { LogCollectionCard } from './log-collection-card'
+import { ApiError } from '@/services/api-error'
 
 const storeMocks = vi.hoisted(() => ({ setClusterId: vi.fn() }))
 const apiGetMock = vi.hoisted(() =>
@@ -73,7 +75,8 @@ vi.mock('@/services/api-client', () => ({ api: { get: apiGetMock } }))
 vi.mock('@/stores/platform-scope-store', () => ({
   usePlatformScopeStore: (selector: (state: typeof storeMocks) => unknown) => selector(storeMocks),
 }))
-vi.mock('@/i18n', () => ({
+vi.mock('@/i18n', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/i18n')>()),
   useI18n: () => ({
     localeCode: 'zh_CN' as const,
     t: (_key: string, fallback?: string) => fallback ?? _key,
@@ -121,6 +124,47 @@ async function flushAsyncWork() {
 }
 
 describe('cluster detail page', () => {
+  it('keeps readable log collection state on a transient error and hides it after denial', async () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    mountedRoots.push(root)
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    await act(async () =>
+      root.render(
+        <QueryClientProvider client={client}>
+          <LogCollectionCard
+            scope={{ clusterId: 'cluster-a', namespace: null }}
+            localeCode="zh_CN"
+          />
+        </QueryClientProvider>,
+      ),
+    )
+    await vi.waitFor(() => expect(container.textContent).toContain('runtime_only'))
+    const query = client
+      .getQueryCache()
+      .findAll()
+      .find((item) => item.queryKey.includes('log-collection'))!
+    expect(query).toBeDefined()
+    await act(async () =>
+      query.setState({
+        status: 'error',
+        error: new ApiError(503, 'unavailable'),
+      }),
+    )
+    await vi.waitFor(() => {
+      expect(container.textContent).toContain('runtime_only')
+      expect(container.querySelectorAll('.soha-read-feedback')).toHaveLength(1)
+      expect(container.textContent).not.toContain('日志采集状态加载失败')
+    })
+    await act(async () => query.setState({ status: 'error', error: new ApiError(403, 'denied') }))
+    await vi.waitFor(() => {
+      expect(container.textContent).not.toContain('runtime_only')
+      expect(container.textContent).toContain('日志采集状态无访问权限')
+    })
+    client.clear()
+  })
+
   it('loads unwrapped detail and node snapshot data for the route cluster', async () => {
     const container = document.createElement('div')
     document.body.appendChild(container)

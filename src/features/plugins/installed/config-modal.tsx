@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
-import { App, Card, Form, Input, Modal, Space, Typography } from 'antd'
+import { operationModalStyles } from '@/components/modal-styles'
 import { SecretRefSelect } from '@/features/secrets'
+import { App, Card, Form, Input, Modal, Space, Typography } from 'antd'
+import { useEffect, useMemo, useState } from 'react'
 import type { InstalledPlugin, PluginConfigRequest } from '../plugin-model'
 import { requiredSecretValues } from '../plugin-model'
 import {
@@ -31,12 +32,18 @@ export function PluginConfigModal({
   onSubmit,
   open,
   plugin,
+  blocked = false,
+  saving = false,
+  feedback,
 }: {
   canEditSecrets: boolean
   onCancel: () => void
   onSubmit: (input: PluginConfigRequest) => Promise<unknown>
   open: boolean
   plugin?: InstalledPlugin
+  blocked?: boolean
+  saving?: boolean
+  feedback?: React.ReactNode
 }) {
   const { message } = App.useApp()
   const [form] = Form.useForm<Record<string, unknown>>()
@@ -61,6 +68,7 @@ export function PluginConfigModal({
 
   useEffect(() => {
     if (!open || !plugin) return
+    form.resetFields()
     const metadata = plugin.metadata && typeof plugin.metadata === 'object' ? plugin.metadata : {}
     const config = isPluginSchemaObject(metadata.config) ? metadata.config : {}
     const secretRefs = plugin.configuredSecretRefs ?? {}
@@ -81,13 +89,25 @@ export function PluginConfigModal({
 
   return (
     <Modal
+      styles={operationModalStyles}
+      style={{ top: 32 }}
+      confirmLoading={saving}
+      okButtonProps={{ disabled: blocked }}
+      cancelButtonProps={{ disabled: blocked }}
+      closable={!blocked}
+      keyboard={!blocked}
+      mask={{ closable: false }}
       open={open}
       title="配置插件"
       width={860}
       okText="保存"
       cancelText="取消"
-      onCancel={onCancel}
+      onCancel={() => {
+        if (!blocked) onCancel()
+      }}
       onOk={async () => {
+        if (blocked) return
+        let submitting = false
         try {
           const formValues = await form.validateFields()
           const secretRefs = parseJSONObject(secretRefsText, 'Secret refs')
@@ -108,6 +128,7 @@ export function PluginConfigModal({
             if (value !== undefined && value !== '') secretRefs[secret.name] = String(value)
           })
           if (Object.keys(config).length) metadata.config = config
+          submitting = true
           await onSubmit({
             secretRefs: canEditSecrets
               ? Object.fromEntries(
@@ -118,14 +139,15 @@ export function PluginConfigModal({
           })
           onCancel()
         } catch (error) {
-          message.error(error instanceof Error ? error.message : '配置解析失败')
+          if (!submitting) message.error(error instanceof Error ? error.message : '配置解析失败')
         }
       }}
     >
       <Space orientation="vertical" size={12} className="soha-plugin-config-modal">
+        {feedback}
         {schemaFields.length || requiredSecrets.length ? (
           <Card size="small" title="Schema 配置">
-            <Form form={form} layout="vertical">
+            <Form form={form} layout="vertical" disabled={blocked}>
               {schemaFields.map(({ name, schema }) => {
                 const isBoolean = schema.type === 'boolean'
                 const isSecretRef = pluginSchemaFieldControl(schema) === 'secret-ref'
@@ -148,7 +170,7 @@ export function PluginConfigModal({
                     }
                   >
                     {isSecretRef ? (
-                      <SecretRefSelect disabled={!canEditSecrets} enabled={open} />
+                      <SecretRefSelect disabled={blocked || !canEditSecrets} enabled={open} />
                     ) : (
                       renderPluginSchemaInput(schema)
                     )}
@@ -169,7 +191,7 @@ export function PluginConfigModal({
                         : [{ required: true, message: `请填写 ${secret.name} secret ref` }]
                     }
                   >
-                    <SecretRefSelect disabled={!canEditSecrets} enabled={open} />
+                    <SecretRefSelect disabled={blocked || !canEditSecrets} enabled={open} />
                   </Form.Item>
                 ))}
             </Form>
@@ -181,6 +203,7 @@ export function PluginConfigModal({
         <div>
           <Text strong>Metadata</Text>
           <Input.TextArea
+            disabled={blocked}
             rows={6}
             value={metadataText}
             onChange={(event) => setMetadataText(event.target.value)}

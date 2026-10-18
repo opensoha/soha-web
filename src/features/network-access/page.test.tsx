@@ -257,7 +257,7 @@ describe('network access page', () => {
       await vi.waitFor(() => expect(container.textContent).toContain('Soha-Staff'))
     })
 
-    expect(container.textContent).not.toContain('RADIUS 服务')
+    expect(container.textContent).not.toContain('RADIUS 接入')
     expect(container.textContent).toContain('新增 SSID')
     expect(container.textContent).not.toContain('总部接入交换机')
   })
@@ -271,10 +271,10 @@ describe('network access page', () => {
     await renderPage('/network-access/settings')
 
     const tabs = Array.from(container.querySelectorAll<HTMLElement>('[role="tab"]'))
-    expect(tabs.map((tab) => tab.textContent)).toEqual(['RADIUS 服务', 'SSID', '网络设备'])
-    expect(container.textContent).toContain('接入 FreeRADIUS 服务')
-    expect(apiMocks.listNetworkRuntimeEnrollments).toHaveBeenCalledWith({ limit: 200 })
-    expect(apiMocks.listNetworkNASBindings).not.toHaveBeenCalled()
+    expect(tabs.map((tab) => tab.textContent)).toEqual(['网络设备', 'SSID', 'RADIUS 接入'])
+    expect(container.textContent).toContain('新增网络设备')
+    expect(apiMocks.listNetworkNASBindings).toHaveBeenCalledWith({ limit: 200 })
+    expect(apiMocks.listNetworkRuntimeEnrollments).not.toHaveBeenCalled()
 
     await act(async () => tabs[1]?.click())
     await act(async () => {
@@ -284,6 +284,15 @@ describe('network access page', () => {
     })
     expect(tabs[1]?.getAttribute('aria-selected')).toBe('true')
     expect(container.textContent).toContain('新增 SSID')
+    await act(async () => tabs[2]?.click())
+    await act(async () => {
+      await vi.waitFor(() =>
+        expect(apiMocks.listNetworkRuntimeEnrollments).toHaveBeenCalledWith({ limit: 200 }),
+      )
+    })
+    expect(container.textContent).toContain('接入说明')
+    expect(container.textContent).not.toContain('运行时类型')
+    expect(container.textContent).toContain('注册状态')
   })
 
   it('shows terminal type and collected network details', async () => {

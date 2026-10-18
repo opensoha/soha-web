@@ -1,16 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { App, Button, Card, Divider, Form, Input, Slider, Spin, Typography } from 'antd'
-import {
-  CheckCircleOutlined,
-  LockOutlined,
-  MoonOutlined,
-  SafetyCertificateOutlined,
-  SunOutlined,
-  UserOutlined,
-  WarningOutlined,
-} from '@ant-design/icons'
+import { ReadFeedback, useInlineApiError } from '@/components/request-feedback'
 import {
   commitAuthResult,
   fetchAuthProviders,
@@ -35,6 +23,20 @@ import {
   readStoredBrandingSettings,
   resolveBrandingLogos,
 } from '@/utils/branding'
+import { readableQueryData } from '@/utils/query-feedback'
+import {
+  CheckCircleOutlined,
+  LockOutlined,
+  MoonOutlined,
+  SafetyCertificateOutlined,
+  SunOutlined,
+  UserOutlined,
+  WarningOutlined,
+} from '@ant-design/icons'
+import { useQuery } from '@tanstack/react-query'
+import { Alert, App, Button, Card, Divider, Form, Input, Slider, Spin, Typography } from 'antd'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import './login-page.css'
 
 const { Title, Text } = Typography
@@ -148,7 +150,8 @@ function LoginConstellationBackground() {
     let lastTimestamp = 0
     let nodes: StarNode[] = []
     let currentThemeMode: 'light' | 'dark' = 'light'
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const motionMedia = window.matchMedia('(prefers-reduced-motion: reduce)')
+    let reducedMotion = motionMedia.matches
     const readThemeMode = () => {
       currentThemeMode = document.documentElement.dataset.themeMode === 'dark' ? 'dark' : 'light'
     }
@@ -275,7 +278,7 @@ function LoginConstellationBackground() {
         context.globalAlpha = 1
       })
 
-      if (!reducedMotion) {
+      if (!reducedMotion && !document.hidden) {
         animationFrame = window.requestAnimationFrame(draw)
       }
     }
@@ -297,10 +300,20 @@ function LoginConstellationBackground() {
       attributeFilter: ['data-theme-mode'],
       attributes: true,
     })
+    const redraw = () => {
+      window.cancelAnimationFrame(animationFrame)
+      reducedMotion = motionMedia.matches
+      lastTimestamp = 0
+      draw(performance.now())
+    }
+    motionMedia.addEventListener('change', redraw)
+    document.addEventListener('visibilitychange', redraw)
     resize()
     draw(performance.now())
 
     return () => {
+      motionMedia.removeEventListener('change', redraw)
+      document.removeEventListener('visibilitychange', redraw)
       resizeObserver.disconnect()
       themeObserver.disconnect()
       window.cancelAnimationFrame(animationFrame)
@@ -436,6 +449,9 @@ export function LoginPage() {
   const { message } = App.useApp()
   const accessToken = useAuthStore((state) => state.accessToken)
   const isAuthenticated = Boolean(accessToken)
+  const [loginError, setLoginError] = useState<Error | null>(null)
+  useInlineApiError(loginError)
+  const loginFence = useRef(false)
   const [loading, setLoading] = useState(false)
   const [providerLoadingKey, setProviderLoadingKey] = useState<string | null>(null)
   const [checkingExistingSession, setCheckingExistingSession] = useState(!isAuthenticated)
@@ -478,20 +494,23 @@ export function LoginPage() {
     retry: false,
     staleTime: 60_000,
   })
-  const branding = loginOptionsQuery.data?.branding ?? storedBranding
+  const loadedBranding = readableQueryData(loginOptionsQuery)?.branding
+  const branding = loadedBranding ?? storedBranding
   useEffect(() => {
-    if (!loginOptionsQuery.data?.branding) return
-    applyBrandingSettings(loginOptionsQuery.data.branding)
-    persistBrandingSettings(loginOptionsQuery.data.branding)
-  }, [loginOptionsQuery.data?.branding])
-  const thirdPartyProviders = (providersQuery.data ?? []).filter(
+    if (!loadedBranding) return
+    applyBrandingSettings(loadedBranding)
+    persistBrandingSettings(loadedBranding)
+  }, [loadedBranding])
+  const thirdPartyProviders = (readableQueryData(providersQuery) ?? []).filter(
     (item) => item.enabled !== false && item.type !== 'password',
   )
   const appTitle = branding.sidebarTitle || branding.appTitle || 'Soha'
   const resolvedThemeMode = resolveThemeMode(themeMode)
   const logos = resolveBrandingLogos(branding, resolvedThemeMode)
-  const sliderVerificationEnabled = loginOptionsQuery.data?.verification?.sliderEnabled === true
-  const localPasswordLoginEnabled = loginOptionsQuery.data?.localPasswordLoginEnabled !== false
+  const sliderVerificationEnabled =
+    readableQueryData(loginOptionsQuery)?.verification?.sliderEnabled === true
+  const localPasswordLoginEnabled =
+    readableQueryData(loginOptionsQuery)?.localPasswordLoginEnabled !== false
   const toggleThemeMode = () => {
     setThemeMode(resolvedThemeMode === 'dark' ? 'light' : 'dark')
   }
@@ -602,11 +621,20 @@ export function LoginPage() {
   }
 
   const handleLogin = async (values: LoginFormValues) => {
+    if (
+      loginFence.current ||
+      providerLoadingKey ||
+      (!readableQueryData(loginOptionsQuery) &&
+        (loginOptionsQuery.isLoading || loginOptionsQuery.isError))
+    )
+      return
     if (sliderVerificationEnabled && !sliderVerified) {
       message.warning('请先完成滑块验证')
       return
     }
 
+    loginFence.current = true
+    setLoginError(null)
     setLoading(true)
     try {
       const authResult = await loginWithPassword(values.username, values.password)
@@ -615,12 +643,13 @@ export function LoginPage() {
       const nextPath = await resolvePostLoginPath(authResult.user.roles, returnTo ?? undefined)
       message.success('登录成功')
       completeLoginNavigation(nextPath)
-    } catch (err: any) {
+    } catch (err) {
       if (sliderVerificationEnabled) {
         resetSliderVerification()
       }
-      message.error(err?.message ?? '登录失败')
+      setLoginError(err instanceof Error ? err : new Error('登录失败'))
     } finally {
+      loginFence.current = false
       setLoading(false)
     }
   }
@@ -631,6 +660,7 @@ export function LoginPage() {
     loginUrl?: string
     name: string
   }) => {
+    if (loading || providerLoadingKey) return
     const loginPath = providerLoginPath(provider)
     if (provider.type === 'saml' || !loginPath) {
       message.warning('当前 SAML 登录配置已保存，但服务端回调链路尚未启用。')
@@ -698,8 +728,22 @@ export function LoginPage() {
               </div>
             ) : (
               <>
+                <ReadFeedback query={loginOptionsQuery} label="登录选项" />
+                <ReadFeedback query={providersQuery} label="第三方登录" />
+                {loginError ? (
+                  <Alert showIcon type="error" title="登录失败" description={loginError.message} />
+                ) : null}
                 {localPasswordLoginEnabled ? (
-                  <Form<LoginFormValues> layout="vertical" onFinish={handleLogin}>
+                  <Form<LoginFormValues>
+                    disabled={
+                      loading ||
+                      Boolean(providerLoadingKey) ||
+                      (!readableQueryData(loginOptionsQuery) &&
+                        (loginOptionsQuery.isLoading || loginOptionsQuery.isError))
+                    }
+                    layout="vertical"
+                    onFinish={handleLogin}
+                  >
                     <Form.Item<LoginFormValues>
                       name="username"
                       label="用户名"
@@ -786,6 +830,7 @@ export function LoginPage() {
                         <Button
                           key={`${provider.type}-${provider.id ?? provider.name}`}
                           block
+                          disabled={loading || Boolean(providerLoadingKey)}
                           loading={Boolean(
                             providerLoginPath(provider) &&
                             providerLoadingKey?.startsWith(providerLoginPath(provider) ?? ''),

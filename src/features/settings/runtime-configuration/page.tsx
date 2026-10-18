@@ -1,4 +1,26 @@
-import { useEffect, useMemo, useState } from 'react'
+import {
+  ManagementIconButton,
+  ManagementQueryField,
+  ManagementQueryPanel,
+} from '@/components/management-list'
+import { operationModalStyles } from '@/components/modal-styles'
+import { ReadFeedback } from '@/components/request-feedback'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { isApiError } from '@/services/api-error'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import { tableColumnPresets } from '@/utils/table-columns'
+import { formatDateTime } from '@/utils/time'
+import {
+  CheckCircleOutlined,
+  EyeOutlined,
+  ReloadOutlined,
+  SaveOutlined,
+  UndoOutlined,
+} from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TableColumnsType } from 'antd'
 import {
   Alert,
   App as AntdApp,
@@ -8,39 +30,15 @@ import {
   Empty,
   Input,
   InputNumber,
+  Modal,
   Select,
   Space,
   Switch,
   Tabs,
   Typography,
 } from 'antd'
-import type { TableColumnsType } from 'antd'
-import {
-  CheckCircleOutlined,
-  EyeOutlined,
-  ReloadOutlined,
-  SaveOutlined,
-  UndoOutlined,
-} from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  ManagementIconButton,
-  ManagementQueryField,
-  ManagementQueryPanel,
-} from '@/components/management-list'
-import { MetadataTag, StatusTag } from '@/components/status-tag'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
-import { isApiError } from '@/services/api-error'
-import { formatDateTime } from '@/utils/time'
-import { tableColumnPresets } from '@/utils/table-columns'
+import { useEffect, useMemo, useState } from 'react'
 import { SettingsAdminTable } from '../shared/components'
-import { RuntimeConfigurationHistoryDrawer } from './components/history-detail-drawer'
-import { RuntimeResourceOverview } from './components/resource-overview'
-import {
-  buildRuntimeConfigChanges,
-  summarizeRuntimeConfigChanges,
-  visibleRuntimeConfigItems,
-} from './runtime-config-model'
 import {
   AI_WORKBENCH_CONFIG_KEY,
   aiWorkbenchDraft,
@@ -48,6 +46,8 @@ import {
   isAIWorkbenchChildConfig,
   isAIWorkbenchConfig,
 } from './ai-module-model'
+import { RuntimeConfigurationHistoryDrawer } from './components/history-detail-drawer'
+import { RuntimeResourceOverview } from './components/resource-overview'
 import {
   computeModuleDraft,
   computeModuleState,
@@ -55,16 +55,24 @@ import {
 } from './compute-module-model'
 import { runtimeConfigurationMutations } from './mutations'
 import { runtimeConfigurationQueries } from './queries'
+import {
+  buildRuntimeConfigChanges,
+  summarizeRuntimeConfigChanges,
+  visibleRuntimeConfigItems,
+} from './runtime-config-model'
+import './styles.css'
 import type {
   RuntimeConfigApplyMode,
+  RuntimeConfigApplyResult,
   RuntimeConfigChange,
+  RuntimeConfigChangeRequest,
   RuntimeConfigItem,
   RuntimeConfigRevision,
+  RuntimeConfigSnapshot,
   RuntimeConfigSource,
   RuntimeConfigValidationResult,
   RuntimeConfigValue,
 } from './types'
-import './styles.css'
 
 const { Text } = Typography
 
@@ -161,10 +169,10 @@ function ConfigValueEditor({
 }
 
 export function RuntimeConfigurationPage() {
-  const { message, modal } = AntdApp.useApp()
+  const { modal } = AntdApp.useApp()
   const queryClient = useQueryClient()
   const permissionQuery = usePermissionSnapshot()
-  const snapshot = permissionQuery.data?.data
+  const snapshot = readableQueryData(permissionQuery)?.data
   const canView = hasPermission(snapshot, 'settings.runtime-config.view')
   const canApply = hasPermission(snapshot, 'settings.runtime-config.apply')
   const canValidate = hasPermission(snapshot, 'settings.runtime-config.validate')
@@ -176,9 +184,49 @@ export function RuntimeConfigurationPage() {
     runtimeConfigurationQueries.resources(canView && activeTab === 'resources'),
   )
   const historyQuery = useQuery(runtimeConfigurationQueries.history(canView))
-  const validateMutation = useMutation(runtimeConfigurationMutations.validate())
-  const applyMutation = useMutation(runtimeConfigurationMutations.apply(queryClient))
-  const rollbackMutation = useMutation(runtimeConfigurationMutations.rollback(queryClient))
+  const reportConflict = (error: Error) => {
+    if (isApiError(error) && error.status === 409) void snapshotQuery.refetch()
+  }
+  const resultError = (result: RuntimeConfigApplyResult) =>
+    ['failed', 'partially_applied'].includes(result.application.status)
+      ? new Error(`配置应用状态：${result.application.status}，请核对变更历史。`)
+      : undefined
+  const receipt = (result: RuntimeConfigApplyResult) => ({
+    message: `已返回配置版本 v${result.revision.version}`,
+    evidence: `应用记录 ${result.application.id} · ${result.application.status}；运行状态以变更历史和服务观察结果为准。`,
+  })
+  const validateMutation = useOperationMutation(
+    { ...runtimeConfigurationMutations.validate(), onError: reportConflict },
+    {
+      label: ['校验运行时配置', 'Validate runtime configuration'],
+      target: (v) => `版本 v${v.expectedVersion} · ${v.changes.length} 项`,
+      readOnly: true,
+      resultError: (r) => (r.valid ? undefined : new Error('配置校验未通过，请处理校验问题。')),
+    },
+  )
+  const applyMutation = useOperationMutation(
+    { ...runtimeConfigurationMutations.apply(queryClient), onError: reportConflict },
+    {
+      label: ['应用运行时配置', 'Apply runtime configuration'],
+      target: (v) => `版本 v${v.expectedVersion} · ${v.changes.length} 项`,
+      receipt,
+      resultError,
+    },
+  )
+  const rollbackMutation = useOperationMutation(
+    { ...runtimeConfigurationMutations.rollback(queryClient), onError: reportConflict },
+    {
+      label: ['回滚运行时配置', 'Rollback runtime configuration'],
+      target: (v) => `版本 v${v.targetVersion}`,
+      receipt,
+      resultError,
+    },
+  )
+  const [applyReview, setApplyReview] = useState<RuntimeConfigChangeRequest | null>(null)
+  const [rollbackReview, setRollbackReview] = useState<{
+    revision: RuntimeConfigRevision
+    expectedVersion: number
+  } | null>(null)
   const [draft, setDraft] = useState<Record<string, RuntimeConfigValue>>({})
   const [resetKeys, setResetKeys] = useState<Set<string>>(() => new Set())
   const [validation, setValidation] = useState<RuntimeConfigValidationResult | null>(null)
@@ -189,12 +237,27 @@ export function RuntimeConfigurationPage() {
   const [reason, setReason] = useState('')
   const [activeRevision, setActiveRevision] = useState<RuntimeConfigRevision | null>(null)
 
-  const runtimeSnapshot = snapshotQuery.data
+  const observedSnapshot = canView ? readableQueryData(snapshotQuery) : undefined
+  const [editingSnapshot, setEditingSnapshot] = useState<RuntimeConfigSnapshot>()
+  const denied = !canView || queryAccessDenied(snapshotQuery)
+  const runtimeSnapshot = denied ? undefined : (editingSnapshot ?? observedSnapshot)
+  const blocked =
+    denied || validateMutation.blocked || applyMutation.blocked || rollbackMutation.blocked
+  const editingBlocked = blocked || Boolean(applyReview || rollbackReview)
   useEffect(() => {
-    setDraft({})
-    setResetKeys(new Set())
-    setValidation(null)
-  }, [runtimeSnapshot?.version])
+    if (denied) {
+      setDraft((current) => (Object.keys(current).length ? {} : current))
+      setResetKeys((current) => (current.size ? new Set<string>() : current))
+      setValidation(null)
+      setReason('')
+      setEditingSnapshot(undefined)
+      setApplyReview(null)
+      setRollbackReview(null)
+      setActiveRevision(null)
+    } else if (!Object.keys(draft).length && !resetKeys.size && !applyReview && !rollbackReview) {
+      setEditingSnapshot(observedSnapshot)
+    }
+  }, [denied, observedSnapshot, draft, resetKeys, applyReview, rollbackReview])
 
   const changes = useMemo<RuntimeConfigChange[]>(() => {
     return buildRuntimeConfigChanges(draft, resetKeys, runtimeSnapshot?.items ?? [])
@@ -315,86 +378,61 @@ export function RuntimeConfigurationPage() {
     reason: reason.trim() || undefined,
   })
 
-  const reportError = (error: unknown, fallback: string) => {
-    if (isApiError(error) && error.status === 409) {
-      void message.error('配置版本已变化，请刷新后重新提交。')
-      void snapshotQuery.refetch()
-      return
-    }
-    void message.error(error instanceof Error ? error.message : fallback)
+  const clearDraft = () => {
+    setDraft({})
+    setResetKeys(new Set())
+    setValidation(null)
+    setEditingSnapshot(observedSnapshot)
   }
-
   const handleValidate = async () => {
-    if (changes.length === 0) return
+    if (!canValidate || blocked || changes.length === 0) return
     try {
-      const result = await validateMutation.mutateAsync(request())
-      setValidation(result)
-      if (result.valid) void message.success('配置校验通过')
-    } catch (error) {
-      reportError(error, '配置校验失败')
+      setValidation(await validateMutation.mutateAsync(request()))
+    } catch {
+      /* Feedback owns request errors. */
     }
   }
-
   const handleApply = () => {
-    if (changes.length === 0) return
-    modal.confirm({
-      title: `应用 ${changes.length} 项配置变更？`,
-      content: (
-        <div className="soha-runtime-config-confirm">
-          <Text>系统会再次校验版本与配置。请确认以下生效影响：</Text>
-          <div className="soha-runtime-config-confirm__impact">
-            {Object.entries(impactSummary)
-              .filter(([, count]) => count > 0)
-              .map(([mode, count]) => (
-                <MetadataTag
-                  key={mode}
-                  label={`${APPLY_MODE_LABELS[mode as RuntimeConfigApplyMode]} ${count} 项`}
-                  tone={mode === 'restart' ? 'orange' : 'blue'}
-                />
-              ))}
-          </div>
-        </div>
-      ),
-      okText: '应用配置',
-      cancelText: '取消',
-      onOk: async () => {
-        try {
-          const checked = await validateMutation.mutateAsync(request())
-          setValidation(checked)
-          if (!checked.valid) throw new Error('配置校验未通过，请先处理校验问题。')
-          await applyMutation.mutateAsync(request())
-          setReason('')
-          void message.success('配置变更已提交')
-        } catch (error) {
-          reportError(error, '应用配置失败')
-          throw error
-        }
-      },
-    })
+    if (!canApply || blocked || changes.length === 0) return
+    applyMutation.reset()
+    validateMutation.reset()
+    setApplyReview(request())
   }
-
   const handleRollback = (revision: RuntimeConfigRevision) => {
-    modal.confirm({
-      title: `回滚到版本 v${revision.version}？`,
-      content: '回滚会创建新的配置版本，并按当前运行时规则应用。',
-      okText: '确认回滚',
-      okButtonProps: { danger: true },
-      cancelText: '取消',
-      onOk: async () => {
-        try {
-          await rollbackMutation.mutateAsync({
-            expectedVersion: runtimeSnapshot?.version ?? 0,
-            targetVersion: revision.version,
-            reason: `回滚到版本 v${revision.version}`,
-          })
-          setActiveRevision(null)
-          void message.success(`已提交回滚到版本 v${revision.version}`)
-        } catch (error) {
-          reportError(error, '配置回滚失败')
-          throw error
-        }
-      },
-    })
+    if (!canRollback || blocked) return
+    rollbackMutation.reset()
+    setRollbackReview({ revision, expectedVersion: observedSnapshot?.version ?? 0 })
+  }
+  const submitApply = async () => {
+    if (!applyReview || blocked || !canApply) return
+    try {
+      const checked = await validateMutation.mutateAsync(applyReview)
+      setValidation(checked)
+      if (!checked.valid) return
+      const result = await applyMutation.mutateAsync(applyReview)
+      if (resultError(result)) return
+      clearDraft()
+      setReason('')
+      setApplyReview(null)
+      setActiveRevision(result.revision)
+    } catch {
+      /* Keep the frozen review and draft for reconciliation. */
+    }
+  }
+  const submitRollback = async () => {
+    if (!rollbackReview || blocked || !canRollback) return
+    try {
+      const result = await rollbackMutation.mutateAsync({
+        expectedVersion: rollbackReview.expectedVersion,
+        targetVersion: rollbackReview.revision.version,
+        reason: `回滚到版本 v${rollbackReview.revision.version}`,
+      })
+      if (resultError(result)) return
+      setRollbackReview(null)
+      setActiveRevision(result.revision)
+    } catch {
+      /* Keep the original target visible. */
+    }
   }
 
   if (!permissionQuery.isLoading && !canView) {
@@ -443,6 +481,23 @@ export function RuntimeConfigurationPage() {
 
   const configurationView = (
     <>
+      <ReadFeedback query={snapshotQuery} label="运行时配置" canRead={canView} />
+      {!applyReview && !rollbackReview && !denied ? (
+        <>
+          {validateMutation.feedback}
+          {applyMutation.feedback}
+          {rollbackMutation.feedback}
+        </>
+      ) : null}
+      {runtimeSnapshot &&
+      observedSnapshot &&
+      runtimeSnapshot.version !== observedSnapshot.version ? (
+        <Alert
+          type="warning"
+          showIcon
+          title={`服务端已更新为 v${observedSnapshot.version}，保留草稿及原始版本 v${runtimeSnapshot.version}。保存将检查版本冲突；放弃草稿后读取新版。`}
+        />
+      ) : null}
       {runtimeSnapshot?.pendingRestart ? (
         <Alert
           className="soha-runtime-config-alert"
@@ -474,7 +529,7 @@ export function RuntimeConfigurationPage() {
           <Space size={12}>
             <Checkbox
               checked={changedOnly}
-              disabled={changes.length === 0}
+              disabled={editingBlocked || changes.length === 0}
               onChange={(event) => setChangedOnly(event.target.checked)}
             >
               仅看已修改
@@ -536,6 +591,7 @@ export function RuntimeConfigurationPage() {
               ))}
           </div>
           <Input
+            disabled={editingBlocked || !canManage}
             className="soha-runtime-config-reason"
             maxLength={1000}
             placeholder="变更原因（可选）"
@@ -547,14 +603,9 @@ export function RuntimeConfigurationPage() {
           {canManage ? (
             <>
               <Button
-                disabled={changes.length === 0}
+                disabled={editingBlocked || changes.length === 0}
                 icon={<UndoOutlined />}
                 onClick={() => {
-                  const clearDraft = () => {
-                    setDraft({})
-                    setResetKeys(new Set())
-                    setValidation(null)
-                  }
                   if (changes.length === 1) {
                     clearDraft()
                     return
@@ -572,7 +623,7 @@ export function RuntimeConfigurationPage() {
               </Button>
               {canValidate ? (
                 <Button
-                  disabled={changes.length === 0}
+                  disabled={editingBlocked || changes.length === 0}
                   icon={<CheckCircleOutlined />}
                   loading={validateMutation.isPending}
                   onClick={() => void handleValidate()}
@@ -582,7 +633,7 @@ export function RuntimeConfigurationPage() {
               ) : null}
               {canApply ? (
                 <Button
-                  disabled={changes.length === 0}
+                  disabled={editingBlocked || changes.length === 0}
                   icon={<SaveOutlined />}
                   loading={applyMutation.isPending}
                   type="primary"
@@ -605,7 +656,7 @@ export function RuntimeConfigurationPage() {
       <div className="soha-runtime-config-list">
         {snapshotQuery.isLoading ? (
           <div className="soha-runtime-config-list__state">正在读取最新配置...</div>
-        ) : groupedItems.length === 0 ? (
+        ) : !runtimeSnapshot ? null : groupedItems.length === 0 ? (
           <Empty description="当前筛选条件下没有匹配的配置项" />
         ) : (
           groupedItems.map((group) => {
@@ -653,9 +704,7 @@ export function RuntimeConfigurationPage() {
                                 <Switch
                                   aria-label="AI 工作台"
                                   checked={aiWorkbenchDraftEnabled}
-                                  disabled={
-                                    !canManage || aiWorkbenchLocked || applyMutation.isPending
-                                  }
+                                  disabled={!canManage || aiWorkbenchLocked || editingBlocked}
                                   onChange={(enabled) => {
                                     updateDraftValues(aiWorkbenchDraft(enabled))
                                   }}
@@ -667,7 +716,7 @@ export function RuntimeConfigurationPage() {
                                 ) : null}
                                 {aiWorkbenchItem.source === 'runtime_override' ? (
                                   <Button
-                                    disabled={!canManage || applyMutation.isPending}
+                                    disabled={!canManage || editingBlocked}
                                     icon={<UndoOutlined />}
                                     size="small"
                                     onClick={(event) => {
@@ -714,7 +763,7 @@ export function RuntimeConfigurationPage() {
                                         !canManage ||
                                         !aiWorkbenchDraftEnabled ||
                                         isLocked(item) ||
-                                        applyMutation.isPending
+                                        editingBlocked
                                       }
                                       item={item}
                                       value={draft[item.key] ?? item.effectiveValue}
@@ -729,7 +778,7 @@ export function RuntimeConfigurationPage() {
                                     ) : null}
                                     {item.source === 'runtime_override' ? (
                                       <Button
-                                        disabled={!canManage || applyMutation.isPending}
+                                        disabled={!canManage || editingBlocked}
                                         icon={<UndoOutlined />}
                                         size="small"
                                         onClick={() => resetOverride(item.key)}
@@ -770,7 +819,7 @@ export function RuntimeConfigurationPage() {
                       <div className="soha-runtime-config-item__editor">
                         <Text type="secondary">新值</Text>
                         <ConfigValueEditor
-                          disabled={!canManage || isLocked(item) || applyMutation.isPending}
+                          disabled={!canManage || isLocked(item) || editingBlocked}
                           item={item}
                           value={
                             draft[item.key] ?? (item.sensitive ? undefined : item.effectiveValue)
@@ -786,7 +835,7 @@ export function RuntimeConfigurationPage() {
                         ) : null}
                         {item.source === 'runtime_override' ? (
                           <Button
-                            disabled={!canManage || applyMutation.isPending}
+                            disabled={!canManage || editingBlocked}
                             icon={<UndoOutlined />}
                             size="small"
                             onClick={() => resetOverride(item.key)}
@@ -837,9 +886,7 @@ export function RuntimeConfigurationPage() {
                                 <Checkbox
                                   aria-label="计算资源工作台"
                                   checked={computeDraftState === 'enabled'}
-                                  disabled={
-                                    !canManage || computeParentLocked || applyMutation.isPending
-                                  }
+                                  disabled={!canManage || computeParentLocked || editingBlocked}
                                   indeterminate={computeDraftState === 'partial'}
                                   onChange={(event) => {
                                     updateDraftValues(computeModuleDraft(event.target.checked))
@@ -881,9 +928,7 @@ export function RuntimeConfigurationPage() {
                                   <div className="soha-runtime-config-item__editor">
                                     <Text type="secondary">新值</Text>
                                     <ConfigValueEditor
-                                      disabled={
-                                        !canManage || isLocked(item) || applyMutation.isPending
-                                      }
+                                      disabled={!canManage || isLocked(item) || editingBlocked}
                                       item={item}
                                       value={draft[item.key] ?? item.effectiveValue}
                                       onChange={(value) => {
@@ -897,7 +942,7 @@ export function RuntimeConfigurationPage() {
                                     ) : null}
                                     {item.source === 'runtime_override' ? (
                                       <Button
-                                        disabled={!canManage || applyMutation.isPending}
+                                        disabled={!canManage || editingBlocked}
                                         icon={<UndoOutlined />}
                                         size="small"
                                         onClick={() => resetOverride(item.key)}
@@ -932,7 +977,10 @@ export function RuntimeConfigurationPage() {
   const historyView = (
     <SettingsAdminTable
       columns={historyColumns}
-      dataSource={historyQuery.data ?? []}
+      dataSource={readableQueryData(historyQuery) ?? []}
+      error={historyQuery.error}
+      hasReadData={readableQueryData(historyQuery) !== undefined}
+      onRetry={canView ? () => void historyQuery.refetch() : undefined}
       loading={historyQuery.isLoading}
       pageSize={20}
       rowKey="id"
@@ -953,10 +1001,98 @@ export function RuntimeConfigurationPage() {
         ]}
         onChange={(key) => setActiveTab(key as RuntimeConfigurationTab)}
       />
+      <Modal
+        title={`应用 ${applyReview?.changes.length ?? 0} 项配置变更？`}
+        open={!denied && Boolean(applyReview)}
+        style={{ top: 32 }}
+        styles={operationModalStyles}
+        closable={!blocked}
+        keyboard={!blocked}
+        mask={{ closable: false }}
+        cancelButtonProps={{ disabled: blocked }}
+        okButtonProps={{
+          disabled:
+            blocked || !canApply || Boolean(applyMutation.data && resultError(applyMutation.data)),
+        }}
+        confirmLoading={validateMutation.isPending || applyMutation.isPending}
+        okText="应用配置"
+        cancelText="取消"
+        onCancel={() => setApplyReview(null)}
+        onOk={() => void submitApply()}
+      >
+        <div className="soha-runtime-config-confirm">
+          <Text>系统会再次校验版本与配置。请确认生效影响：</Text>
+          <Space wrap>
+            {Object.entries(impactSummary)
+              .filter(([, count]) => count > 0)
+              .map(([mode, count]) => (
+                <MetadataTag
+                  key={mode}
+                  label={`${APPLY_MODE_LABELS[mode as RuntimeConfigApplyMode]} ${count} 项`}
+                />
+              ))}
+          </Space>
+          <p>原始配置版本 v{applyReview?.expectedVersion}</p>
+        </div>
+        {validateMutation.feedback}
+        {applyMutation.feedback}
+        {applyMutation.data ? (
+          <Button
+            onClick={() => {
+              setActiveRevision(applyMutation.data.revision)
+              setApplyReview(null)
+            }}
+          >
+            查看返回版本
+          </Button>
+        ) : null}
+      </Modal>
+      <Modal
+        title={`回滚到版本 v${rollbackReview?.revision.version ?? '-'}？`}
+        open={!denied && Boolean(rollbackReview)}
+        style={{ top: 32 }}
+        styles={operationModalStyles}
+        closable={!blocked}
+        keyboard={!blocked}
+        mask={{ closable: false }}
+        cancelButtonProps={{ disabled: blocked }}
+        okButtonProps={{
+          danger: true,
+          disabled:
+            blocked ||
+            !canRollback ||
+            Boolean(rollbackMutation.data && resultError(rollbackMutation.data)),
+        }}
+        confirmLoading={rollbackMutation.isPending}
+        okText="确认回滚"
+        cancelText="取消"
+        onCancel={() => setRollbackReview(null)}
+        onOk={() => void submitRollback()}
+      >
+        <p>回滚会创建新的配置版本，并按当前运行时规则应用。</p>
+        {rollbackMutation.feedback}
+        {rollbackMutation.data ? (
+          <Button
+            onClick={() => {
+              setActiveRevision(rollbackMutation.data.revision)
+              setRollbackReview(null)
+            }}
+          >
+            查看返回版本
+          </Button>
+        ) : null}
+      </Modal>
       <RuntimeConfigurationHistoryDrawer
-        canRollback={canRollback && activeRevision?.version !== runtimeSnapshot?.version}
+        applicationId={
+          [applyMutation.data, rollbackMutation.data].find(
+            (result) => result && result.revision.id === activeRevision?.id,
+          )?.application.id
+        }
+        canRollback={
+          canRollback && !editingBlocked && activeRevision?.version !== observedSnapshot?.version
+        }
         items={runtimeSnapshot?.items ?? []}
-        open={Boolean(activeRevision)}
+        open={!denied && !queryAccessDenied(historyQuery) && Boolean(activeRevision)}
         revision={activeRevision}
         rollingBack={rollbackMutation.isPending}
         onClose={() => setActiveRevision(null)}

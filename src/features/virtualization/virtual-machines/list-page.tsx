@@ -1,4 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { readableQueryData, writeOutcomeUnknown } from '@/utils/query-feedback'
+import { ReadFeedback } from '@/components/request-feedback'
+import { ComputeOperationFeedback, ComputeMutationFeedback } from '@/features/compute'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -7,6 +10,7 @@ import {
   AutoComplete,
   Button,
   Collapse,
+  Dropdown,
   Form,
   Input,
   InputNumber,
@@ -26,6 +30,7 @@ import {
   PoweroffOutlined,
   ReloadOutlined,
   SettingOutlined,
+  MoreOutlined,
 } from '@ant-design/icons'
 import { hasAllowedAction, hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useAIPageContext } from '@/features/copilot'
@@ -73,6 +78,7 @@ import type { VirtualMachineFormValues } from '@/features/virtualization/virtual
 import { useTaskStream } from '@/features/virtualization/use-task-stream'
 import { secretQueries, buildSecretReference } from '@/features/secrets'
 import '@/features/virtualization/virtualization-workbench.css'
+import './list-page.css'
 import type {
   VirtualMachine,
   CreateVirtualMachineInput,
@@ -107,8 +113,11 @@ type PendingCreate =
   | { kind: 'vm'; idempotencyKey: string; payload: CreateVirtualMachineInput }
   | { kind: 'runtime'; idempotencyKey: string; payload: DockerQuickCreateHostInput }
 
-function pveVMSourceRef(item: VirtualMachine) {
-  return String(item.sourceRef || item.config?.sourceRef || item.config?.vmid || '').trim()
+export function pveVMSourceRef(item: VirtualMachine) {
+  const reference = String(
+    item.externalId || item.config?.vmid || item.sourceRef || item.config?.sourceRef || '',
+  ).trim()
+  return /^[1-9]\d*$/.test(reference) ? reference : ''
 }
 
 export function defaultRootDisk(
@@ -138,6 +147,14 @@ function providerTag(provider?: string) {
   return <MetadataTag label={providerLabel(provider)} tone={provider === 'pve' ? 'gold' : 'cyan'} />
 }
 
+function vmResourceTag(value?: string, identity = value) {
+  if (!value) return <Text type="secondary">-</Text>
+  const tones = ['blue', 'cyan', 'purple', 'gold', 'orange'] as const
+  let hash = 0
+  for (const character of identity || value) hash = (hash * 31 + character.charCodeAt(0)) >>> 0
+  return <MetadataTag label={value} title={value} tone={tones[hash % tones.length]} />
+}
+
 function vmIdentity(record: VirtualMachine) {
   const hostname = virtualMachineObservation(record).hostname
   return (
@@ -149,19 +166,6 @@ function vmIdentity(record: VirtualMachine) {
         <TableCellText value={record.name} />
       </Link>
       {hostname && hostname !== record.name ? <Text type="secondary">{hostname}</Text> : null}
-    </span>
-  )
-}
-
-function vmMetadataTags(
-  values: Array<{ label: string; tone?: 'default' | 'blue' | 'cyan' | 'purple' | 'gold' }>,
-) {
-  if (values.length === 0) return <Text type="secondary">-</Text>
-  return (
-    <span className="soha-vrt-vm-tag-group">
-      {values.map((item) => (
-        <MetadataTag key={item.label} label={item.label} tone={item.tone} />
-      ))}
     </span>
   )
 }
@@ -246,6 +250,7 @@ export function VirtualizationVmsPage() {
   const cloneSourceId = searchParams.get('clone') ?? ''
   const [filterForm] = Form.useForm<VirtualizationListParams>()
   const [form] = Form.useForm<VirtualMachineFormValues>()
+  const [createFormVersion, setCreateFormVersion] = useState(0)
   const [pendingTaskId, setPendingTaskId] = useState<string | null>(null)
   const [createPlan, setCreatePlan] = useState<OperationalPlan | null>(null)
   const [pendingCreate, setPendingCreate] = useState<PendingCreate | null>(null)
@@ -255,13 +260,18 @@ export function VirtualizationVmsPage() {
   const [cloneSource, setCloneSource] = useState<VirtualMachine | null>(null)
   const [resizeStep, setResizeStep] = useState(0)
   const [resizeForm] = Form.useForm<VirtualMachineResizeFormValues>()
-  const { virtualizationModuleEnabled, canCreateVMs } = useVirtualizationPermissions()
+  // New initialValues must reach the retained form before resetting a fresh create/clone session.
+  useLayoutEffect(() => {
+    if (createFormVersion > 0) form.resetFields()
+  }, [createFormVersion, form])
+  const { virtualizationModuleEnabled, canCreateVMs, canViewVMOperations } =
+    useVirtualizationPermissions()
   const permissionSnapshotQuery = usePermissionSnapshot()
   const { moduleEnabled: dockerModuleEnabled } = useWorkbenchModuleEnabled('docker')
   const canCreateRuntimeHosts =
     dockerModuleEnabled && hasPermission(permissionSnapshotQuery.data?.data, 'docker.hosts.create')
   const queryClient = useQueryClient()
-  const { message } = App.useApp()
+  const { message, modal } = App.useApp()
   const { localeCode } = useI18n()
   const createProvider = Form.useWatch('provider', form) ?? 'kubevirt'
   const createSourceMode =
@@ -278,11 +288,11 @@ export function VirtualizationVmsPage() {
   const selectedFlavorId = Form.useWatch('flavorId', form)
   const { task: streamedTask, status: streamStatus } = useTaskStream(
     pendingTaskId,
-    virtualizationModuleEnabled,
+    virtualizationModuleEnabled && canViewVMOperations,
   )
   const { task: streamedResizeTask, status: resizeStreamStatus } = useTaskStream(
     pendingResizeTaskId,
-    virtualizationModuleEnabled,
+    virtualizationModuleEnabled && canViewVMOperations,
   )
 
   useEffect(() => {
@@ -290,7 +300,11 @@ export function VirtualizationVmsPage() {
       const success = streamedTask?.status === 'completed'
       message[success ? 'success' : 'error'](
         success
-          ? localeText(localeCode, '虚拟机创建完成', 'Virtual machine created')
+          ? localeText(
+              localeCode,
+              '虚拟机创建任务已完成，资源记录待核对',
+              'VM create task completed; verify the resource record',
+            )
           : localeText(
               localeCode,
               `虚拟机创建失败: ${streamedTask?.message ?? '未知错误'}`,
@@ -306,7 +320,11 @@ export function VirtualizationVmsPage() {
     const success = streamedResizeTask?.status === 'completed'
     message[success ? 'success' : 'error'](
       success
-        ? localeText(localeCode, '虚拟机规格调整完成', 'Virtual machine resized')
+        ? localeText(
+            localeCode,
+            '规格调整任务已完成，资源记录待核对',
+            'Resize task completed; verify the resource record',
+          )
         : localeText(
             localeCode,
             `虚拟机规格调整失败: ${streamedResizeTask?.message ?? '未知错误'}`,
@@ -346,7 +364,6 @@ export function VirtualizationVmsPage() {
       setPendingCreate({ kind: 'vm', idempotencyKey: createUUID(), payload })
       setDrawerOpen(false)
     },
-    onError: (error) => void message.error(error.message),
   })
   const runtimePlanMutation = useMutation({
     mutationFn: dockerApi.planQuickCreateHost,
@@ -355,7 +372,6 @@ export function VirtualizationVmsPage() {
       setPendingCreate({ kind: 'runtime', idempotencyKey: createUUID(), payload })
       setDrawerOpen(false)
     },
-    onError: (error) => void message.error(error.message),
   })
   const createMutation = useMutation(
     withVirtualizationMutationSuccess(
@@ -450,7 +466,7 @@ export function VirtualizationVmsPage() {
       rootDiskSizeGiB: disk.sizeGiB,
     })
   }, [discoveredDisks, resizeForm, resizeTarget])
-  const clusters = clustersQuery.data ?? []
+  const clusters = readableQueryData(clustersQuery) ?? []
   const providerOptions = useMemo(
     () =>
       Array.from(new Set(clusters.map((item) => item.provider).filter(Boolean))).map((value) => ({
@@ -461,7 +477,7 @@ export function VirtualizationVmsPage() {
   )
   const defaultProvider =
     providerOptions.find((item) => item.value === 'kubevirt')?.value ?? providerOptions[0]?.value
-  const images = normalizePage(imagesQuery.data, 1, 200).items
+  const images = normalizePage(readableQueryData(imagesQuery), 1, 200).items
   const pveCloneSources = normalizePage(pveCloneSourcesQuery.data, 1, 500).items.filter(
     (item) =>
       item.provider === 'pve' &&
@@ -469,7 +485,7 @@ export function VirtualizationVmsPage() {
       item.status !== 'deleted' &&
       pveVMSourceRef(item),
   )
-  const flavors = flavorsQuery.data ?? []
+  const flavors = readableQueryData(flavorsQuery) ?? []
   const compatibleFlavors = useMemo(
     () => filterVmCreateFlavors(flavors, createProvider, selectedConnectionId),
     [createProvider, flavors, selectedConnectionId],
@@ -596,12 +612,20 @@ export function VirtualizationVmsPage() {
   )
   const openCloneModal = useCallback(
     (source: VirtualMachine) => {
+      if (createPlanMutation.isPending || runtimePlanMutation.isPending) return
+      createPlanMutation.reset()
+      runtimePlanMutation.reset()
       setCurrentStep(0)
-      form.resetFields()
       setCloneSource(source)
+      setCreateFormVersion((version) => version + 1)
       setDrawerOpen(true)
     },
-    [form],
+    [
+      createPlanMutation.isPending,
+      createPlanMutation.reset,
+      runtimePlanMutation.isPending,
+      runtimePlanMutation.reset,
+    ],
   )
   useEffect(() => {
     const source = cloneSourceQuery.data?.vm
@@ -635,7 +659,11 @@ export function VirtualizationVmsPage() {
       ...pveBridgeOptions.map((item) => item.value),
     ]),
   ).map((value) => ({ value, label: value }))
-  const vmPage = normalizePage(vmsQuery.data, filters.page ?? 1, filters.pageSize ?? 15)
+  const vmPage = normalizePage(
+    readableQueryData(vmsQuery),
+    filters.page ?? 1,
+    filters.pageSize ?? 15,
+  )
   const selectedFlavor = compatibleFlavors.find((item) => item.id === selectedFlavorId)
   useAIPageContext({
     sourceWorkbench: 'compute',
@@ -660,94 +688,156 @@ export function VirtualizationVmsPage() {
   })
   const columns: ColumnsType<VirtualMachine> = [
     {
+      key: 'name',
       title: localeText(localeCode, '名称', 'Name'),
       dataIndex: 'name',
       fixed: 'left',
-      width: 210,
+      width: 200,
       render: (_value, record) => vmIdentity(record),
     },
     {
+      key: 'power',
+      title: localeText(localeCode, '电源', 'Power'),
+      dataIndex: 'powerState',
+      render: (_value, record) => statusTag(virtualMachineDisplayStatus(record)),
+      width: 96,
+    },
+    {
+      key: 'resources',
+      title: localeText(localeCode, '规格', 'Resources'),
+      render: (_value, record) => (
+        <div className="soha-vm-list-resources">
+          <span>
+            {record.cpu != null ? `${record.cpu} vCPU` : '-'}
+            <span className="soha-vm-list-separator"> / </span>
+            {memoryLabel(record.memoryMiB) || '-'}
+          </span>
+          <Text type="secondary">
+            {record.diskGiB != null ? `${record.diskGiB} GiB` : '-'}
+            {record.flavorName ? ` · ${record.flavorName}` : ''}
+          </Text>
+        </div>
+      ),
+      width: 168,
+    },
+    {
+      key: 'addresses',
+      title: localeText(localeCode, '地址', 'Addresses'),
+      dataIndex: 'ipAddresses',
+      render: (value: string[]) => tableTooltipText(value?.join(' · ') || '-'),
+      width: 152,
+    },
+    {
+      key: 'location',
+      title: localeText(localeCode, '命名空间/节点', 'Namespace / Node'),
+      render: (_value, record) =>
+        record.namespace || record.node ? (
+          <div className="soha-vm-list-resource-tags">
+            {record.namespace ? vmResourceTag(record.namespace) : null}
+            {record.node ? vmResourceTag(record.node) : null}
+          </div>
+        ) : (
+          <Text type="secondary">-</Text>
+        ),
+      width: 148,
+    },
+    {
+      key: 'provider',
       title: localeText(localeCode, '提供方', 'Provider'),
       dataIndex: 'provider',
       render: (value) => providerTag(value),
-      width: 90,
+      width: 88,
     },
     {
+      key: 'connection',
       title: localeText(localeCode, '连接', 'Connection'),
       dataIndex: 'connectionName',
-      render: (value, record) => tableTooltipText(value || record.connectionId || '-'),
+      render: (value, record) =>
+        vmResourceTag(
+          value ||
+            clusters.find((item) => item.id === record.connectionId)?.name ||
+            record.connectionId,
+          record.connectionId || value,
+        ),
       ellipsis: tableEllipsis,
       width: 160,
     },
     {
-      title: localeText(localeCode, '命名空间/节点', 'Namespace / Node'),
-      render: (_value, record) =>
-        vmMetadataTags([
-          ...(record.namespace ? [{ label: record.namespace, tone: 'purple' as const }] : []),
-          ...(record.node ? [{ label: record.node, tone: 'blue' as const }] : []),
-        ]),
+      key: 'image',
+      title: localeText(localeCode, '镜像', 'Image'),
+      dataIndex: 'bootImageName',
+      render: (value, record) => tableTooltipText(value || record.bootImageId || '-'),
       width: 160,
     },
     {
-      title: localeText(localeCode, '电源', 'Power'),
-      dataIndex: 'powerState',
-      render: (_value, record) => statusTag(virtualMachineDisplayStatus(record)),
-      width: 100,
-    },
-    {
-      title: localeText(localeCode, '地址', 'Addresses'),
-      dataIndex: 'ipAddresses',
-      render: (value: string[]) =>
-        vmMetadataTags([
-          ...(value ?? [])
-            .slice(0, 2)
-            .map((address) => ({ label: address, tone: 'cyan' as const })),
-          ...((value?.length ?? 0) > 2
-            ? [{ label: `+${value.length - 2}`, tone: 'default' as const }]
-            : []),
-        ]),
-      width: 200,
-    },
-    {
-      title: localeText(localeCode, '规格', 'Resources'),
-      render: (_value, record) =>
-        record.flavorName
-          ? vmMetadataTags([{ label: record.flavorName, tone: 'purple' }])
-          : vmMetadataTags([
-              ...(record.cpu ? [{ label: `${record.cpu} vCPU`, tone: 'purple' as const }] : []),
-              ...(record.memoryMiB
-                ? [{ label: memoryLabel(record.memoryMiB), tone: 'cyan' as const }]
-                : []),
-              ...(record.diskGiB
-                ? [{ label: `${record.diskGiB} GiB`, tone: 'gold' as const }]
-                : []),
-            ]),
-      width: 210,
-    },
-    {
-      title: localeText(localeCode, '镜像', 'Image'),
-      dataIndex: 'bootImageName',
-      render: (value, record) =>
-        vmMetadataTags(
-          value || record.bootImageId
-            ? [{ label: String(value || record.bootImageId), tone: 'blue' }]
-            : [],
-        ),
-      width: 200,
-    },
-    {
       ...tableColumnPresets.datetime,
+      key: 'createdAt',
       title: localeText(localeCode, '创建时间', 'Created at'),
       dataIndex: 'createdAt',
       render: formatDateTime,
     },
     {
       ...tableColumnPresets.action,
+      key: 'actions',
       title: localeText(localeCode, '操作', 'Actions'),
-      width: 156,
+      width: 104,
       render: (_value, record) => {
         const canPower = (action: string) => hasAllowedAction(record.allowedActions, action)
 
+        const menuItems = [
+          ...(canPower('restart')
+            ? [
+                {
+                  key: 'restart',
+                  icon: <ReloadOutlined aria-hidden="true" />,
+                  label: localeText(localeCode, '重启虚拟机', 'Restart virtual machine'),
+                  disabled: powerMutation.isPending || writeOutcomeUnknown(powerMutation.error),
+                  onClick: () =>
+                    modal.confirm({
+                      title: localeText(localeCode, '确认重启虚拟机？', 'Restart this VM?'),
+                      content: record.name,
+                      onOk: () => powerMutation.mutateAsync({ id: record.id, action: 'restart' }),
+                    }),
+                },
+              ]
+            : []),
+          ...(canCreateVMs && record.provider === 'pve' && pveVMSourceRef(record)
+            ? [
+                {
+                  key: 'clone',
+                  icon: <CopyOutlined aria-hidden="true" />,
+                  label: localeText(localeCode, '克隆虚拟机', 'Clone virtual machine'),
+                  onClick: () => openCloneModal(record),
+                },
+              ]
+            : []),
+          ...(canPower('resize')
+            ? [
+                {
+                  key: 'resize',
+                  icon: <SettingOutlined aria-hidden="true" />,
+                  label: localeText(localeCode, '调整虚拟机规格', 'Resize virtual machine'),
+                  onClick: () => {
+                    if (resizeMutation.isPending) return
+                    if (!writeOutcomeUnknown(resizeMutation.error)) resizeMutation.reset()
+                    setResizeTarget(record)
+                    setResizeStep(0)
+                  },
+                },
+              ]
+            : []),
+          ...(canPower('delete')
+            ? [
+                {
+                  key: 'delete',
+                  icon: <DeleteOutlined aria-hidden="true" />,
+                  label: localeText(localeCode, '删除虚拟机', 'Delete virtual machine'),
+                  danger: true,
+                  onClick: () => setDeleteTarget(record),
+                },
+              ]
+            : []),
+        ]
         return (
           <Space className="soha-row-action-icons">
             {canPower('start') ? (
@@ -756,6 +846,8 @@ export function VirtualizationVmsPage() {
                 size="small"
                 tooltip={localeText(localeCode, '启动', 'Start')}
                 icon={<PlayCircleOutlined />}
+                loading={powerMutation.isPending && powerMutation.variables?.id === record.id}
+                disabled={powerMutation.isPending || writeOutcomeUnknown(powerMutation.error)}
                 onClick={() => powerMutation.mutate({ id: record.id, action: 'start' })}
               />
             ) : null}
@@ -765,48 +857,30 @@ export function VirtualizationVmsPage() {
                 size="small"
                 tooltip={localeText(localeCode, '停止', 'Stop')}
                 icon={<PoweroffOutlined />}
-                onClick={() => powerMutation.mutate({ id: record.id, action: 'stop' })}
+                disabled={powerMutation.isPending || writeOutcomeUnknown(powerMutation.error)}
+                onClick={() =>
+                  modal.confirm({
+                    title: localeText(localeCode, '确认停止虚拟机？', 'Stop this VM?'),
+                    content: record.name,
+                    okButtonProps: { danger: true },
+                    onOk: () => powerMutation.mutateAsync({ id: record.id, action: 'stop' }),
+                  })
+                }
               />
             ) : null}
-            {canPower('restart') ? (
-              <ManagementIconButton
-                aria-label={localeText(localeCode, '重启虚拟机', 'Restart virtual machine')}
-                size="small"
-                tooltip={localeText(localeCode, '重启', 'Restart')}
-                icon={<ReloadOutlined />}
-                onClick={() => powerMutation.mutate({ id: record.id, action: 'restart' })}
-              />
-            ) : null}
-            {canCreateVMs && record.provider === 'pve' && pveVMSourceRef(record) ? (
-              <ManagementIconButton
-                aria-label={localeText(localeCode, '克隆虚拟机', 'Clone virtual machine')}
-                size="small"
-                tooltip={localeText(localeCode, '克隆', 'Clone')}
-                icon={<CopyOutlined />}
-                onClick={() => openCloneModal(record)}
-              />
-            ) : null}
-            {canPower('resize') ? (
-              <ManagementIconButton
-                aria-label={localeText(localeCode, '调整虚拟机规格', 'Resize virtual machine')}
-                size="small"
-                tooltip={localeText(localeCode, '调整规格', 'Resize')}
-                icon={<SettingOutlined />}
-                onClick={() => {
-                  setResizeTarget(record)
-                  setResizeStep(0)
-                }}
-              />
-            ) : null}
-            {canPower('delete') ? (
-              <ManagementIconButton
-                aria-label={localeText(localeCode, '删除虚拟机', 'Delete virtual machine')}
-                size="small"
-                tooltip={localeText(localeCode, '删除', 'Delete')}
-                danger
-                icon={<DeleteOutlined />}
-                onClick={() => setDeleteTarget(record)}
-              />
+            {menuItems.length ? (
+              <Dropdown trigger={['click']} menu={{ items: menuItems }} placement="bottomRight">
+                <ManagementIconButton
+                  size="small"
+                  aria-label={localeText(
+                    localeCode,
+                    `更多操作：${record.name}`,
+                    `More actions: ${record.name}`,
+                  )}
+                  tooltip={localeText(localeCode, '更多操作', 'More actions')}
+                  icon={<MoreOutlined />}
+                />
+              </Dropdown>
             ) : null}
           </Space>
         )
@@ -874,9 +948,80 @@ export function VirtualizationVmsPage() {
   return (
     <>
       <ManagementDataPage
-        className="soha-virtualization-page"
+        className="soha-virtualization-page soha-vm-resource-list"
         beforeQuery={
           <Space orientation="vertical" className="soha-vrt-fill">
+            <ReadFeedback
+              query={vmsQuery}
+              label={localeText(localeCode, '虚拟机', 'Virtual machines')}
+            />
+            <ComputeMutationFeedback
+              operations={[
+                {
+                  label: localeText(localeCode, '电源操作', 'Power operation'),
+                  mutation: powerMutation,
+                  target: powerMutation.variables?.id,
+                  receipt: {
+                    message: localeText(localeCode, '电源操作任务已提交', 'Power task submitted'),
+                    taskId: powerMutation.data?.id,
+                    domain: 'virtualization',
+                    canViewTask: canViewVMOperations,
+                  },
+                },
+                {
+                  label: localeText(localeCode, '创建虚拟机', 'Create VM'),
+                  mutation: createMutation,
+                  target: createMutation.variables?.payload.name,
+                  receipt: {
+                    message: localeText(
+                      localeCode,
+                      '虚拟机创建任务已提交',
+                      'VM create task submitted',
+                    ),
+                    taskId: createMutation.data?.id,
+                    domain: 'virtualization',
+                    canViewTask: canViewVMOperations,
+                  },
+                },
+                {
+                  label: localeText(localeCode, '创建运行时主机', 'Create runtime host'),
+                  mutation: runtimeCreateMutation,
+                  target: runtimeCreateMutation.variables?.payload.name,
+                  receipt: {
+                    message: localeText(
+                      localeCode,
+                      '运行时主机构建任务已提交',
+                      'Runtime host build task submitted',
+                    ),
+                    taskId: runtimeCreateMutation.data?.id,
+                    domain: 'container_runtime',
+                    canViewTask: hasPermission(
+                      permissionSnapshotQuery.data?.data,
+                      'docker.operations.view',
+                    ),
+                  },
+                },
+                {
+                  label: localeText(localeCode, '调整规格', 'Resize VM'),
+                  mutation: resizeMutation,
+                  target: resizeMutation.variables?.id,
+                  receipt: {
+                    message: localeText(localeCode, '调整规格任务已提交', 'Resize task submitted'),
+                    taskId: resizeMutation.data?.id,
+                    domain: 'virtualization',
+                    canViewTask: canViewVMOperations,
+                  },
+                },
+                {
+                  label: localeText(localeCode, '取消创建任务', 'Cancel create task'),
+                  mutation: cancelCreateMutation,
+                  target: cancelCreateMutation.variables,
+                  receipt: {
+                    message: localeText(localeCode, '取消请求已提交', 'Cancellation requested'),
+                  },
+                },
+              ]}
+            />
             <TaskProgressBanner
               task={streamedTask}
               status={streamStatus}
@@ -963,22 +1108,39 @@ export function VirtualizationVmsPage() {
         tableNode={
           <VirtualizationAdminTable
             rowKey="id"
+            toolbar={
+              <div className="soha-vm-list-summary">
+                {readableQueryData(vmsQuery) ? <strong>{vmPage.total}</strong> : null}
+                <span>
+                  {localeText(
+                    localeCode,
+                    Object.entries(filters).some(
+                      ([key, value]) => !['page', 'pageSize'].includes(key) && Boolean(value),
+                    )
+                      ? '匹配的虚拟机'
+                      : '虚拟机',
+                    Object.entries(filters).some(
+                      ([key, value]) => !['page', 'pageSize'].includes(key) && Boolean(value),
+                    )
+                      ? 'matching virtual machines'
+                      : 'virtual machines',
+                  )}
+                </span>
+              </div>
+            }
             actions={
               canCreateVMs ? (
                 <Button
                   type="primary"
+                  aria-label={localeText(localeCode, '创建虚拟机', 'Create virtual machine')}
                   icon={<PlusOutlined />}
                   onClick={() => {
+                    if (createPlanMutation.isPending || runtimePlanMutation.isPending) return
+                    createPlanMutation.reset()
+                    runtimePlanMutation.reset()
                     setCurrentStep(0)
-                    form.resetFields()
                     setCloneSource(null)
-                    form.setFieldValue('provider', defaultProvider)
-                    form.setFieldValue(
-                      'sourceMode',
-                      defaultProvider === 'pve' ? 'template_clone' : 'datasource_clone',
-                    )
-                    form.setFieldValue('enableCloudInit', false)
-                    form.setFieldValue('registerRuntimeHost', false)
+                    setCreateFormVersion((version) => version + 1)
                     setDrawerOpen(true)
                   }}
                 >
@@ -991,7 +1153,7 @@ export function VirtualizationVmsPage() {
             loading={vmsQuery.isLoading}
             dataSource={vmPage.items}
             columns={columns}
-            scroll={{ x: 1580 }}
+            scroll={{ x: 1410 }}
             pagination={pageTablePagination(vmPage, setFilters)}
             paginationSummary={(total, range) =>
               localeText(
@@ -1004,8 +1166,62 @@ export function VirtualizationVmsPage() {
         }
         afterTable={
           <StepFormModal
+            bodyClassName="soha-vm-form"
+            feedback={
+              <>
+                <div className="soha-vm-form-context">
+                  <CopyOutlined aria-hidden="true" />
+                  <div>
+                    <strong>
+                      {cloneSource
+                        ? localeText(localeCode, '克隆来源', 'Clone source')
+                        : localeText(localeCode, '创建计算实例', 'Create a compute instance')}
+                    </strong>
+                    <p>
+                      {cloneSource
+                        ? cloneSource.name
+                        : localeText(
+                            localeCode,
+                            '配置资源与初始化方式，提交前核对创建计划。',
+                            'Configure resources and initialization, then review the creation plan.',
+                          )}
+                    </p>
+                  </div>
+                </div>
+                <ReadFeedback
+                  query={clustersQuery}
+                  label={localeText(localeCode, '连接选项', 'Connections')}
+                />
+                <ReadFeedback
+                  query={imagesQuery}
+                  label={localeText(localeCode, '镜像选项', 'Images')}
+                />
+                <ReadFeedback
+                  query={flavorsQuery}
+                  label={localeText(localeCode, '规格选项', 'Flavors')}
+                />
+                <ComputeMutationFeedback
+                  operations={[
+                    {
+                      readOnly: true,
+                      label: localeText(localeCode, '创建预检', 'Create preflight'),
+                      mutation: createPlanMutation,
+                    },
+                    {
+                      readOnly: true,
+                      label: localeText(localeCode, '主机创建预检', 'Host preflight'),
+                      mutation: runtimePlanMutation,
+                    },
+                  ]}
+                />
+              </>
+            }
             name="virtual-machine-create"
-            title={localeText(localeCode, '创建虚拟机', 'Create virtual machine')}
+            title={localeText(
+              localeCode,
+              cloneSource ? '克隆虚拟机' : '创建虚拟机',
+              cloneSource ? 'Clone virtual machine' : 'Create virtual machine',
+            )}
             current={currentStep}
             form={form}
             loading={createPlanMutation.isPending || runtimePlanMutation.isPending}
@@ -1391,8 +1607,8 @@ export function VirtualizationVmsPage() {
                             showIcon
                             title={localeText(
                               localeCode,
-                              '模板将作为系统盘来源，存储用于承载克隆后的磁盘。',
-                              'The template supplies the system disk; storage holds the cloned disk.',
+                              '所选来源用于生成系统盘，存储用于承载新建的磁盘。',
+                              'The selected source supplies the system disk; storage holds the new disk.',
                             )}
                           />
                         )}
@@ -2021,6 +2237,32 @@ export function VirtualizationVmsPage() {
         }
       />
       <StepFormModal
+        bodyClassName="soha-vm-form"
+        feedback={
+          <>
+            <div className="soha-vm-form-context">
+              <SettingOutlined aria-hidden="true" />
+              <div>
+                <strong>{resizeTarget?.name}</strong>
+                <p>
+                  {localeText(localeCode, '当前配置', 'Current allocation')} ·{' '}
+                  {resizeTarget?.cpu ?? '-'} vCPU / {memoryLabel(resizeTarget?.memoryMiB) || '-'} /{' '}
+                  {resizeTarget?.diskGiB ?? '-'} GiB
+                </p>
+              </div>
+            </div>
+            <ReadFeedback
+              query={resizeDevicesQuery}
+              label={localeText(localeCode, '设备配置', 'Devices')}
+            />
+            <ComputeOperationFeedback
+              label={localeText(localeCode, '调整规格', 'Resize VM')}
+              pending={resizeMutation.isPending}
+              error={resizeMutation.error}
+              target={resizeMutation.error ? resizeMutation.variables?.id : resizeTarget?.name}
+            />
+          </>
+        }
         title={localeText(
           localeCode,
           `调整规格：${resizeTarget?.name ?? ''}`,

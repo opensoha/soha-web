@@ -1,4 +1,3 @@
-import { useEffect } from 'react'
 import type { FormInstance } from 'antd'
 import {
   Alert,
@@ -12,6 +11,7 @@ import {
   Select,
   Space,
 } from 'antd'
+import { useEffect, type ReactNode } from 'react'
 import type {
   AIClient,
   DrawerState,
@@ -689,6 +689,8 @@ export interface GatewayEditorDrawerProps {
   manifest?: GatewayManifest
   upstreams: LLMUpstream[]
   saving: boolean
+  disabled?: boolean
+  feedback?: ReactNode
   canTestUpstream: boolean
   testingUpstream: boolean
   onClose: () => void
@@ -704,6 +706,8 @@ export function GatewayEditorDrawer({
   manifest,
   upstreams,
   saving,
+  disabled = false,
+  feedback,
   canTestUpstream,
   testingUpstream,
   onClose,
@@ -720,23 +724,35 @@ export function GatewayEditorDrawer({
       title={drawerTitle(drawer)}
       size={560}
       open
+      closable={!disabled}
+      keyboard={!disabled}
+      mask={{ closable: !disabled }}
       onClose={onClose}
       footer={
         <Space style={{ justifyContent: 'flex-end', width: '100%' }}>
-          <Button onClick={onClose}>取消</Button>
-          <Button type="primary" loading={saving} onClick={() => form.submit()}>
+          <Button disabled={disabled} onClick={onClose}>
+            取消
+          </Button>
+          <Button disabled={disabled} type="primary" loading={saving} onClick={() => form.submit()}>
             保存
           </Button>
         </Space>
       }
     >
-      <Form form={form} layout="vertical" onFinish={onSubmit} initialValues={initialValues}>
+      {feedback}
+      <Form
+        disabled={disabled}
+        form={form}
+        layout="vertical"
+        onFinish={onSubmit}
+        initialValues={initialValues}
+      >
         {renderDrawerFields(
           drawer,
           clients,
           manifest,
           upstreams,
-          canTestUpstream,
+          canTestUpstream && !disabled,
           testingUpstream,
           onTestUpstream,
         )}

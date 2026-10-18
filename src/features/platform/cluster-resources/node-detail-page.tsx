@@ -1,13 +1,8 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
-import { App, Button, Card, Form, Input, Space, Spin, Tabs, Tag, Typography } from 'antd'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import type { TableColumnsType } from 'antd'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementDetailHeader, ManagementState } from '@/components/management-list'
-import { useAIPageContext } from '@/features/copilot'
+import { ReadFeedback } from '@/components/request-feedback'
 import { StatusTag } from '@/components/status-tag'
-import { PlatformResourceOverview } from '@/features/platform/shared/resource-overview'
+import { useAIPageContext } from '@/features/copilot'
 import {
   NodeResourcePanel,
   parseStringMap,
@@ -15,15 +10,26 @@ import {
   stringifyMap,
   stringifyTaints,
 } from '@/features/platform/node-resource-utils'
+import { PlatformResourceOverview } from '@/features/platform/shared/resource-overview'
+import {
+  platformResourceTarget,
+  usePlatformMutation,
+} from '@/features/platform/shared/use-platform-mutation'
+import '@/features/platform/styles/base.css'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
+import { readableQueryData } from '@/utils/query-feedback'
 import { formatAgeSeconds, formatDateTime } from '@/utils/time'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TableColumnsType } from 'antd'
+import { Button, Card, Form, Input, Space, Spin, Tabs, Tag, Typography } from 'antd'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useClusterCapabilityForCluster } from '../cluster-capabilities'
 import { nodeMutations } from './mutations'
 import { nodeQueries } from './queries'
 import { toClusterScope } from './scope'
 import type { NodeCondition, NodePod } from './types'
-import '@/features/platform/styles/base.css'
 
 const { Text } = Typography
 
@@ -39,7 +45,6 @@ function buildPodDetailPath(name: string, namespace: string) {
 
 export function NodeDetailPage() {
   const { localeCode, t } = useI18n()
-  const { message } = App.useApp()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { nodeName = '' } = useParams()
@@ -50,7 +55,12 @@ export function NodeDetailPage() {
   const scope = toClusterScope(clusterId)
   const [activeTab, setActiveTab] = useState('overview')
   const nodeDetailQuery = useQuery(nodeQueries.detail(scope, nodeName))
-  const updateNodeMutation = useMutation(nodeMutations.update(queryClient))
+  const visibleNodeDetailQueryData = readableQueryData(nodeDetailQuery)
+  const updateNodeMutation = usePlatformMutation(nodeMutations.update(queryClient), {
+    label: ['更新节点', 'Update node'],
+    target: platformResourceTarget,
+  })
+  const platformWriteBlocked = updateNodeMutation.blocked
   const yamlCapability = useClusterCapabilityForCluster('resource.yaml.view', localeCode, clusterId)
   const yamlAvailable = !yamlCapability.disabled && !yamlCapability.isLoading
   useAIPageContext({
@@ -68,7 +78,7 @@ export function NodeDetailPage() {
     }
   }, [requestedClusterId, scopedClusterId, setClusterId])
 
-  const nodeDetail = nodeDetailQuery.data
+  const nodeDetail = visibleNodeDetailQueryData
   const nodeFormInitValues = useMemo(() => {
     if (!nodeDetail) return { labels: '{}', taints: '[]' }
     return {
@@ -194,19 +204,17 @@ export function NodeDetailPage() {
           taints: parseTaints(values.taints),
         },
       },
-      {
-        onSuccess: () =>
-          void message.success(
-            localeCode === 'zh_CN' ? '节点配置已更新' : 'Node configuration updated',
-          ),
-        onError: (error) => void message.error(error.message),
-      },
+      {},
     )
 
   const namespaceCount = new Set((nodeDetail.pods ?? []).map((pod) => pod.namespace)).size
 
   return (
     <div className="soha-page">
+      <ReadFeedback canRead={nodeDetailQuery.isEnabled} query={nodeDetailQuery} label="节点详情" />
+
+      {updateNodeMutation.feedback}
+
       <Tabs
         activeKey={activeTab}
         destroyOnHidden
@@ -300,6 +308,7 @@ export function NodeDetailPage() {
                       layout="vertical"
                       initialValues={nodeFormInitValues}
                       onFinish={updateNode}
+                      disabled={platformWriteBlocked || Boolean(nodeDetailQuery.error)}
                     >
                       <div className="grid gap-4 xl:grid-cols-2">
                         <Form.Item name="labels" label="Labels(JSON)">

@@ -1,19 +1,27 @@
-import type { ObservabilityTraceSpan } from '@opensoha/contracts/gen/ts/sohaapi'
-import { FileSearchOutlined } from '@ant-design/icons'
-import { useMutation } from '@tanstack/react-query'
-import type { TableColumnsType } from 'antd'
-import { Form, Input, InputNumber, Typography } from 'antd'
-import { useEffect, useRef } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
-import { ManagementQueryField } from '@/components/management-list'
 import { AdminTable } from '@/components/admin-table'
-import { ManagementIconButton, ManagementState } from '@/components/management-list'
+import {
+  ManagementIconButton,
+  ManagementQueryField,
+  ManagementState,
+} from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
 import { StatusTag } from '@/components/status-tag'
 import { useAIPageContext } from '@/features/copilot'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
+import { readableQueryData } from '@/utils/query-feedback'
 import { formatDateTime } from '@/utils/time'
-import { queryTraces } from './api'
+import { FileSearchOutlined } from '@ant-design/icons'
+import type {
+  ObservabilityTraceQueryInput,
+  ObservabilityTraceSpan,
+} from '@opensoha/contracts/gen/ts/sohaapi'
+import { useQuery } from '@tanstack/react-query'
+import type { TableColumnsType } from 'antd'
+import { Form, Input, InputNumber, Typography } from 'antd'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { signalSearchParams, traceWaterfallRows } from './model'
+import { observabilitySignalQueries } from './queries'
 import { SignalQueryForm, SignalState, traceInput, type SignalFilters } from './shared'
 
 const { Text } = Typography
@@ -57,9 +65,17 @@ export function ObservabilityTracesPage({ embedded = false }: { embedded?: boole
   const requestedClusterId = searchParams.get('cluster') || clusterId
   const requestedNamespace = searchParams.get('namespace') || namespace
   const [form] = Form.useForm<SignalFilters>()
-  const traces = useMutation({ mutationFn: queryTraces })
-  const runTraces = traces.mutate
-  const autoQueryStarted = useRef(false)
+  const [request, setRequest] = useState<ObservabilityTraceQueryInput>()
+  const traces = useQuery(observabilitySignalQueries.traces(request))
+  const result = readableQueryData(traces)
+  const runTraces = useCallback(
+    (input: ObservabilityTraceQueryInput) => {
+      if (request && JSON.stringify(input) === JSON.stringify(request)) void traces.refetch()
+      else setRequest(input)
+    },
+    [request, traces.refetch],
+  )
+  const appliedSearch = useRef<string | null>(null)
   const columns: TableColumnsType<ObservabilityTraceSpan> = [
     {
       title: '开始时间',
@@ -90,6 +106,7 @@ export function ObservabilityTracesPage({ embedded = false }: { embedded?: boole
       key: 'actions',
       render: (_, span) => (
         <ManagementIconButton
+          aria-label="查看关联日志"
           icon={<FileSearchOutlined />}
           tooltip="查看关联日志"
           onClick={() => {
@@ -127,8 +144,8 @@ export function ObservabilityTracesPage({ embedded = false }: { embedded?: boole
         timeFrom: searchParams.get('from') || undefined,
         timeTo: searchParams.get('to') || undefined,
       },
-      pinnedData: traces.data
-        ? { serviceCount: traces.data.services.length, spanCount: traces.data.spans.length }
+      pinnedData: result
+        ? { serviceCount: result.services.length, spanCount: result.spans.length }
         : undefined,
       promptHint: '分析当前 Trace 的慢 Span、错误路径和关联日志，并给出可打开的证据。',
     },
@@ -136,19 +153,34 @@ export function ObservabilityTracesPage({ embedded = false }: { embedded?: boole
   )
 
   useEffect(() => {
+    const signature = searchParams.toString()
+    if (appliedSearch.current === signature) return
+    appliedSearch.current = signature
     const from = Date.parse(searchParams.get('from') ?? '')
     const to = Date.parse(searchParams.get('to') ?? '')
     if (
-      autoQueryStarted.current ||
       !searchParams.get('traceId') ||
       !Number.isFinite(from) ||
       !Number.isFinite(to) ||
       from >= to
-    )
+    ) {
+      setRequest(undefined)
       return
-    autoQueryStarted.current = true
-    runTraces(traceInput(form.getFieldsValue(true), requestedClusterId, requestedNamespace))
-  }, [form, requestedClusterId, requestedNamespace, runTraces, searchParams])
+    }
+    const values: SignalFilters = {
+      ...form.getFieldsValue(true),
+      traceId: searchParams.get('traceId') ?? undefined,
+      minDurationMs: Number(searchParams.get('minDurationMs') || 0),
+      limit: Number(searchParams.get('limit') || 100),
+      dataSourceId: searchParams.get('dataSourceId') ?? undefined,
+      service: searchParams.get('service') ?? undefined,
+      workload: searchParams.get('workload') ?? undefined,
+      timeFrom: searchParams.get('from') ?? undefined,
+      timeTo: searchParams.get('to') ?? undefined,
+    }
+    form.setFieldsValue(values)
+    setRequest(traceInput(values, requestedClusterId, requestedNamespace))
+  }, [form, requestedClusterId, requestedNamespace, searchParams])
 
   return (
     <div className={`${embedded ? '' : 'soha-page '}soha-signal-page`}>
@@ -162,23 +194,22 @@ export function ObservabilityTracesPage({ embedded = false }: { embedded?: boole
           timeFrom: searchParams.get('from') ?? undefined,
           timeTo: searchParams.get('to') ?? undefined,
         }}
-        loading={traces.isPending}
+        loading={traces.isFetching}
         submitLabel="查询链路"
         onFinish={(values) => {
           const input = traceInput(values, requestedClusterId, requestedNamespace)
-          setSearchParams(
-            signalSearchParams(searchParams, {
-              dataSourceId: input.dataSourceId,
-              cluster: requestedClusterId,
-              namespace: requestedNamespace,
-              service: values.service,
-              workload: values.workload,
-              traceId: values.traceId,
-              from: input.timeFrom,
-              to: input.timeTo,
-            }),
-            { replace: true },
-          )
+          const next = signalSearchParams(searchParams, {
+            dataSourceId: input.dataSourceId,
+            cluster: requestedClusterId,
+            namespace: requestedNamespace,
+            service: values.service,
+            workload: values.workload,
+            traceId: values.traceId,
+            from: input.timeFrom,
+            to: input.timeTo,
+          })
+          appliedSearch.current = next.toString()
+          setSearchParams(next, { replace: true })
           runTraces(input)
         }}
       >
@@ -192,23 +223,38 @@ export function ObservabilityTracesPage({ embedded = false }: { embedded?: boole
           <InputNumber min={1} max={500} style={{ width: '100%' }} />
         </ManagementQueryField>
       </SignalQueryForm>
-      <SignalState error={traces.error} idle={traces.isIdle} loading={traces.isPending} />
-      {traces.data ? (
+      <ReadFeedback label="链路查询" query={traces} />
+      {request ? (
+        <Text type="secondary">
+          查询范围：
+          {[
+            request.dataSourceId,
+            request.scope?.clusterId,
+            request.scope?.namespace,
+            request.scope?.service,
+          ]
+            .filter(Boolean)
+            .join(' / ') || '默认来源'}{' '}
+          · {formatDateTime(request.timeFrom)} — {formatDateTime(request.timeTo)}
+        </Text>
+      ) : null}
+      <SignalState error={null} idle={!request} loading={traces.isFetching && !result} />
+      {result ? (
         <AdminTable
           enableDensity
-          refreshing={traces.isPending}
+          refreshing={traces.isFetching}
           onRefresh={() => {
-            if (traces.variables) runTraces(traces.variables)
+            if (request) void traces.refetch()
           }}
           columnSettingIconOnly
           columnSettingPlacement="header"
           columns={columns}
-          dataSource={traces.data.spans}
+          dataSource={result.spans}
           empty={<ManagementState bordered={false} compact description="当前范围暂无链路" />}
           expandedRowRender={(span: ObservabilityTraceSpan) => (
             <div className="soha-trace-expanded">
               <Text code>Trace {span.traceId}</Text>
-              <TraceWaterfall spans={traces.data.spans} traceId={span.traceId} />
+              <TraceWaterfall spans={result.spans} traceId={span.traceId} />
             </div>
           )}
           pagination={false}

@@ -1,14 +1,20 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Alert, App, Col, Form, Input, InputNumber, Row, Select, Spin, Switch } from 'antd'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { StepFormModal } from '@/components/step-form-modal'
 import { OperationalPlanModal } from '@/components/operational-plan-modal'
+import { ReadFeedback } from '@/components/request-feedback'
 import type { StepFormStep } from '@/components/step-form'
-import { planResourceUpdate } from '@/features/platform/shared/resource-update-plan'
+import { StepFormModal } from '@/components/step-form-modal'
 import { KeyValueFields } from '@/features/platform/resource-creation/forms/field-sections'
+import { planResourceUpdate } from '@/features/platform/shared/resource-update-plan'
+import {
+  platformResourceTarget,
+  usePlatformMutation,
+} from '@/features/platform/shared/use-platform-mutation'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
+import { readableQueryData } from '@/utils/query-feedback'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Alert, App, Button, Col, Form, Input, InputNumber, Row, Select, Spin, Switch } from 'antd'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { parse, stringify } from 'yaml'
 import { workloadMutations } from './mutations'
 import { workloadQueries } from './queries'
@@ -156,15 +162,27 @@ export function WorkloadQuickEditModal({
   const queryClient = useQueryClient()
   const scope = toScopeKey(clusterId, namespace)
   const yamlQuery = useQuery(workloadQueries.yaml(kind, scope, name))
-  const updateMutation = useMutation(workloadMutations.updateYAML(kind, queryClient))
-  const planMutation = useMutation({ mutationFn: planResourceUpdate })
+  const visibleYamlQueryData = readableQueryData(yamlQuery)
+  const updateMutation = usePlatformMutation(workloadMutations.updateYAML(kind, queryClient), {
+    label: ['更新资源', 'Update resource'],
+    target: platformResourceTarget,
+  })
+  const platformWriteBlocked = updateMutation.blocked
+  const planMutation = usePlatformMutation(
+    { mutationFn: planResourceUpdate },
+    {
+      label: ['资源变更预检', 'Resource change preflight'],
+      target: platformResourceTarget,
+      readOnly: true,
+    },
+  )
   const [pendingContent, setPendingContent] = useState<string | null>(null)
   const [form] = Form.useForm<WorkloadQuickEditValues>()
   const [current, setCurrent] = useState(0)
   const loaded = useMemo(() => {
-    if (!yamlQuery.data) return {}
+    if (!visibleYamlQueryData) return {}
     try {
-      const manifest = parse(yamlQuery.data.content)
+      const manifest = parse(visibleYamlQueryData.content)
       return {
         manifest,
         containerNames: workloadContainerNames(manifest, kind),
@@ -173,20 +191,46 @@ export function WorkloadQuickEditModal({
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) }
     }
-  }, [kind, yamlQuery.data])
+  }, [kind, visibleYamlQueryData])
 
+  const initialized = useRef('')
+  const identity = JSON.stringify([clusterId, namespace, kind, name])
   useEffect(() => {
+    if (initialized.current === identity) return
     if (!loaded.values) return
     form.setFieldsValue(loaded.values)
+    initialized.current = identity
     setCurrent(0)
-  }, [form, loaded.values])
+  }, [form, identity, loaded.values])
 
   const title = `${localeCode === 'zh_CN' ? '编辑' : 'Edit'} ${kindLabels[kind]} · ${name}`
-  const error = yamlQuery.isError ? yamlQuery.error.message : loaded.error
+  if (updateMutation.isSuccess)
+    return (
+      <StepFormModal
+        open
+        title={title}
+        width={860}
+        onClose={onClose}
+        feedback={updateMutation.feedback}
+      >
+        <Button type="primary" onClick={onClose}>
+          {localeCode === 'zh_CN' ? '完成' : 'Done'}
+        </Button>
+      </StepFormModal>
+    )
+
+  const error = yamlQuery.isError && !visibleYamlQueryData ? yamlQuery.error.message : loaded.error
 
   if (yamlQuery.isLoading || error || !loaded.manifest || !loaded.values) {
     return (
-      <StepFormModal onClose={onClose} open title={title} width={860}>
+      <StepFormModal
+        onClose={() => {
+          if (!platformWriteBlocked) onClose?.()
+        }}
+        open
+        title={title}
+        width={860}
+      >
         {yamlQuery.isLoading ? (
           <div className="soha-resource-create-loading">
             <Spin size="large" />
@@ -240,44 +284,49 @@ export function WorkloadQuickEditModal({
         ]
 
   const clearPlan = () => {
+    if (platformWriteBlocked) return
     planMutation.reset()
     setPendingContent(null)
   }
   const applyUpdate = () => {
-    if (!pendingContent) return
+    if (!pendingContent || platformWriteBlocked || yamlQuery.isError) return
     updateMutation.mutate(
       { scope, name, content: pendingContent },
       {
         onSuccess: () => {
-          void message.success(
-            localeCode === 'zh_CN' ? `${kindLabels[kind]} 已更新` : `${kindLabels[kind]} updated`,
-          )
           clearPlan()
-          onClose()
         },
-        onError: (mutationError) => void message.error(mutationError.message),
       },
     )
   }
 
   return (
     <>
+      <ReadFeedback canRead={yamlQuery.isEnabled} query={yamlQuery} label="YAML" />
+
       <StepFormModal
+        disabled={platformWriteBlocked || Boolean(yamlQuery.error)}
+        feedback={
+          <>
+            <ReadFeedback canRead={yamlQuery.isEnabled} query={yamlQuery} label="YAML" />
+            {updateMutation.feedback}
+            {planMutation.feedback}
+          </>
+        }
         contentMaxWidth={760}
         current={current}
         form={form}
         initialValues={loaded.values}
         loading={planMutation.isPending || updateMutation.isPending}
-        onClose={onClose}
+        onClose={() => {
+          if (!platformWriteBlocked) onClose?.()
+        }}
         onCurrentChange={setCurrent}
         onFinish={(values) => {
           try {
             const content = stringify(mergeWorkloadQuickEditManifest(loaded.manifest, kind, values))
             setPendingContent(content)
-            planMutation.mutate(
-              { scope, kind: kindLabels[kind], name, content },
-              { onError: (mutationError) => void message.error(mutationError.message) },
-            )
+            planMutation.mutate({ scope, kind: kindLabels[kind], name, content }, {})
           } catch (saveError) {
             void message.error(saveError instanceof Error ? saveError.message : String(saveError))
           }
@@ -289,6 +338,14 @@ export function WorkloadQuickEditModal({
         width={860}
       />
       <OperationalPlanModal
+        disabled={platformWriteBlocked || Boolean(yamlQuery.error)}
+        feedback={
+          <>
+            <ReadFeedback canRead={yamlQuery.isEnabled} query={yamlQuery} label="YAML" />
+            {updateMutation.feedback}
+            {planMutation.feedback}
+          </>
+        }
         confirmText={localeCode === 'zh_CN' ? '确认更新' : 'Confirm update'}
         loading={updateMutation.isPending}
         onCancel={clearPlan}

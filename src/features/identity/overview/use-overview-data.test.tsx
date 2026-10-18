@@ -1,7 +1,8 @@
+import { ApiError } from '@/services/api-error'
 /** @vitest-environment jsdom */
 
-import { act } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useIdentityOverviewData } from './use-overview-data'
@@ -122,6 +123,9 @@ async function renderProbe() {
     const overview = useIdentityOverviewData()
     return (
       <div>
+        <span data-testid="applications">
+          {overview.applications.map((item) => item.name).join(',')}
+        </span>
         <span data-testid="permissions">
           {Object.entries(overview.permissions)
             .filter(([, allowed]) => allowed)
@@ -201,5 +205,25 @@ describe('useIdentityOverviewData', () => {
     expect(testState.applications).not.toHaveBeenCalled()
     expect(testState.providers).not.toHaveBeenCalled()
     expect(testState.outposts).not.toHaveBeenCalled()
+  })
+  it('keeps transient cached application reads but removes denied cache', async () => {
+    testState.permissionKeys = ['identity.applications.view']
+    testState.applications.mockResolvedValue([{ id: 'cached', name: 'Cached application' }])
+    const { container, queryClient } = await renderProbe()
+    expect(container.querySelector('[data-testid="applications"]')?.textContent).toBe(
+      'Cached application',
+    )
+    testState.applications.mockRejectedValue(
+      new ApiError(503, 'Unavailable', { method: 'GET', path: '/identity/applications' }),
+    )
+    await clickRefresh(container, queryClient)
+    expect(container.querySelector('[data-testid="applications"]')?.textContent).toBe(
+      'Cached application',
+    )
+    testState.applications.mockRejectedValue(
+      new ApiError(403, 'Denied', { method: 'GET', path: '/identity/applications' }),
+    )
+    await clickRefresh(container, queryClient)
+    expect(container.querySelector('[data-testid="applications"]')?.textContent).toBe('')
   })
 })

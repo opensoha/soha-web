@@ -1,17 +1,24 @@
-import { useState } from 'react'
-import { useLocation } from 'react-router-dom'
-import { Alert, App, Button, Drawer, Form, Modal, Popconfirm, Space, Typography } from 'antd'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { AdminTable } from '@/components/admin-table'
+import { ManagementDataPage } from '@/components/management-data-page'
+import { operationModalStyles } from '@/components/modal-styles'
+import { ReadFeedback } from '@/components/request-feedback'
+import { StatusTag } from '@/components/status-tag'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { useI18n } from '@/i18n'
+import { isApiError } from '@/services/api-error'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
 import type {
   NetworkVPNProfileConfig,
   NetworkVPNSelectionPolicyConfig,
 } from '@opensoha/contracts/gen/ts/sohaapi'
-import { ManagementDataPage } from '@/components/management-data-page'
-import { AdminTable } from '@/components/admin-table'
-import { StatusTag } from '@/components/status-tag'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
-import { useI18n } from '@/i18n'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Alert, Button, Drawer, Form, Modal, Popconfirm, Space, Typography } from 'antd'
+import { useEffect, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { TablePane } from './table-pane'
+import { formatDateTime } from '@/utils/time'
+import './styles.css'
 import {
   deleteVPNDocument,
   publishVPNDocument,
@@ -29,7 +36,6 @@ import {
   vpnPolicyDefaults,
   vpnProfileDefaults,
 } from './vpn-fields'
-
 export default function VPNDocumentsPage() {
   const { pathname } = useLocation()
   const kind = pathname.endsWith('selection-policies') ? 'selection-policies' : 'profiles'
@@ -40,7 +46,7 @@ export default function VPNDocumentsPage() {
   const can = (permission: string) => hasPermission(permissions.data?.data, permission)
   const allowed = (action: string) => can(`network_access.${key}.${action}`)
   const client = useQueryClient()
-  const { message } = App.useApp()
+
   const [editing, setEditing] = useState<VPNDocument | null | undefined>()
   const [history, setHistory] = useState<VPNDocument | null>(null)
   const [form] = Form.useForm<NetworkVPNProfileConfig & NetworkVPNSelectionPolicyConfig>()
@@ -49,22 +55,44 @@ export default function VPNDocumentsPage() {
     queryFn: () => vpnDocuments(kind),
     enabled: allowed('view'),
   })
+  const visibleQueryData = query.isEnabled === false ? undefined : readableQueryData(query)
   const revisions = useQuery({
     queryKey: vpnKeys.revisions(kind, history?.id),
     queryFn: () => vpnRevisions(kind, history!.id),
-    enabled: !!history,
+    enabled: !!history && allowed('view'),
   })
-  const mutation = useMutation({
-    mutationFn: (work: () => Promise<unknown>) => work(),
-    onSuccess: () => {
+  const visibleRevisionsData =
+    revisions.isEnabled === false ? undefined : readableQueryData(revisions)
+  const mutation = useOperationMutation(
+    {
+      mutationFn: (work: { target: string; action: string; run: () => Promise<unknown> }) =>
+        work.run(),
+      onSuccess: () => {
+        setEditing(undefined)
+        setHistory(null)
+        void client.invalidateQueries({ queryKey: vpnKeys.all })
+      },
+    },
+    {
+      label: ['VPN 配置操作', 'VPN configuration operation'],
+      target: (v) => v.action + ' / ' + v.target,
+      receipt: (_, v) => ({
+        message: v.action === '保存草稿' ? '草稿已保存，尚未发布' : v.action + '请求已返回',
+        evidence: '请核对已发布修订；终端应用结果以运行记录为准。',
+      }),
+    },
+  )
+  const operationBlocked =
+    mutation.blocked || (query.isEnabled !== false && queryAccessDenied(query))
+  useEffect(() => {
+    if ([query.error].some((error) => isApiError(error) && [401, 403].includes(error.status))) {
       setEditing(undefined)
       setHistory(null)
-      void client.invalidateQueries({ queryKey: vpnKeys.all })
-      message.success(text('已保存', 'Saved'))
-    },
-    onError: (err: Error) => message.error(err.message),
-  })
+      form.resetFields()
+    }
+  }, [query.error, form])
   const edit = (item: VPNDocument | null) => {
+    if (operationBlocked) return
     form.resetFields()
     form.setFieldsValue(
       item?.configuration || (kind === 'profiles' ? vpnProfileDefaults : vpnPolicyDefaults),
@@ -77,20 +105,14 @@ export default function VPNDocumentsPage() {
       : text('VPN Auto 策略', 'VPN Auto policies')
   return (
     <ManagementDataPage
-      header={{
-        title,
-        description: text(
-          '发布后的修订控制新连接；安全范围变更会撤销受影响会话。',
-          'Published revisions govern new connections. Security scope changes revoke affected sessions.',
-        ),
-      }}
+      className="soha-network-page"
       tableNode={
         <TablePane<VPNDocument>
-          items={query.data}
+          items={visibleQueryData}
           loading={query.isPending && allowed('view')}
-          error={query.isError}
+          error={query.isEnabled === false ? null : query.error}
           refreshing={query.isFetching}
-          onRefresh={() => void query.refetch()}
+          onRefresh={() => void (query.isEnabled === false ? undefined : query.refetch())}
           searchPlaceholder={text('搜索方案或策略', 'Search profiles or policies')}
           getSearchValues={(d) => [d.configuration.name, d.id]}
           createAction={
@@ -144,7 +166,15 @@ export default function VPNDocumentsPage() {
                         '发布此修订？安全范围变更将撤销相关会话。',
                         'Publish this revision? Security changes revoke affected sessions.',
                       )}
-                      onConfirm={() => mutation.mutate(() => publishVPNDocument(kind, d))}
+                      onConfirm={() =>
+                        mutation.mutate({
+                          target: d.id,
+                          action: '发布',
+                          run: () => publishVPNDocument(kind, d),
+                        })
+                      }
+                      okButtonProps={{ disabled: operationBlocked }}
+                      disabled={operationBlocked}
                     >
                       <Button
                         size="small"
@@ -157,7 +187,15 @@ export default function VPNDocumentsPage() {
                   {allowed('delete') ? (
                     <Popconfirm
                       title={text('删除此配置？', 'Delete this configuration?')}
-                      onConfirm={() => mutation.mutate(() => deleteVPNDocument(kind, d))}
+                      onConfirm={() =>
+                        mutation.mutate({
+                          target: d.id,
+                          action: '删除',
+                          run: () => deleteVPNDocument(kind, d),
+                        })
+                      }
+                      okButtonProps={{ disabled: operationBlocked }}
+                      disabled={operationBlocked}
                     >
                       <Button size="small" danger disabled={mutation.isPending}>
                         {text('删除', 'Delete')}
@@ -171,6 +209,18 @@ export default function VPNDocumentsPage() {
         />
       }
     >
+      <h1 className="soha-network-sr-only">{title}</h1>
+      <Typography.Paragraph type="secondary" className="soha-network-note">
+        {text(
+          '发布后的修订控制新连接；保存草稿不会直接应用到终端。安全范围变更会撤销受影响会话。',
+          'Published revisions govern new connections; drafts are not applied to endpoints. Security scope changes revoke affected sessions.',
+        )}
+      </Typography.Paragraph>
+      {!(
+        (editing !== undefined && !(query.isEnabled !== false && queryAccessDenied(query))) ||
+        (!!history && !(query.isEnabled !== false && queryAccessDenied(query)))
+      ) && <> {mutation.feedback} </>}
+
       {!allowed('view') && !permissions.isPending ? (
         <Alert
           type="warning"
@@ -179,55 +229,78 @@ export default function VPNDocumentsPage() {
         />
       ) : null}
       <Modal
+        styles={operationModalStyles}
+        style={{ top: 32 }}
         title={title}
-        open={editing !== undefined}
-        onCancel={() => setEditing(undefined)}
+        open={editing !== undefined && !(query.isEnabled !== false && queryAccessDenied(query))}
+        onCancel={() => {
+          if (!operationBlocked) (() => setEditing(undefined))()
+        }}
         confirmLoading={mutation.isPending}
         width={680}
         destroyOnHidden
         onOk={() => form.submit()}
+        closable={!operationBlocked}
+        cancelButtonProps={{ disabled: operationBlocked }}
+        okButtonProps={{ disabled: operationBlocked }}
       >
+        {mutation.feedback}
+
         <Form
           form={form}
           layout="vertical"
           preserve={false}
           onFinish={(values) =>
-            mutation.mutate(() =>
-              saveVPNDocument(kind, editing?.id, editing?.revision || 0, values),
-            )
+            mutation.mutate({
+              target: editing?.id || values.name,
+              action: '保存草稿',
+              run: () => saveVPNDocument(kind, editing?.id, editing?.revision || 0, values),
+            })
           }
+          disabled={operationBlocked}
         >
           <VPNNameField />
           {kind === 'profiles' ? <VPNProfileFields can={can} /> : <VPNPolicyFields />}
         </Form>
       </Modal>
       <Drawer
-        open={!!history}
-        onClose={() => setHistory(null)}
+        open={!!history && !(query.isEnabled !== false && queryAccessDenied(query))}
+        onClose={() => {
+          if (!operationBlocked) (() => setHistory(null))()
+        }}
         title={text('修订记录', 'Revision history')}
         size={760}
       >
-        {revisions.isError ? <Alert type="error" description={revisions.error.message} /> : null}
+        {mutation.feedback}
+
+        <ReadFeedback canRead={revisions.isEnabled} query={revisions} label="修订记录" />
+
         <AdminTable
           rowKey="revision"
           loading={revisions.isPending}
-          dataSource={revisions.data || []}
+          dataSource={visibleRevisionsData || []}
           columns={[
             { title: text('修订', 'Revision'), dataIndex: 'revision' },
             { title: text('操作者', 'Actor'), dataIndex: 'createdBy' },
-            { title: text('时间', 'Time'), dataIndex: 'createdAt' },
+            { title: text('时间', 'Time'), dataIndex: 'createdAt', render: formatDateTime },
             {
               title: text('操作', 'Action'),
               key: 'rollback',
               render: (_: unknown, r: VPNRevision) => (
                 <Button
                   disabled={
+                    operationBlocked ||
                     !allowed('publish') ||
                     mutation.isPending ||
                     r.revision === history?.publishedRevision
                   }
                   onClick={() =>
-                    history && mutation.mutate(() => publishVPNDocument(kind, history, r.revision))
+                    history &&
+                    mutation.mutate({
+                      target: history.id,
+                      action: '回滚',
+                      run: () => publishVPNDocument(kind, history, r.revision),
+                    })
                   }
                 >
                   {text('回滚为新修订', 'Restore as new revision')}

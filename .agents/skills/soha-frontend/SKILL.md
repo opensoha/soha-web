@@ -14,6 +14,9 @@ description: Implement or review soha-web React and Ant Design UI, shared tables
    Read [theme-system.md](references/theme-system.md) for styling/token ownership and
    [architecture-development.md](references/architecture-development.md) for route/data/state/CSS boundaries.
 3. Preserve the task's API, permissions, state and engine lifecycle when implementing the design.
+   For state changes, operation feedback or relationship exploration, apply
+   [interaction semantics](../soha-design/references/interaction-feedback.md) at the actual
+   API/Query owner and verify page integration, not only the shared control.
 4. Reuse or adjust mature controls for that composition. Maintenance must not grow into an
    unsolicited redesign; authorized redesign must not shrink into color/radius/spacing changes
    because an old management template exists. Follow the `antd` skill for APIs: check the installed
@@ -40,6 +43,10 @@ description: Implement or review soha-web React and Ant Design UI, shared tables
   private implementation. TanStack Query owns server state; Zustand owns persistent UI context.
 - Keep one app-level `ConfigProvider` in `src/main.tsx`; `src/theme/app-theme.ts` owns tokens.
   Shared components own reusable conventions. Explicitly scoped product pilots may compose their own layouts and select scene tokens from that same source.
+- Import generic reading/request feedback from `components/request-feedback` and cache/write
+  helpers from `utils/query-feedback`. Reuse `components/use-operation-mutation` for ordinary
+  request fences and receipts; domain adapters retain task receipts and evidence routes.
+  Reuse shared error presentation ownership instead of adding a second notification policy.
 - Separate page composition, query behavior and table behavior. Reuse `AdminTable` over Ant Design
   `Table`; choose `ManagementDataPage` only when its management-list composition fits the task.
   Use `StatusTag` for states, `MetadataTag` for categories and `BooleanTag` for boolean labels;

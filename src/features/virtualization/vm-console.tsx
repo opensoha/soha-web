@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Alert, App, Badge, Button, Card, Space, Spin } from 'antd'
-import { CopyOutlined, FullscreenOutlined, FullscreenExitOutlined } from '@ant-design/icons'
+import {
+  CopyOutlined,
+  FullscreenOutlined,
+  FullscreenExitOutlined,
+  ReloadOutlined,
+} from '@ant-design/icons'
 import RFB from '@novnc/novnc'
 import { virtualizationQueries } from './queries'
 import { ManagementState } from '@/components/management-list'
@@ -28,14 +33,32 @@ export function VMConsole({ vmId }: { vmId: string }) {
   )
   const [errorMessage, setErrorMessage] = useState<string>('')
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [requestedVmId, setRequestedVmId] = useState('')
   const containerRef = useRef<HTMLDivElement>(null)
   const { message } = App.useApp()
 
-  const consoleQuery = useQuery(virtualizationQueries.vmConsole(vmId))
+  const consoleQuery = useQuery({
+    ...virtualizationQueries.vmConsole(vmId),
+    enabled: requestedVmId !== vmId,
+    retry: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  })
+
+  useEffect(() => {
+    // VM mutations invalidate the detail key and its console child. Only explicit entry/reconnect acquires another ticket.
+    if (consoleQuery.isFetched) setRequestedVmId(vmId)
+  }, [consoleQuery.isFetched, vmId])
 
   useEffect(() => {
     const consoleData = consoleQuery.data
-    if (!consoleData || !containerRef.current || consoleData.message) {
+    if (
+      !consoleData?.ready ||
+      !containerRef.current ||
+      consoleData.message ||
+      consoleQuery.isFetching ||
+      consoleQuery.isError
+    ) {
       return
     }
 
@@ -57,11 +80,13 @@ export function VMConsole({ vmId }: { vmId: string }) {
         rfbInstance.resizeSession = true
 
         rfbInstance.addEventListener('connect', () => {
+          if (disposed) return
           setStatus('connected')
           setErrorMessage('')
         })
 
         rfbInstance.addEventListener('disconnect', (e: any) => {
+          if (disposed) return
           disconnected = true
           setStatus('disconnected')
           if (e.detail.clean === false) {
@@ -70,12 +95,14 @@ export function VMConsole({ vmId }: { vmId: string }) {
         })
 
         rfbInstance.addEventListener('securityfailure', (e: any) => {
+          if (disposed) return
           setStatus('error')
           setErrorMessage(e.detail.reason || 'Security failure')
         })
 
         setRfb(rfbInstance)
       } catch (err) {
+        if (disposed) return
         setStatus('error')
         setErrorMessage(String(err))
       }
@@ -87,7 +114,14 @@ export function VMConsole({ vmId }: { vmId: string }) {
         rfbInstance?.disconnect()
       }
     }
-  }, [consoleQuery.data, vmId])
+    // An explicit reconnect may return the same URL/token; the read timestamp still starts a new session.
+  }, [
+    consoleQuery.data,
+    consoleQuery.dataUpdatedAt,
+    consoleQuery.isFetching,
+    consoleQuery.isError,
+    vmId,
+  ])
 
   useEffect(() => {
     const handler = () => setIsFullscreen(Boolean(document.fullscreenElement))
@@ -127,44 +161,66 @@ export function VMConsole({ vmId }: { vmId: string }) {
   }
 
   if (consoleQuery.isLoading) {
-    return <Spin description="正在获取控制台信息..." />
+    return (
+      <Card size="small" className="soha-vm-console" title="VNC 控制台">
+        <Spin description="正在获取控制台信息..." />
+      </Card>
+    )
   }
 
   if (consoleQuery.error) {
     return (
-      <ManagementState
-        compact
-        kind="error"
-        title="获取控制台信息失败"
-        description={String(consoleQuery.error)}
-      />
+      <Card size="small" className="soha-vm-console" title="VNC 控制台">
+        <ManagementState
+          compact
+          kind="error"
+          title="获取控制台信息失败"
+          description={String(consoleQuery.error)}
+          actions={<Button onClick={() => void consoleQuery.refetch()}>重试获取连接信息</Button>}
+        />
+      </Card>
     )
   }
 
   const consoleData = consoleQuery.data
   if (!consoleData?.ready) {
     return (
-      <ManagementState
-        compact
-        kind="unsupported"
-        title="控制台暂不可用"
-        description={consoleData?.message || '当前 Provider 尚未提供控制台能力。'}
-      />
+      <Card size="small" className="soha-vm-console" title="VNC 控制台">
+        <ManagementState
+          compact
+          kind="unsupported"
+          title="控制台暂不可用"
+          description={consoleData?.message || '当前 Provider 尚未提供控制台能力。'}
+          actions={<Button onClick={() => void consoleQuery.refetch()}>重新检查控制台</Button>}
+        />
+      </Card>
     )
   }
 
   return (
     <Card
       size="small"
+      className="soha-vm-console"
+      classNames={{ header: 'soha-vm-console-header' }}
       title={
-        <Space>
+        <Space wrap>
           <Badge status={STATUS_BADGE[status]} />
           <span>VNC 控制台</span>
           <span className="text-xs text-[var(--soha-text-secondary)]">{STATUS_LABEL[status]}</span>
         </Space>
       }
       extra={
-        <Space>
+        <Space wrap>
+          {status === 'disconnected' || status === 'error' ? (
+            <Button
+              size="small"
+              icon={<ReloadOutlined />}
+              loading={consoleQuery.isFetching}
+              onClick={() => void consoleQuery.refetch()}
+            >
+              重新连接
+            </Button>
+          ) : null}
           <Button
             size="small"
             icon={<CopyOutlined />}

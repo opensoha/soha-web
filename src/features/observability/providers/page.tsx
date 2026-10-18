@@ -131,6 +131,7 @@ export function ObservabilityProvidersPage() {
         <AdminTable
           enableDensity
           error={providersQuery.error}
+          hasReadData={providersQuery.data !== undefined}
           refreshing={providersQuery.isFetching}
           onRefresh={() => void providersQuery.refetch()}
           columnSettingIconOnly

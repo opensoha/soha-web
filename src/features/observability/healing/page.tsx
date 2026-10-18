@@ -1,5 +1,13 @@
+import { AdminTable } from '@/components/admin-table'
+import { ManagementIconButton } from '@/components/management-list'
+import type { ReleaseDagDefinition } from '@/components/release-flow-dag-definition'
+import { BooleanTag, MetadataTag, StatusTag } from '@/components/status-tag'
 import { StepForm } from '@/components/step-form'
-import { lazy, Suspense, useCallback, useMemo, useState } from 'react'
+import { StepFormModal } from '@/components/step-form-modal'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { queryAccessDenied } from '@/utils/query-feedback'
+import { formatDateTime } from '@/utils/time'
 import {
   CheckOutlined,
   CloseOutlined,
@@ -7,16 +15,10 @@ import {
   PlusOutlined,
   ReloadOutlined,
 } from '@ant-design/icons'
-import { App, Button, Card, Form, Input, InputNumber, Select, Space, Switch, Tabs } from 'antd'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { TableProps } from 'antd'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { ReleaseDagDefinition } from '@/components/release-flow-dag-definition'
-import { StepFormModal } from '@/components/step-form-modal'
-import { AdminTable } from '@/components/admin-table'
-import { ManagementIconButton } from '@/components/management-list'
-import { BooleanTag, MetadataTag, StatusTag } from '@/components/status-tag'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
-import { formatDateTime } from '@/utils/time'
+import { App, Button, Card, Form, Input, InputNumber, Select, Space, Switch, Tabs } from 'antd'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import '../observability-pages.css'
 import { buildHealingPolicyPayload } from './model'
 import { observabilityHealingMutations } from './mutations'
@@ -42,29 +44,70 @@ export function HealingPage() {
   const [definition, setDefinition] = useState<ReleaseDagDefinition>()
   const policiesQuery = useQuery(observabilityHealingQueries.policies())
   const runsQuery = useQuery(observabilityHealingQueries.runs())
-  const mutationError = (error: Error) => message.error(error.message)
-  const createMutation = useMutation({
-    ...observabilityHealingMutations.createPolicy(queryClient),
-    onError: mutationError,
+  const createMutation = useOperationMutation(
+    observabilityHealingMutations.createPolicy(queryClient),
+    {
+      label: ['创建自愈策略', 'Create healing policy'],
+      target: (input) => input.name,
+      receipt: () => ({ message: '自愈策略记录已创建' }),
+    },
+  )
+  const updateMutation = useOperationMutation(
+    observabilityHealingMutations.updatePolicy(queryClient),
+    {
+      label: ['更新自愈策略', 'Update healing policy'],
+      target: ({ id }) => id,
+      receipt: () => ({ message: '自愈策略记录已更新' }),
+    },
+  )
+  const approveMutation = useOperationMutation(
+    observabilityHealingMutations.approveRun(queryClient),
+    {
+      label: ['审批自愈运行', 'Approve healing run'],
+      target: ({ id }) => id,
+      receipt: () => ({ message: '审批请求已返回，请核对运行记录。' }),
+    },
+  )
+  const rejectMutation = useOperationMutation(
+    observabilityHealingMutations.rejectRun(queryClient),
+    {
+      label: ['拒绝自愈运行', 'Reject healing run'],
+      target: ({ id }) => id,
+      receipt: () => ({ message: '拒绝请求已返回，请核对运行记录。' }),
+    },
+  )
+  const retryMutation = useOperationMutation(observabilityHealingMutations.retryRun(queryClient), {
+    label: ['重试自愈运行', 'Retry healing run'],
+    target: (id) => id,
+    receipt: () => ({ message: '重试请求已返回，请核对运行记录。' }),
   })
-  const updateMutation = useMutation({
-    ...observabilityHealingMutations.updatePolicy(queryClient),
-    onError: mutationError,
-  })
-  const approveMutation = useMutation({
-    ...observabilityHealingMutations.approveRun(queryClient),
-    onError: mutationError,
-  })
-  const rejectMutation = useMutation({
-    ...observabilityHealingMutations.rejectRun(queryClient),
-    onError: mutationError,
-  })
-  const retryMutation = useMutation({
-    ...observabilityHealingMutations.retryRun(queryClient),
-    onError: mutationError,
-  })
-
+  const denied = queryAccessDenied(policiesQuery)
+  const writeBlocked = createMutation.blocked || updateMutation.blocked
+  const runBlocked =
+    approveMutation.blocked ||
+    rejectMutation.blocked ||
+    retryMutation.blocked ||
+    queryAccessDenied(runsQuery)
+  function closeEditor() {
+    if (writeBlocked) return
+    setOpen(false)
+    setEditing(null)
+    setDefinition(undefined)
+    form.resetFields()
+  }
+  useEffect(() => {
+    if (denied || queryAccessDenied(createMutation) || queryAccessDenied(updateMutation)) {
+      setOpen(false)
+      setEditing(null)
+      setDefinition(undefined)
+      form.resetFields()
+    }
+  }, [denied, createMutation.error, updateMutation.error, form])
   function openEditor(record: HealingPolicy | null) {
+    if (writeBlocked || denied) return
+    createMutation.reset()
+    updateMutation.reset()
+    form.resetFields()
     setStep(0)
     setEditing(record)
     setOpen(true)
@@ -94,15 +137,17 @@ export function HealingPage() {
   }
 
   function submit(values: HealingPolicyFormValues) {
+    if (writeBlocked || denied || !(editing ? canUpdateHealing : canCreateHealing)) return
     if (!definition) {
       message.warning('自愈 DAG 尚未加载完成')
       return
     }
     const payload = buildHealingPolicyPayload(values, definition)
     const onSuccess = () => {
-      message.success(editing ? '自愈策略已更新' : '自愈策略已保存')
       setOpen(false)
       setEditing(null)
+      setDefinition(undefined)
+      form.resetFields()
     }
     if (editing) updateMutation.mutate({ id: editing.id, payload }, { onSuccess })
     else createMutation.mutate(payload, { onSuccess })
@@ -154,12 +199,9 @@ export function HealingPage() {
               <Button
                 size="small"
                 icon={<CheckOutlined />}
-                disabled={['completed', 'rejected'].includes(record.status)}
+                disabled={runBlocked || ['completed', 'rejected'].includes(record.status)}
                 onClick={() =>
-                  approveMutation.mutate(
-                    { id: value, comment: 'approved from console' },
-                    { onSuccess: () => message.success('已审批通过') },
-                  )
+                  approveMutation.mutate({ id: value, comment: 'approved from console' })
                 }
               >
                 通过
@@ -169,12 +211,9 @@ export function HealingPage() {
               <Button
                 size="small"
                 icon={<CloseOutlined />}
-                disabled={['completed', 'rejected'].includes(record.status)}
+                disabled={runBlocked || ['completed', 'rejected'].includes(record.status)}
                 onClick={() =>
-                  rejectMutation.mutate(
-                    { id: value, comment: 'rejected from console' },
-                    { onSuccess: () => message.success('已拒绝') },
-                  )
+                  rejectMutation.mutate({ id: value, comment: 'rejected from console' })
                 }
               >
                 拒绝
@@ -183,12 +222,9 @@ export function HealingPage() {
             {canRetryHealing ? (
               <Button
                 size="small"
+                disabled={runBlocked}
                 icon={<ReloadOutlined />}
-                onClick={() =>
-                  retryMutation.mutate(value, {
-                    onSuccess: () => message.success('已重试'),
-                  })
-                }
+                onClick={() => retryMutation.mutate(value)}
               >
                 重试
               </Button>
@@ -202,7 +238,7 @@ export function HealingPage() {
       canApproveHealing,
       canRejectHealing,
       canRetryHealing,
-      message,
+      runBlocked,
       rejectMutation,
       retryMutation,
     ],
@@ -236,6 +272,7 @@ export function HealingPage() {
         canUpdateHealing ? (
           <ManagementIconButton
             aria-label="编辑自愈策略"
+            disabled={writeBlocked || denied}
             size="small"
             tooltip="编辑"
             icon={<EditOutlined />}
@@ -247,6 +284,15 @@ export function HealingPage() {
 
   return (
     <div className="soha-page">
+      {!open ? (
+        <>
+          {createMutation.feedback}
+          {updateMutation.feedback}
+        </>
+      ) : null}
+      {approveMutation.feedback}
+      {rejectMutation.feedback}
+      {retryMutation.feedback}
       <h1 className="soha-observability-page-heading">自愈中心</h1>
       <Tabs
         className="soha-resource-tabs"
@@ -259,13 +305,19 @@ export function HealingPage() {
               <AdminTable
                 enableDensity
                 error={policiesQuery.error}
+                hasReadData={policiesQuery.data !== undefined}
                 refreshing={policiesQuery.isFetching}
                 onRefresh={() => void policiesQuery.refetch()}
                 columnSettingPlacement="header"
                 columnSettingIconOnly
                 headerExtra={
                   canCreateHealing ? (
-                    <Button icon={<PlusOutlined />} type="primary" onClick={() => openEditor(null)}>
+                    <Button
+                      disabled={writeBlocked || denied}
+                      icon={<PlusOutlined />}
+                      type="primary"
+                      onClick={() => openEditor(null)}
+                    >
                       新建自愈策略
                     </Button>
                   ) : null
@@ -285,6 +337,7 @@ export function HealingPage() {
               <AdminTable
                 enableDensity
                 error={runsQuery.error}
+                hasReadData={runsQuery.data !== undefined}
                 refreshing={runsQuery.isFetching}
                 onRefresh={() => void runsQuery.refetch()}
                 columnSettingPlacement="header"
@@ -303,19 +356,21 @@ export function HealingPage() {
 
       <StepFormModal
         title={editing ? '编辑自愈策略' : '新建自愈策略'}
-        open={open}
-        onClose={() => {
-          setOpen(false)
-          setEditing(null)
-        }}
+        open={open && !denied}
+        closeDisabled={writeBlocked}
+        feedback={
+          <>
+            {createMutation.feedback}
+            {updateMutation.feedback}
+          </>
+        }
+        onClose={closeEditor}
         width={step === 2 ? 1180 : 760}
       >
         <StepForm
-          onCancel={() => {
-            setOpen(false)
-            setEditing(null)
-          }}
+          onCancel={closeEditor}
           contentMaxWidth="100%"
+          disabled={writeBlocked || denied}
           form={form}
           current={step}
           onCurrentChange={setStep}
@@ -380,6 +435,7 @@ export function HealingPage() {
                   <>
                     <Suspense fallback={<Card loading variant="borderless" />}>
                       <HealingDagEditor
+                        disabled={writeBlocked}
                         initialDefinition={definition}
                         onChange={updateDefinition}
                       />

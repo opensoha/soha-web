@@ -29,7 +29,9 @@ describe('runtimeConfigurationQueries', () => {
 
     expect(options.queryKey).toEqual(runtimeConfigurationKeys.resources())
     expect(options.enabled).toBe(true)
-    expect(options.refetchInterval).toBe(5_000)
+    const interval = options.refetchInterval as (query: unknown) => number | false
+    expect(interval({ state: { status: 'success' } })).toBe(5_000)
+    expect(interval({ state: { status: 'error' } })).toBe(false)
     await expect(executeQuery(options)).resolves.toMatchObject({ uptimeSeconds: 12 })
     expect(runtimeConfigurationQueries.resources(false).enabled).toBe(false)
   })
@@ -38,6 +40,11 @@ describe('runtimeConfigurationQueries', () => {
     const options = runtimeConfigurationQueries.application('application-1')
     const interval = options.refetchInterval
     expect(typeof interval).toBe('function')
+    expect(
+      (interval as (query: unknown) => number | false)({
+        state: { status: 'error', data: { status: 'pending' } },
+      }),
+    ).toBe(false)
     expect(
       (interval as (query: unknown) => number | false)({ state: { data: { status: 'applying' } } }),
     ).toBe(1_000)

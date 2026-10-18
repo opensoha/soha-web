@@ -1,23 +1,15 @@
-import { useEffect, useState } from 'react'
-import {
-  Alert,
-  App as AntdApp,
-  Button,
-  Form,
-  Input,
-  InputNumber,
-  Segmented,
-  Select,
-  Space,
-  Switch,
-} from 'antd'
-import { LinkOutlined, ThunderboltOutlined } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ManagementState } from '@/components/management-list'
-import { StepFormModal } from '@/components/step-form-modal'
+import { ReadFeedback } from '@/components/request-feedback'
 import type { StepFormStep } from '@/components/step-form'
+import { StepFormModal } from '@/components/step-form-modal'
+import { useOperationMutation } from '@/components/use-operation-mutation'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import { LinkOutlined, ThunderboltOutlined } from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Alert, Button, Form, Input, InputNumber, Segmented, Select, Space, Switch } from 'antd'
+import { useEffect, useRef, useState } from 'react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   createGitLabIntegration,
   gitLabFormValues,
@@ -28,13 +20,13 @@ import { systemIntegrationMutations } from './mutations'
 import { systemIntegrationQueries } from './queries'
 import { SourceConnectionsPage } from './source-list-page'
 import './styles.css'
+import type { SystemIntegration } from './types'
 
 type SourceConnectionFormValues = GitLabFormValues & {
   providerType: 'gitlab'
 }
 
 export function SourceConnectionDetailPage() {
-  const { message } = AntdApp.useApp()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const params = useParams<{ integrationId: string }>()
@@ -42,37 +34,66 @@ export function SourceConnectionDetailPage() {
   const integrationId = params.integrationId ?? ''
   const isNew = !params.integrationId || integrationId === 'new'
   const permissionQuery = usePermissionSnapshot()
-  const permissionSnapshot = permissionQuery.data?.data
+  const permissionSnapshot = readableQueryData(permissionQuery)?.data
   const canView = hasPermission(permissionSnapshot, 'settings.system-integrations.view')
   const canCreate = hasPermission(permissionSnapshot, 'settings.system-integrations.create')
   const canUpdate = hasPermission(permissionSnapshot, 'settings.system-integrations.update')
   const canTest = hasPermission(permissionSnapshot, 'settings.system-integrations.test')
   const canSave = isNew ? canCreate : canUpdate
   const detailQuery = useQuery(systemIntegrationQueries.detail(integrationId, canView && !isNew))
-  const createMutation = useMutation(systemIntegrationMutations.create(queryClient))
-  const updateMutation = useMutation(systemIntegrationMutations.update(queryClient))
-  const testMutation = useMutation(systemIntegrationMutations.test(queryClient))
-  const authorizeOAuthMutation = useMutation(systemIntegrationMutations.authorizeOAuth())
+  const createMutation = useOperationMutation(systemIntegrationMutations.create(queryClient), {
+    label: ['创建代码源连接', '创建代码源连接'],
+    target: (v) => v.name,
+  })
+  const updateMutation = useOperationMutation(systemIntegrationMutations.update(queryClient), {
+    label: ['保存代码源连接', '保存代码源连接'],
+    target: (v) => v.id,
+  })
+  const testMutation = useOperationMutation(systemIntegrationMutations.test(queryClient), {
+    label: ['测试代码源连接', '测试代码源连接'],
+    target: (id) => id,
+    readOnly: true,
+    resultError: (r) =>
+      r.status === 'failed' ? new Error(r.message || '连接测试失败') : undefined,
+    receipt: (r) => ({ message: r.message || '连接测试已返回' }),
+  })
+  const authorizeOAuthMutation = useOperationMutation(systemIntegrationMutations.authorizeOAuth(), {
+    label: ['获取 OAuth 授权入口', '获取 OAuth 授权入口'],
+    target: (id) => id,
+  })
   const [form] = Form.useForm<SourceConnectionFormValues>()
   const [currentStep, setCurrentStep] = useState(() => (isNew ? 0 : 1))
+  const detail = canView ? readableQueryData(detailQuery) : undefined
+  const [baseIntegration, setBaseIntegration] = useState<SystemIntegration>()
+  const initialized = useRef('')
+  const denied =
+    !canView ||
+    queryAccessDenied(detailQuery) ||
+    [createMutation, updateMutation, authorizeOAuthMutation].some(queryAccessDenied)
+  const blocked =
+    denied ||
+    [createMutation, updateMutation, testMutation, authorizeOAuthMutation].some((m) => m.blocked)
   const saving = createMutation.isPending || updateMutation.isPending
   const providerType = Form.useWatch('providerType', form) ?? 'gitlab'
   const authMode = Form.useWatch('authMode', form) ?? 'access_token'
-  const configuredAuthMode = detailQuery.data?.configuration.find(
-    (field) => field.key === 'auth_mode',
-  )?.value
+  const configuredAuthMode = detail?.configuration.find((field) => field.key === 'auth_mode')?.value
   const oauthMode = configuredAuthMode === 'oauth'
-  const connectionReady = detailQuery.data?.credentialKeys.includes(
-    oauthMode ? 'access_token' : 'token',
-  )
+  const connectionReady = detail?.credentialKeys.includes(oauthMode ? 'access_token' : 'token')
 
   useEffect(() => {
-    if (isNew) {
-      form.setFieldsValue({ providerType: 'gitlab', ...gitLabFormValues() })
-    } else if (detailQuery.data) {
-      form.setFieldsValue({ providerType: 'gitlab', ...gitLabFormValues(detailQuery.data) })
+    if (denied) {
+      initialized.current = ''
+      form.resetFields()
+      setBaseIntegration(undefined)
+      return
     }
-  }, [detailQuery.data, form, isNew])
+    const key = isNew ? 'new' : integrationId
+    if (initialized.current === key || (!isNew && !detail)) return
+    initialized.current = key
+    form.resetFields()
+    form.setFieldsValue({ providerType: 'gitlab', ...gitLabFormValues(detail) })
+    setBaseIntegration(detail)
+  }, [detail, form, isNew, integrationId, denied])
 
   if (!permissionQuery.isLoading && !canView) {
     return (
@@ -91,26 +112,24 @@ export function SourceConnectionDetailPage() {
   }
 
   const save = (values: SourceConnectionFormValues) => {
-    if (!canSave) return
+    if (!canSave || blocked) return
     if (isNew) {
       createMutation.mutate(createGitLabIntegration(values), {
         onSuccess: () => {
-          void message.success('GitLab 连接已创建')
-          navigate('/settings/source-control')
+          form.resetFields()
+          navigate('/settings/source-control', { state: { savedSource: values.name } })
         },
-        onError: (error) => void message.error(error.message),
       })
       return
     }
-    if (!detailQuery.data) return
+    if (!baseIntegration) return
     updateMutation.mutate(
-      { id: detailQuery.data.id, values: updateGitLabIntegration(detailQuery.data, values) },
+      { id: baseIntegration.id, values: updateGitLabIntegration(baseIntegration, values) },
       {
         onSuccess: () => {
-          void message.success('GitLab 连接已保存')
-          navigate('/settings/source-control')
+          form.resetFields()
+          navigate('/settings/source-control', { state: { savedSource: values.name } })
         },
-        onError: (error) => void message.error(error.message),
       },
     )
   }
@@ -127,7 +146,7 @@ export function SourceConnectionDetailPage() {
             rules={[{ required: true, message: '请选择 Git Provider' }]}
           >
             <Select
-              disabled={!isNew}
+              disabled={!isNew || blocked}
               options={[{ label: 'GitLab', value: 'gitlab' }]}
               placeholder="选择 Git Provider"
             />
@@ -155,37 +174,27 @@ export function SourceConnectionDetailPage() {
               title="GitLab OAuth 授权失败，请重新授权"
             />
           ) : null}
-          {!isNew && detailQuery.data ? (
+          {!isNew && detail ? (
             <div className="soha-system-integration-tools">
               <Space wrap>
                 <Button
-                  disabled={!canTest || !detailQuery.data.enabled || !connectionReady}
+                  disabled={blocked || !canTest || !detail.enabled || !connectionReady}
                   icon={<ThunderboltOutlined />}
                   loading={testMutation.isPending}
-                  onClick={() =>
-                    testMutation.mutate(detailQuery.data!.id, {
-                      onSuccess: (result) =>
-                        void message[result.status === 'succeeded' ? 'success' : 'error'](
-                          result.message ||
-                            (result.status === 'succeeded' ? '连接测试成功' : '连接测试失败'),
-                        ),
-                      onError: (error) => void message.error(error.message),
-                    })
-                  }
+                  onClick={() => testMutation.mutate(detail!.id)}
                 >
                   测试连接
                 </Button>
                 {oauthMode ? (
                   <Button
                     disabled={
-                      !canUpdate || !detailQuery.data.credentialKeys.includes('client_secret')
+                      blocked || !canUpdate || !detail.credentialKeys.includes('client_secret')
                     }
                     icon={<LinkOutlined />}
                     loading={authorizeOAuthMutation.isPending}
                     onClick={() =>
-                      authorizeOAuthMutation.mutate(detailQuery.data!.id, {
+                      authorizeOAuthMutation.mutate(detail!.id, {
                         onSuccess: (result) => window.location.assign(result.authorizationUrl),
-                        onError: (error) => void message.error(error.message),
                       })
                     }
                   >
@@ -213,6 +222,7 @@ export function SourceConnectionDetailPage() {
                 rules={[{ required: true, message: '请选择认证方式' }]}
               >
                 <Segmented
+                  disabled={blocked || !canSave}
                   block
                   options={[
                     { label: 'Access Token', value: 'access_token' },
@@ -251,7 +261,7 @@ export function SourceConnectionDetailPage() {
                 <Form.Item
                   name="token"
                   label={
-                    detailQuery.data?.credentialKeys.includes('token')
+                    detail?.credentialKeys.includes('token')
                       ? '访问令牌（已配置，留空保持不变）'
                       : '访问令牌'
                   }
@@ -271,12 +281,12 @@ export function SourceConnectionDetailPage() {
                   <Form.Item
                     name="clientSecret"
                     label={
-                      detailQuery.data?.credentialKeys.includes('client_secret')
+                      detail?.credentialKeys.includes('client_secret')
                         ? 'Application Secret（已配置，留空保持不变）'
                         : 'Application Secret'
                     }
                     rules={
-                      isNew || !detailQuery.data?.credentialKeys.includes('client_secret')
+                      isNew || !detail?.credentialKeys.includes('client_secret')
                         ? [{ required: true, message: '请输入 GitLab Application Secret' }]
                         : undefined
                     }
@@ -336,7 +346,7 @@ export function SourceConnectionDetailPage() {
                 <Form.Item
                   name="privateKey"
                   label={
-                    detailQuery.data?.credentialKeys.includes('private_key')
+                    detail?.credentialKeys.includes('private_key')
                       ? 'SSH 私钥（已配置，留空保持不变）'
                       : 'SSH 私钥'
                   }
@@ -346,7 +356,7 @@ export function SourceConnectionDetailPage() {
                 <Form.Item
                   name="knownHosts"
                   label={
-                    detailQuery.data?.credentialKeys.includes('known_hosts')
+                    detail?.credentialKeys.includes('known_hosts')
                       ? 'SSH known_hosts（已配置，留空保持不变）'
                       : 'SSH known_hosts'
                   }
@@ -365,14 +375,50 @@ export function SourceConnectionDetailPage() {
   return (
     <>
       <SourceConnectionsPage />
+      {denied && canView ? (
+        <div className="soha-page">
+          {createMutation.feedback}
+          {updateMutation.feedback}
+          {authorizeOAuthMutation.feedback}
+          <ReadFeedback query={detailQuery} label="代码源连接" />
+          <Button onClick={() => navigate('/settings/source-control')}>返回代码源连接</Button>
+        </div>
+      ) : null}
       <StepFormModal
+        closeDisabled={blocked}
         contentMaxWidth={820}
         current={currentStep}
-        disabled={!canSave || saving}
+        disabled={!canSave || blocked || (!isNew && !baseIntegration)}
+        feedback={
+          <>
+            {!isNew ? (
+              <Button
+                size="small"
+                aria-label="刷新当前代码源连接"
+                loading={detailQuery.isFetching}
+                onClick={() => void detailQuery.refetch()}
+              >
+                刷新记录
+              </Button>
+            ) : null}
+            <ReadFeedback query={detailQuery} label="代码源连接" canRead={canView && !isNew} />
+            {createMutation.feedback}
+            {updateMutation.feedback}
+            {testMutation.feedback}
+            {authorizeOAuthMutation.feedback}
+            {baseIntegration && detail && baseIntegration.version !== detail.version ? (
+              <Alert
+                type="warning"
+                showIcon
+                title="连接记录已更新，保留当前草稿及原始版本；保存时由服务端检查冲突。"
+              />
+            ) : null}
+          </>
+        }
         form={form}
         initialValues={{ providerType: 'gitlab', ...gitLabFormValues() }}
         loading={saving}
-        open
+        open={!denied}
         steps={steps}
         submitText="保存"
         title={isNew ? '新增 Git' : '编辑 Git 连接'}

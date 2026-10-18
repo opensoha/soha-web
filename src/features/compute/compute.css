@@ -2,6 +2,50 @@
   display: grid;
 }
 
+.soha-compute-relations {
+  min-width: 0;
+}
+.soha-compute-relations-toolbar,
+.soha-compute-relation-nodes {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.soha-compute-relations-toolbar {
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.soha-compute-relations-search {
+  width: 240px;
+  max-width: 100%;
+}
+.soha-compute-relation-nodes {
+  margin-block: 16px;
+}
+.soha-compute-relation-nodes button {
+  max-width: 100%;
+  height: auto;
+  min-height: 24px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.soha-compute-relation-selected {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: var(--soha-radius-control);
+  background: var(--soha-bg-surface-muted);
+  overflow-wrap: anywhere;
+}
+.soha-compute-relation-row.is-selected {
+  border-color: var(--soha-primary);
+  background: var(--soha-bg-surface-muted);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .soha-compute-relations .soha-compute-relation-row {
+    transition: background-color var(--soha-motion-duration-mid) var(--soha-motion-ease);
+  }
+}
 .soha-compute-page:not(.soha-overview-page) {
   gap: 16px;
 }
@@ -258,8 +302,8 @@
   color: inherit;
   text-decoration: none;
   transition:
-    border-color 0.2s ease,
-    background-color 0.2s ease;
+    border-color var(--soha-motion-duration-mid) var(--soha-motion-ease),
+    background-color var(--soha-motion-duration-mid) var(--soha-motion-ease);
 }
 
 .soha-compute-overview-link-row:hover {
@@ -502,4 +546,9 @@
 
 .soha-compute-provider-actions {
   justify-self: end;
+}
+
+.soha-operation-feedback,
+.soha-compute-relation-selected {
+  overflow-wrap: anywhere;
 }

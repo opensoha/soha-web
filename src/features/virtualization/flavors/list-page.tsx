@@ -1,3 +1,6 @@
+import { readableQueryData, writeOutcomeUnknown } from '@/utils/query-feedback'
+import { ReadFeedback } from '@/components/request-feedback'
+import { ComputeOperationFeedback, ComputeMutationFeedback } from '@/features/compute'
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -67,7 +70,7 @@ export function VirtualizationFlavorsPage() {
   const { message } = App.useApp()
   const { localeCode } = useI18n()
   const flavorsQuery = useQuery(virtualizationQueries.flavors(virtualizationModuleEnabled))
-  const flavors = flavorsQuery.data ?? []
+  const flavors = readableQueryData(flavorsQuery) ?? []
   const textFilteredFlavors = useManagementTextFilter(
     flavors,
     flavorFilters.search ?? '',
@@ -101,6 +104,9 @@ export function VirtualizationFlavorsPage() {
   )
   const savePending = createMutation.isPending || updateMutation.isPending
   function openEditor(record?: VirtualizationFlavor) {
+    if (savePending) return
+    if (!writeOutcomeUnknown(createMutation.error)) createMutation.reset()
+    if (!writeOutcomeUnknown(updateMutation.error)) updateMutation.reset()
     setEditing(record ?? null)
     form.resetFields()
     form.setFieldsValue(record ?? { enabled: true })
@@ -177,6 +183,39 @@ export function VirtualizationFlavorsPage() {
   return (
     <ManagementDataPage
       className="soha-virtualization-page"
+      beforeQuery={
+        <>
+          <ReadFeedback query={flavorsQuery} label={localeText(localeCode, '规格', 'Flavors')} />
+          <ComputeMutationFeedback
+            operations={[
+              {
+                label: localeText(localeCode, '新增规格', 'Create flavor'),
+                mutation: createMutation,
+                target: createMutation.variables?.name,
+                receipt: {
+                  message: localeText(localeCode, '规格记录已保存', 'Flavor record saved'),
+                },
+              },
+              {
+                label: localeText(localeCode, '更新规格', 'Update flavor'),
+                mutation: updateMutation,
+                target: updateMutation.variables?.id,
+                receipt: {
+                  message: localeText(localeCode, '规格记录已保存', 'Flavor record saved'),
+                },
+              },
+              {
+                label: localeText(localeCode, '删除规格', 'Delete flavor'),
+                mutation: deleteMutation,
+                target: deleteMutation.variables,
+                receipt: {
+                  message: localeText(localeCode, '规格记录已删除', 'Flavor record deleted'),
+                },
+              },
+            ]}
+          />
+        </>
+      }
       query={{
         actions: (
           <ManagementQueryActions
@@ -227,6 +266,11 @@ export function VirtualizationFlavorsPage() {
       tableNode={
         <VirtualizationAdminTable
           rowKey="id"
+          empty={
+            flavorsQuery.isError
+              ? localeText(localeCode, '数据读取失败，请先重试', 'Read failed; retry first')
+              : undefined
+          }
           actions={
             canCreateFlavors ? (
               <Button type="primary" icon={<PlusOutlined />} onClick={() => openEditor()}>
@@ -255,7 +299,9 @@ export function VirtualizationFlavorsPage() {
               : localeText(localeCode, '新增规格', 'Add flavor')
           }
           open={drawerOpen}
-          onCancel={() => setDrawerOpen(false)}
+          onCancel={() => {
+            if (!savePending) setDrawerOpen(false)
+          }}
           onOk={() => form.submit()}
           confirmLoading={savePending}
           okText={localeText(localeCode, '保存', 'Save')}
@@ -266,6 +312,14 @@ export function VirtualizationFlavorsPage() {
           style={{ top: 32 }}
           styles={{ body: { ...scrollableModalBodyStyle, maxHeight: 'calc(100dvh - 180px)' } }}
         >
+          <ComputeOperationFeedback
+            label={localeText(localeCode, '保存规格', 'Save record')}
+            pending={createMutation.isPending || updateMutation.isPending}
+            error={updateMutation.error || createMutation.error}
+            target={
+              updateMutation.error ? updateMutation.variables?.id : createMutation.variables?.name
+            }
+          />
           <Form<VirtualizationFlavorInput>
             form={form}
             layout="vertical"

@@ -1,66 +1,65 @@
-import { useState } from 'react'
-import { Button, Form, Select, Space, Tooltip, Typography } from 'antd'
-import { QuestionCircleOutlined } from '@ant-design/icons'
-import { useQuery } from '@tanstack/react-query'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementRefreshButton, ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
 import { accessQueries } from '@/features/access'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useI18n } from '@/i18n'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import { QuestionCircleOutlined } from '@ant-design/icons'
+import { useQuery } from '@tanstack/react-query'
+import { Button, Form, Select, Space, Tooltip, Typography } from 'antd'
+import { useState } from 'react'
 import { identityProviderQueries } from '../queries'
 import type { IdentityProvider } from '../types'
-
 export function ProviderProtocolMetadataPanel({ provider }: { provider: IdentityProvider }) {
   const { t } = useI18n()
   const query = useQuery(identityProviderQueries.protocolMetadata(provider))
+  const visibleQueryData = query.isEnabled === false ? undefined : readableQueryData(query)
   return (
     <div className="soha-identity-provider-metadata">
+      <ReadFeedback canRead={query.isEnabled} query={query} label="当前记录" />
+
       <div className="soha-identity-provider-setup-summary">
         <Typography.Text strong>
           {provider.type === 'oidc' ? 'OpenID Connect Discovery' : 'SAML IdP Metadata'}
         </Typography.Text>
         <Space>
-          {query.data && (
-            <Typography.Text copyable={{ text: query.data }}>
+          {visibleQueryData && (
+            <Typography.Text copyable={{ text: visibleQueryData }}>
               {t('common.copy', '复制')}
             </Typography.Text>
           )}
           <ManagementRefreshButton
             loading={query.isFetching}
-            onClick={() => void query.refetch()}
+            onClick={() => void (query.isEnabled === false ? undefined : query.refetch())}
             tooltip={t('common.refresh', '刷新')}
           />
         </Space>
       </div>
       {query.isPending ? (
         <ManagementState kind="loading" compact />
-      ) : query.isError ? (
-        <ManagementState
-          kind="error"
-          title={t('identity.providers.metadata.failed')}
-          description={query.error.message}
-          actions={
-            <Button onClick={() => void query.refetch()}>{t('common.retry', '重试')}</Button>
-          }
-        />
-      ) : (
+      ) : query.isError && !visibleQueryData ? null : (
         <pre className="soha-json-block" aria-label={t('identity.providers.tabs.protocolMetadata')}>
-          {query.data}
+          {visibleQueryData}
         </pre>
       )}
     </div>
   )
 }
-
 export function ProviderUserMetadataPanel({ provider }: { provider: IdentityProvider }) {
   const { t } = useI18n()
   const snapshot = usePermissionSnapshot().data?.data
   const canViewUsers = hasPermission(snapshot, 'access.users.view')
   const users = useQuery(accessQueries.users(canViewUsers))
+  const visibleUsersData = users.isEnabled === false ? undefined : readableQueryData(users)
   const clients = useQuery(
     identityProviderQueries.oidcClients(provider.id, canViewUsers && provider.type === 'oidc'),
   )
-  const [selection, setSelection] = useState<{ userId: string; clientId?: string } | null>(null)
+  const visibleClientsData = clients.isEnabled === false ? undefined : readableQueryData(clients)
+  const [selection, setSelection] = useState<{
+    userId: string
+    clientId?: string
+  } | null>(null)
   const metadata = useQuery({
     ...identityProviderQueries.userMetadata(
       provider.id,
@@ -69,6 +68,7 @@ export function ProviderUserMetadataPanel({ provider }: { provider: IdentityProv
     ),
     enabled: canViewUsers && Boolean(selection),
   })
+  const visibleMetadataData = metadata.isEnabled === false ? undefined : readableQueryData(metadata)
   if (!canViewUsers)
     return (
       <ManagementState
@@ -76,31 +76,25 @@ export function ProviderUserMetadataPanel({ provider }: { provider: IdentityProv
         title={t('identity.providers.metadata.noUserPermission')}
       />
     )
-  if (users.isError || (provider.type === 'oidc' && clients.isError))
+  if (queryAccessDenied(users) || (provider.type === 'oidc' && queryAccessDenied(clients)))
     return (
-      <ManagementState
-        kind="error"
-        title={t('identity.providers.metadata.optionsFailed')}
-        actions={
-          <Button
-            onClick={() => {
-              void users.refetch()
-              if (provider.type === 'oidc') void clients.refetch()
-            }}
-          >
-            {t('common.retry', '重试')}
-          </Button>
-        }
-      />
+      <>
+        <ReadFeedback query={users} canRead={users.isEnabled} label="用户目录" />
+        <ReadFeedback query={clients} canRead={clients.isEnabled} label="OIDC Client" />
+      </>
     )
   return (
     <div className="soha-identity-provider-metadata">
+      <ReadFeedback canRead={users.isEnabled} query={users} label="用户目录" />
+      <ReadFeedback canRead={clients.isEnabled} query={clients} label="OIDC Client" />
+      <ReadFeedback canRead={metadata.isEnabled} query={metadata} label="用户元数据" />
+
       <Form
         layout="inline"
         style={{ rowGap: 12 }}
         onValuesChange={() => setSelection(null)}
         onFinish={(values) => {
-          if (selection) void metadata.refetch()
+          if (selection) void (metadata.isEnabled === false ? undefined : metadata.refetch())
           else setSelection(values)
         }}
       >
@@ -115,7 +109,7 @@ export function ProviderUserMetadataPanel({ provider }: { provider: IdentityProv
             showSearch={{ optionFilterProp: 'label' }}
             loading={users.isPending}
             placeholder={t('identity.providers.metadata.selectUser')}
-            options={(users.data ?? [])
+            options={(visibleUsersData ?? [])
               .filter((user) => user.status === 'active')
               .map((user) => ({
                 value: user.id,
@@ -134,7 +128,7 @@ export function ProviderUserMetadataPanel({ provider }: { provider: IdentityProv
               style={{ width: 200 }}
               loading={clients.isPending}
               placeholder={t('identity.providers.metadata.selectClient')}
-              options={(clients.data ?? []).map((client) => ({
+              options={(visibleClientsData ?? []).map((client) => ({
                 value: client.id,
                 label: client.clientId,
               }))}
@@ -156,28 +150,19 @@ export function ProviderUserMetadataPanel({ provider }: { provider: IdentityProv
           </Space>
         </Form.Item>
       </Form>
-      {metadata.isError ? (
-        <ManagementState
-          kind="error"
-          title={t('identity.providers.metadata.failed')}
-          description={metadata.error.message}
-          actions={
-            <Button onClick={() => void metadata.refetch()}>{t('common.retry', '重试')}</Button>
-          }
-        />
-      ) : !selection ? (
+      {metadata.isError && !visibleMetadataData ? null : !selection ? (
         <ManagementState kind="empty" compact title={t('identity.providers.metadata.selectHint')} />
       ) : metadata.isPending ? (
         <ManagementState kind="loading" compact />
-      ) : (
+      ) : !visibleMetadataData ? null : (
         <>
-          {metadata.data.scopes?.length ? (
+          {visibleMetadataData.scopes?.length ? (
             <Typography.Text type="secondary">
-              Scopes: {metadata.data.scopes.join(', ')}
+              Scopes: {visibleMetadataData.scopes.join(', ')}
             </Typography.Text>
           ) : null}
-          {metadata.data.subject && (
-            <Typography.Text>NameID: {metadata.data.subject}</Typography.Text>
+          {visibleMetadataData.subject && (
+            <Typography.Text>NameID: {visibleMetadataData.subject}</Typography.Text>
           )}
           <AdminTable
             rowKey="name"
@@ -195,7 +180,7 @@ export function ProviderUserMetadataPanel({ provider }: { provider: IdentityProv
                 ),
               },
             ]}
-            dataSource={Object.entries(metadata.data.attributes)
+            dataSource={Object.entries(visibleMetadataData.attributes)
               .sort(([a], [b]) => a.localeCompare(b))
               .map(([name, values]) => ({ name, values }))}
           />

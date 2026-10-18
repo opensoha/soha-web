@@ -1,4 +1,33 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { ManagementDataPage } from '@/components/management-data-page'
+import {
+  ManagementDensityButton,
+  ManagementIconButton,
+  ManagementQueryActions,
+  ManagementQueryField,
+  ManagementRefreshButton,
+  ManagementState,
+  ManagementTableToolbar,
+} from '@/components/management-list'
+import { operationModalStyles } from '@/components/modal-styles'
+import { ReadFeedback } from '@/components/request-feedback'
+import { MetadataTag } from '@/components/status-tag'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import {
+  systemIntegrationQueries,
+  type SystemIntegration,
+  type SystemIntegrationCategory,
+} from '@/features/settings'
+import { useI18n } from '@/i18n'
+import { queryAccessDenied, readableQueryData, writeOutcomeUnknown } from '@/utils/query-feedback'
+import {
+  CloudDownloadOutlined,
+  DeleteOutlined,
+  FileAddOutlined,
+  UploadOutlined,
+} from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TableColumnsType, UploadFile } from 'antd'
 import {
   App,
   Button,
@@ -15,58 +44,28 @@ import {
   Typography,
   Upload,
 } from 'antd'
-import type { TableColumnsType, UploadFile } from 'antd'
-import {
-  CloudDownloadOutlined,
-  DeleteOutlined,
-  FileAddOutlined,
-  UploadOutlined,
-} from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import dayjs from 'dayjs'
-import { ManagementDataPage } from '@/components/management-data-page'
-import {
-  ManagementDensityButton,
-  ManagementIconButton,
-  ManagementQueryActions,
-  ManagementQueryField,
-  ManagementRefreshButton,
-  ManagementState,
-  ManagementTableToolbar,
-} from '@/components/management-list'
-import { MetadataTag } from '@/components/status-tag'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
-import {
-  systemIntegrationQueries,
-  type SystemIntegration,
-  type SystemIntegrationCategory,
-} from '@/features/settings'
-import { useI18n } from '@/i18n'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { ObjectStorageConfig } from './components/object-storage-config'
 import { softwarePackageMutations } from './mutations'
 import { softwarePackageQueries } from './queries'
-import { ObjectStorageConfig } from './components/object-storage-config'
-import type { SoftwarePackage, SoftwarePackageFilters, SoftwarePackagePublishInput } from './types'
 import './styles.css'
-
+import type { SoftwarePackage, SoftwarePackageFilters, SoftwarePackagePublishInput } from './types'
 const { Text } = Typography
-
 const platformOptions = [
   { label: 'macOS', value: 'darwin' },
   { label: 'Windows', value: 'windows' },
   { label: 'Linux', value: 'linux' },
 ]
-
 const architectureOptions = [
   { label: 'ARM64', value: 'arm64' },
   { label: 'x86_64', value: 'amd64' },
 ]
-
 const installerAccept: Record<string, string> = {
   darwin: '.dmg,.pkg',
   windows: '.exe,.msi',
   linux: '.AppImage,.appimage,.deb,.rpm',
 }
-
 interface SoftwareUploadFormValues {
   storageIntegrationId: string
   name: string
@@ -89,21 +88,20 @@ interface SoftwareUploadFormValues {
   url?: string
   fileName?: string
 }
-
 interface SoftwareUploadModalProps {
   open: boolean
   saving: boolean
+  blocked: boolean
+  feedback: React.ReactNode
   existingPackages: SoftwarePackage[]
   storageIntegrations: SystemIntegration[]
   onCancel: () => void
   onSubmit: (inputs: SoftwarePackagePublishInput[]) => void
 }
-
 function softwareIdFromName(name: string, packages: SoftwarePackage[]) {
   const normalizedName = name.trim().toLocaleLowerCase()
   const existing = packages.find((item) => item.name.trim().toLocaleLowerCase() === normalizedName)
   if (existing) return existing.softwareId
-
   const slug = name
     .normalize('NFKD')
     .toLocaleLowerCase()
@@ -113,7 +111,6 @@ function softwareIdFromName(name: string, packages: SoftwarePackage[]) {
     .slice(0, 64)
   return slug || `software-${crypto.randomUUID().slice(0, 8)}`
 }
-
 function packageTargetFromFileName(fileName: string) {
   const normalized = fileName.toLocaleLowerCase()
   const platform = /\.(dmg|pkg)$/.test(normalized)
@@ -130,7 +127,6 @@ function packageTargetFromFileName(fileName: string) {
       : undefined
   return { platform, arch }
 }
-
 function packageDraftFromFile(file: UploadFile) {
   return {
     file,
@@ -138,7 +134,6 @@ function packageDraftFromFile(file: UploadFile) {
     ...packageTargetFromFileName(file.name),
   }
 }
-
 function SelectedPackageFile({ value }: { value?: UploadFile }) {
   return (
     <Text className="soha-software-package-file" ellipsis title={value?.name}>
@@ -146,10 +141,11 @@ function SelectedPackageFile({ value }: { value?: UploadFile }) {
     </Text>
   )
 }
-
 function SoftwareUploadModal({
   open,
   saving,
+  blocked,
+  feedback,
   existingPackages,
   storageIntegrations,
   onCancel,
@@ -160,7 +156,6 @@ function SoftwareUploadModal({
   const [source, setSource] = useState<'file' | 'url'>('file')
   const [publishMode, setPublishMode] = useState<'single' | 'batch'>('single')
   const packageCount = Form.useWatch('variants', form)?.length ?? 0
-
   useEffect(() => {
     if (open) {
       form.resetFields()
@@ -171,8 +166,8 @@ function SoftwareUploadModal({
       setSource('file')
       setPublishMode('single')
     }
-  }, [form, open, storageIntegrations])
-
+    // Keep an open draft when storage or package queries refresh.
+  }, [form, open])
   const submit = (values: SoftwareUploadFormValues) => {
     if (publishMode === 'batch') {
       const inputs = values.variants.flatMap((variant) => {
@@ -206,7 +201,6 @@ function SoftwareUploadModal({
       if (inputs.length) onSubmit(inputs)
       return
     }
-
     const metadata = {
       storageIntegrationId: values.storageIntegrationId,
       softwareId: softwareIdFromName(values.name, existingPackages),
@@ -246,10 +240,11 @@ function SoftwareUploadModal({
       ])
     }
   }
-
   return (
     <Modal
-      closable={!saving}
+      styles={operationModalStyles}
+      style={{ top: 32 }}
+      closable={!blocked}
       destroyOnHidden
       footer={null}
       mask={{ closable: false }}
@@ -258,7 +253,9 @@ function SoftwareUploadModal({
       width={920}
       onCancel={onCancel}
     >
+      {feedback}
       <Form
+        disabled={blocked}
         className="soha-software-upload-form"
         form={form}
         initialValues={{ platform: 'darwin', arch: 'arm64', variants: [] }}
@@ -271,6 +268,7 @@ function SoftwareUploadModal({
           tooltip="单个发布支持本地文件或下载地址；批量发布可一次选择多个独立软件包，并分别配置软件信息。"
         >
           <Segmented<'single' | 'batch'>
+            disabled={blocked}
             block
             className="soha-form-segmented"
             options={[
@@ -326,7 +324,7 @@ function SoftwareUploadModal({
           rules={[{ required: true, message: '请选择目标对象存储' }]}
         >
           <Select
-            disabled={storageIntegrations.length === 0}
+            disabled={blocked || storageIntegrations.length === 0}
             options={storageIntegrations.map((item) => ({
               label: `${item.name} · ${integrationConfiguration(item, 'region') || '未标注地域'}`,
               value: item.id,
@@ -337,6 +335,7 @@ function SoftwareUploadModal({
 
         {publishMode === 'single' ? (
           <Segmented<'file' | 'url'>
+            disabled={blocked}
             block
             className="soha-software-source-segmented"
             options={[
@@ -545,7 +544,7 @@ function SoftwareUploadModal({
         )}
         <div className="soha-software-form-actions">
           <Space>
-            <Button disabled={saving} onClick={onCancel}>
+            <Button disabled={blocked} onClick={onCancel}>
               {t('common.cancel', '取消')}
             </Button>
             <Button
@@ -567,7 +566,6 @@ function SoftwareUploadModal({
     </Modal>
   )
 }
-
 function formatBytes(value: number) {
   const units = ['B', 'KiB', 'MiB', 'GiB']
   let size = value
@@ -578,7 +576,6 @@ function formatBytes(value: number) {
   }
   return `${size >= 10 || index === 0 ? size.toFixed(0) : size.toFixed(1)} ${units[index]}`
 }
-
 function SoftwareFileDetailDrawer({
   file,
   storageName,
@@ -595,6 +592,8 @@ function SoftwareFileDetailDrawer({
     ...softwarePackageQueries.downloadRecords(file?.id ?? ''),
     enabled: Boolean(file) && canViewDownloadRecords,
   })
+  const visibleRecordsQueryData =
+    recordsQuery.isEnabled === false ? undefined : readableQueryData(recordsQuery)
   return (
     <Drawer
       destroyOnHidden
@@ -603,6 +602,8 @@ function SoftwareFileDetailDrawer({
       title={t('software.storage.detailTitle', '文件详情')}
       onClose={onClose}
     >
+      <ReadFeedback canRead={recordsQuery.isEnabled} query={recordsQuery} label="身份数据" />
+
       {file ? (
         <Space orientation="vertical" size={16} style={{ width: '100%' }}>
           <div className="soha-software-file-detail-head">
@@ -659,17 +660,9 @@ function SoftwareFileDetailDrawer({
               description="需要审计查看权限。"
               title="无权限查看下载记录"
             />
-          ) : recordsQuery.isError ? (
-            <ManagementState
-              bordered={false}
-              compact
-              kind="error"
-              description="请稍后重试。"
-              title="下载记录加载失败"
-            />
-          ) : recordsQuery.isLoading ? (
+          ) : recordsQuery.isError && !visibleRecordsQueryData ? null : recordsQuery.isLoading ? (
             <ManagementState bordered={false} compact kind="loading" />
-          ) : recordsQuery.data?.items.length ? (
+          ) : visibleRecordsQueryData?.items.length ? (
             <Table
               columns={[
                 {
@@ -694,7 +687,7 @@ function SoftwareFileDetailDrawer({
                   render: (value?: string) => value || '-',
                 },
               ]}
-              dataSource={recordsQuery.data.items}
+              dataSource={visibleRecordsQueryData.items}
               pagination={false}
               rowKey="id"
               size="small"
@@ -713,7 +706,6 @@ function SoftwareFileDetailDrawer({
     </Drawer>
   )
 }
-
 export function SoftwareLibraryPage() {
   const { message } = App.useApp()
   const { t } = useI18n()
@@ -731,7 +723,11 @@ export function SoftwareLibraryPage() {
   const canViewDownloadRecords =
     hasPermission(snapshot, 'system.audit.view') || hasPermission(snapshot, 'identity.audit.view')
   const packagesQuery = useQuery(softwarePackageQueries.list(filters))
+  const visiblePackagesQueryData =
+    packagesQuery.isEnabled === false ? undefined : readableQueryData(packagesQuery)
   const storageQuery = useQuery(softwarePackageQueries.storage())
+  const visibleStorageQueryData =
+    storageQuery.isEnabled === false ? undefined : readableQueryData(storageQuery)
   const storageIntegrationsQuery = useQuery(
     systemIntegrationQueries.list(
       {
@@ -741,56 +737,65 @@ export function SoftwareLibraryPage() {
       canViewStorage,
     ),
   )
-  const storageIntegrations = storageIntegrationsQuery.data ?? []
+  const visibleStorageIntegrationsQueryData =
+    storageIntegrationsQuery.isEnabled === false
+      ? undefined
+      : readableQueryData(storageIntegrationsQuery)
+  const storageIntegrations = visibleStorageIntegrationsQueryData ?? []
   const enabledStorageIntegrations = storageIntegrations.filter((item) => item.enabled)
   const storageById = useMemo(
     () => new Map(storageIntegrations.map((item) => [item.id, item])),
     [storageIntegrations],
   )
-  const publishMutation = useMutation(softwarePackageMutations.publish(queryClient))
-  const deleteMutation = useMutation(softwarePackageMutations.remove(queryClient))
-
+  const publishMutation = useOperationMutation(softwarePackageMutations.publish(queryClient), {
+    label: ['发布安装包', 'Publish package'],
+    target: (v) => v.name + ' / ' + v.version,
+  })
+  const deleteMutation = useOperationMutation(softwarePackageMutations.remove(queryClient), {
+    label: ['删除 软件包', 'Delete package'],
+    target: (v) => v,
+  })
+  const operationBlocked =
+    publishMutation.blocked ||
+    deleteMutation.blocked ||
+    (packagesQuery.isEnabled !== false && queryAccessDenied(packagesQuery))
   const publishPackages = async (inputs: SoftwarePackagePublishInput[]) => {
+    if (operationBlocked || publishing) return
     setPublishing(true)
-    const failed: string[] = []
     let published = 0
     try {
       for (const input of inputs) {
         try {
           await publishMutation.mutateAsync(input)
           published += 1
-        } catch {
-          failed.push(input.source === 'file' ? input.file.name : input.fileName || input.url)
+        } catch (error) {
+          const remaining = inputs.length - published - 1
+          message.warning(
+            writeOutcomeUnknown(error instanceof Error ? error : undefined)
+              ? `${published} 个已发布，当前项结果不明，${remaining} 个未提交。请先核对软件版本记录。`
+              : `${published} 个已发布，当前项失败，${remaining} 个未提交。请核对后重新选择未发布项。`,
+          )
+          return
         }
       }
+      message.success(`${published} 个安装包已发布`)
+      setUploadOpen(false)
     } finally {
       setPublishing(false)
     }
-
-    if (failed.length === 0) {
-      message.success(`${published} 个安装包已发布`)
-      setUploadOpen(false)
-    } else if (published === 0) {
-      message.error(`发布失败：${failed.join('、')}`)
-    } else {
-      message.warning(`${published} 个已发布，${failed.length} 个失败，请重新选择失败项`)
-      setUploadOpen(false)
-    }
   }
-
   const deleteAction = useCallback(
     (record: SoftwarePackage) => (
       <Popconfirm
         cancelText={t('common.cancel', '取消')}
-        disabled={!canDelete}
-        okButtonProps={{ danger: true, loading: deleteMutation.isPending }}
+        disabled={operationBlocked || !canDelete}
+        okButtonProps={{
+          ...{ danger: true, loading: deleteMutation.isPending },
+          disabled: operationBlocked,
+        }}
         okText={t('common.delete', '删除')}
         title={`${t('software.delete.title', '删除软件版本')} ${record.name} ${record.version}`}
-        onConfirm={() =>
-          deleteMutation.mutate(record.id, {
-            onSuccess: () => message.success(t('software.delete.success', '软件版本已删除')),
-          })
-        }
+        onConfirm={() => deleteMutation.mutate(record.id)}
       >
         <ManagementIconButton
           aria-label={t('common.delete', '删除')}
@@ -803,7 +808,6 @@ export function SoftwareLibraryPage() {
     ),
     [canDelete, deleteMutation, message, t],
   )
-
   const columns = useMemo<TableColumnsType<SoftwarePackage>>(
     () => [
       {
@@ -890,14 +894,34 @@ export function SoftwareLibraryPage() {
     ],
     [deleteAction, storageById, t],
   )
-
   const resetFilters = () => {
     queryForm.resetFields()
     setFilters({})
   }
-
   return (
     <div className="soha-software-library-shell">
+      {!(
+        uploadOpen &&
+        !(
+          (packagesQuery.isEnabled !== false && queryAccessDenied(packagesQuery)) ||
+          (storageIntegrationsQuery.isEnabled !== false &&
+            queryAccessDenied(storageIntegrationsQuery))
+        )
+      ) && (
+        <>
+          {' '}
+          {publishMutation.feedback}
+          {deleteMutation.feedback}{' '}
+        </>
+      )}
+
+      <ReadFeedback canRead={storageQuery.isEnabled} query={storageQuery} label="身份数据" />
+      <ReadFeedback
+        canRead={storageIntegrationsQuery.isEnabled}
+        query={storageIntegrationsQuery}
+        label="身份数据"
+      />
+
       <ManagementDataPage
         className="soha-software-library-page"
         query={{
@@ -956,33 +980,33 @@ export function SoftwareLibraryPage() {
             }),
         }}
         table={{
+          error: packagesQuery.isEnabled === false ? null : packagesQuery.error,
+          hasReadData:
+            readableQueryData(packagesQuery) !== undefined && packagesQuery.isEnabled !== false,
+          onRetry: () => {
+            if (packagesQuery.isEnabled !== false) void packagesQuery.refetch()
+          },
           columnSettingIconOnly: true,
           columnSettingPlacement: 'header',
           columns,
-          dataSource: packagesQuery.data?.items ?? [],
-          empty: packagesQuery.isError ? (
-            <ManagementState
-              actions={
-                <Button size="small" onClick={() => void packagesQuery.refetch()}>
-                  重试
-                </Button>
-              }
-              description="请稍后重试。"
-              kind="error"
-              title="软件库加载失败"
-            />
-          ) : (
-            <ManagementState
-              description={t('software.empty.description', '尚未发布任何桌面安装包。')}
-              kind="empty"
-              title={t('software.empty.title', '暂无软件版本')}
-            />
-          ),
+          dataSource: visiblePackagesQueryData?.items ?? [],
+          empty:
+            packagesQuery.isError && !visiblePackagesQueryData ? null : (
+              <ManagementState
+                description={t('software.empty.description', '尚未发布任何桌面安装包。')}
+                kind="empty"
+                title={t('software.empty.title', '暂无软件版本')}
+              />
+            ),
           headerExtra: (
             <ManagementTableToolbar>
               <Button
                 autoInsertSpace={false}
-                disabled={!canUpload || (canViewStorage && enabledStorageIntegrations.length === 0)}
+                disabled={
+                  operationBlocked ||
+                  !canUpload ||
+                  (canViewStorage && enabledStorageIntegrations.length === 0)
+                }
                 icon={<UploadOutlined />}
                 size="small"
                 type="primary"
@@ -990,7 +1014,7 @@ export function SoftwareLibraryPage() {
               >
                 {t('software.upload.action', '上传软件')}
               </Button>
-              <ObjectStorageConfig storage={storageQuery.data} />
+              <ObjectStorageConfig storage={visibleStorageQueryData} />
               <ManagementDensityButton
                 aria-label={t('common.tableDensity', '切换表格密度')}
                 title={t('common.tableDensity', '切换表格密度')}
@@ -1009,9 +1033,11 @@ export function SoftwareLibraryPage() {
                 title={t('common.refresh', '刷新')}
                 tooltip={t('common.refresh', '刷新')}
                 onClick={() => {
-                  void packagesQuery.refetch()
-                  void storageQuery.refetch()
-                  void storageIntegrationsQuery.refetch()
+                  void (packagesQuery.isEnabled === false ? undefined : packagesQuery.refetch())
+                  void (storageQuery.isEnabled === false ? undefined : storageQuery.refetch())
+                  void (storageIntegrationsQuery.isEnabled === false
+                    ? undefined
+                    : storageIntegrationsQuery.refetch())
                 }}
               />
             </ManagementTableToolbar>
@@ -1024,11 +1050,22 @@ export function SoftwareLibraryPage() {
         }}
       />
       <SoftwareUploadModal
-        existingPackages={packagesQuery.data?.items ?? []}
-        open={uploadOpen}
+        existingPackages={visiblePackagesQueryData?.items ?? []}
+        open={
+          uploadOpen &&
+          !(
+            (packagesQuery.isEnabled !== false && queryAccessDenied(packagesQuery)) ||
+            (storageIntegrationsQuery.isEnabled !== false &&
+              queryAccessDenied(storageIntegrationsQuery))
+          )
+        }
         saving={publishing}
+        blocked={operationBlocked || publishing}
+        feedback={publishMutation.feedback}
         storageIntegrations={enabledStorageIntegrations}
-        onCancel={() => setUploadOpen(false)}
+        onCancel={() => {
+          if (!operationBlocked) (() => setUploadOpen(false))()
+        }}
         onSubmit={(inputs) => void publishPackages(inputs)}
       />
       <SoftwareFileDetailDrawer
@@ -1038,12 +1075,13 @@ export function SoftwareLibraryPage() {
           storageById.get(selectedStorageFile?.storageIntegrationId ?? '')?.name ??
           selectedStorageFile?.storageIntegrationId
         }
-        onClose={() => setSelectedStorageFile(null)}
+        onClose={() => {
+          if (!operationBlocked) (() => setSelectedStorageFile(null))()
+        }}
       />
     </div>
   )
 }
-
 function integrationConfiguration(item: SystemIntegration, key: string) {
   return item.configuration.find((field) => field.key === key)?.value ?? ''
 }

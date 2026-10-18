@@ -1,11 +1,17 @@
-import { App, Button, Spin } from 'antd'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useParams, useSearchParams } from 'react-router-dom'
 import { ManagementState } from '@/components/management-list'
-import { useI18n } from '@/i18n'
+import { ReadFeedback } from '@/components/request-feedback'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import {
+  platformResourceTarget,
+  usePlatformMutation,
+} from '@/features/platform/shared/use-platform-mutation'
+import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
+import { readableQueryData } from '@/utils/query-feedback'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Spin } from 'antd'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { ConfigurationDetailShell } from '../shared/detail-shell'
 import { resolveConfigurationNamespace } from '../shared/scope'
 import { SecretDataTab } from './data-tab'
@@ -14,7 +20,6 @@ import { secretQueries } from './queries'
 
 export function SecretDetailPage() {
   const { localeCode } = useI18n()
-  const { message } = App.useApp()
   const params = useParams()
   const [searchParams] = useSearchParams()
   const queryClient = useQueryClient()
@@ -24,10 +29,15 @@ export function SecretDetailPage() {
   const scope = toScopeKey(clusterId, detailNamespace)
   const target = { scope, name }
   const detailQuery = useQuery(secretQueries.detail(scope, name))
-  const updateDataMutation = useMutation(secretMutations.updateData(queryClient))
+  const visibleDetailQueryData = readableQueryData(detailQuery)
+  const updateDataMutation = usePlatformMutation(secretMutations.updateData(queryClient), {
+    label: ['应用数据更改', 'Apply data changes'],
+    target: (variables) => platformResourceTarget(variables.target),
+  })
+  const platformWriteBlocked = updateDataMutation.blocked
   const permissionSnapshot = usePermissionSnapshot().data?.data
   const canEditData = hasPermission(permissionSnapshot, 'platform.configuration.secrets.update')
-  const detail = detailQuery.data
+  const detail = visibleDetailQueryData
 
   if (detailQuery.isLoading) {
     return (
@@ -36,23 +46,11 @@ export function SecretDetailPage() {
       </div>
     )
   }
-  if (detailQuery.isError) {
-    const error = detailQuery.error
-    const status = error && 'status' in error ? error.status : undefined
-    return (
-      <div className="soha-page">
-        <ManagementState
-          kind={status === 404 ? 'not-found' : status === 403 ? 'no-permission' : 'error'}
-          description={error.message}
-          actions={
-            <Button onClick={() => void detailQuery.refetch()}>
-              {localeCode === 'zh_CN' ? '重试' : 'Retry'}
-            </Button>
-          }
-        />
-      </div>
-    )
+  if (detailQuery.isError && visibleDetailQueryData === undefined) {
+    return <ReadFeedback canRead={detailQuery.isEnabled} query={detailQuery} label="资源记录" />
   }
+  if (detailQuery.isError && !detail)
+    return <ReadFeedback canRead={detailQuery.isEnabled} query={detailQuery} label="资源详情" />
   if (!detail) {
     return (
       <div className="soha-page">
@@ -65,32 +63,29 @@ export function SecretDetailPage() {
   }
 
   return (
-    <ConfigurationDetailShell
-      dataTab={
-        <SecretDataTab
-          key={JSON.stringify([scope.clusterId, detailNamespace, name])}
-          applying={updateDataMutation.isPending}
-          canEdit={canEditData}
-          detail={detail}
-          onApply={(data) =>
-            updateDataMutation.mutateAsync(
-              { target, payload: { data } },
-              {
-                onSuccess: () =>
-                  void message.success(localeCode === 'zh_CN' ? '数据已更新' : 'Data updated'),
-              },
-            )
-          }
-        />
-      }
-      detail={detail}
-      kind="secrets"
-      label="Secret"
-      overviewExtra={[
-        { key: 'Type', value: detail.type || '-' },
-        { key: 'Immutable', value: detail.immutable ? 'Yes' : 'No' },
-      ]}
-      target={target}
-    />
+    <>
+      <ReadFeedback canRead={detailQuery.isEnabled} query={detailQuery} label="资源详情" />
+      {updateDataMutation.feedback}
+      <ConfigurationDetailShell
+        dataTab={
+          <SecretDataTab
+            key={JSON.stringify([scope.clusterId, detailNamespace, name])}
+            applying={updateDataMutation.isPending}
+            blocked={platformWriteBlocked || Boolean(detailQuery.error)}
+            canEdit={canEditData}
+            detail={detail}
+            onApply={(data) => updateDataMutation.mutateAsync({ target, payload: { data } }, {})}
+          />
+        }
+        detail={detail}
+        kind="secrets"
+        label="Secret"
+        overviewExtra={[
+          { key: 'Type', value: detail.type || '-' },
+          { key: 'Immutable', value: detail.immutable ? 'Yes' : 'No' },
+        ]}
+        target={target}
+      />
+    </>
   )
 }

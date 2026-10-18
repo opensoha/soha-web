@@ -9,18 +9,28 @@ import {
   Tag,
   Timeline,
   Typography,
+  theme,
 } from 'antd'
-import { LinkOutlined } from '@ant-design/icons'
+import {
+  LinkOutlined,
+  ReloadOutlined,
+  CheckOutlined,
+  ClockCircleOutlined,
+  CloseOutlined,
+} from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ManagementDetailHeader, ManagementState } from '@/components/management-list'
+import { ReadFeedback, requestErrorMessage, useInlineApiError } from '@/components/request-feedback'
+import { useDocumentHidden } from '@/utils/use-document-hidden'
+import { readableQueryData } from '@/utils/query-feedback'
 import { StatusTag } from '@/components/status-tag'
 import { isApiError } from '@/services/api-error'
 import { formatDateTime } from '@/utils/time'
 import { runtimeDetailQueries } from '../queries'
 import { ExecutionRolloutPanel } from './rollout-panel'
 import { WorkflowExecutionDetail } from './workflow-execution-detail'
-import { workflowExecutionIsLive } from './workflow-execution-model'
+import { workflowExecutionIsLive, workflowExecutionState } from './workflow-execution-model'
 import type {
   ApplicationEnvironment,
   BuildRecord,
@@ -369,7 +379,14 @@ function buildTimelineItems(
           {createdAt ? <Text type="secondary">{formatDateTime(createdAt)}</Text> : null}
         </Space>
       ),
-      color: status === 'failed' ? 'red' : status === 'running' ? 'blue' : 'green',
+      color:
+        workflowExecutionState(status).tone === 'error'
+          ? 'red'
+          : workflowExecutionState(status).tone === 'running'
+            ? 'blue'
+            : workflowExecutionState(status).tone === 'success'
+              ? 'green'
+              : 'gray',
     }
   })
 }
@@ -385,17 +402,14 @@ function RuntimeHeader({
 }) {
   return (
     <Space wrap size={[8, 8]}>
-      <Tag
-        color={
-          runtimeStatus(record) === 'failed'
-            ? 'red'
-            : runtimeStatus(record) === 'running'
-              ? 'blue'
-              : 'green'
+      <StatusTag
+        value={
+          kind === 'release_bundle'
+            ? runtimeStatus(record)
+            : workflowExecutionState(runtimeStatus(record)).tag
         }
-      >
-        {runtimeStatus(record)}
-      </Tag>
+        label={runtimeStatus(record)}
+      />
       <Tag>{compactApplicationName(detail)}</Tag>
       <Tag>{runtimeEnvironmentLabel(detail, record, kind)}</Tag>
       <Tag>{runtimeTemplateLabel(detail, record, kind)}</Tag>
@@ -409,18 +423,60 @@ function renderArtifactTimeline(
 ) {
   return artifacts?.length ? (
     <Timeline
-      items={buildTimelineItems(
-        artifacts.map((artifact, index) => ({
-          id:
-            artifact.id ||
-            `${artifact.kind}:${artifact.name || artifact.ref || artifact.digest || index}`,
-          title: `${artifact.kind}${artifact.name ? ` · ${artifact.name}` : ''}`,
-          status: artifact.status || 'available',
-          summary:
-            artifact.ref || artifact.digest || artifact.path || artifact.workflowNodeId || '-',
-          createdAt: artifact.createdAt || artifact.updatedAt || artifact.modifiedAt,
-        })),
-      )}
+      items={artifacts.map((artifact, index) => ({
+        key: artifact.id || `${artifact.kind}:${index}`,
+        color: artifact.status === 'failed' ? 'red' : 'gray',
+        content: (
+          <Space orientation="vertical" size={6} style={{ maxWidth: '100%' }}>
+            <Space wrap>
+              <Text strong>{artifact.name || artifact.kind}</Text>
+              <StatusTag value={artifact.status || 'available'} />
+            </Space>
+            {artifact.ref ? (
+              <Text copyable style={{ overflowWrap: 'anywhere' }}>
+                {artifact.ref}
+              </Text>
+            ) : null}
+            {artifact.digest ? (
+              <Text code copyable style={{ overflowWrap: 'anywhere' }}>
+                {artifact.digest}
+              </Text>
+            ) : null}
+            {artifact.path ? (
+              <Text type="secondary" style={{ overflowWrap: 'anywhere' }}>
+                {artifact.path}
+              </Text>
+            ) : null}
+            <Space wrap>
+              {artifact.workflowRunId ? (
+                <Link to={`/workflows/${encodeURIComponent(artifact.workflowRunId)}`}>
+                  来源工作流
+                </Link>
+              ) : null}
+              {artifact.executionTaskId ? (
+                <Link
+                  to={`/delivery/execution-tasks/${encodeURIComponent(artifact.executionTaskId)}`}
+                >
+                  来源执行任务
+                </Link>
+              ) : null}
+              {artifact.releaseBundleId ? (
+                <Link
+                  to={`/delivery/release-bundles/${encodeURIComponent(artifact.releaseBundleId)}`}
+                >
+                  版本包
+                </Link>
+              ) : null}
+              {artifact.workflowNodeId ? (
+                <Text type="secondary">节点 {artifact.workflowNodeId}</Text>
+              ) : null}
+            </Space>
+            <Text type="secondary">
+              {formatDateTime(artifact.createdAt || artifact.updatedAt || artifact.modifiedAt)}
+            </Text>
+          </Space>
+        ),
+      }))}
     />
   ) : (
     <ManagementState bordered={false} compact title="暂无制品" description={emptyDescription} />
@@ -570,6 +626,12 @@ function RuntimeEvidenceCard({
   }
   return (
     <Card title="关键证据" className="soha-detail-card" size="small">
+      {executionArtifacts ? (
+        <>
+          <Text strong>制品与来源</Text>
+          {renderArtifactTimeline(executionArtifacts)}
+        </>
+      ) : null}
       {renderExternalPipeline((record as BuildRecord | ReleaseRecord).metadata)}
       {(record as BuildRecord | ReleaseRecord).metadata?.externalPipeline ? (
         <Collapse
@@ -658,10 +720,12 @@ export function RuntimeDetailContent({
   onEvidence?: (kind: RuntimeKind, id: string) => void
 }) {
   const navigate = useNavigate()
+  const { token } = theme.useToken()
+  const hidden = useDocumentHidden()
   const runtimeDetailQuery = useQuery({
     ...runtimeDetailQueries.detail(kind, recordId),
     refetchInterval:
-      kind === 'workflow' && !embedded
+      kind !== 'release_bundle'
         ? (query) =>
             query.state.status !== 'error' &&
             workflowExecutionIsLive(query.state.data?.object.status)
@@ -669,7 +733,9 @@ export function RuntimeDetailContent({
               : false
         : false,
   })
-  const retainWorkflowEvidence = kind === 'workflow' && !embedded && !!runtimeDetailQuery.data
+  useInlineApiError(runtimeDetailQuery.isError ? runtimeDetailQuery.error : null)
+  const runtimeDetail = readableQueryData(runtimeDetailQuery)
+  const retainEvidence = !!runtimeDetail
 
   if (!recordId) {
     return (
@@ -688,11 +754,7 @@ export function RuntimeDetailContent({
       </div>
     )
   }
-  if (
-    runtimeDetailQuery.isError &&
-    !retainWorkflowEvidence &&
-    isNotFoundError(runtimeDetailQuery.error)
-  ) {
+  if (runtimeDetailQuery.isError && isNotFoundError(runtimeDetailQuery.error)) {
     return (
       <div className="soha-page">
         <ManagementState
@@ -702,7 +764,7 @@ export function RuntimeDetailContent({
       </div>
     )
   }
-  if (runtimeDetailQuery.isError && !retainWorkflowEvidence) {
+  if (runtimeDetailQuery.isError && !retainEvidence) {
     return (
       <div className="soha-page">
         <ManagementState
@@ -714,7 +776,7 @@ export function RuntimeDetailContent({
           }
           description={
             runtimeDetailQuery.error instanceof Error
-              ? runtimeDetailQuery.error.message
+              ? requestErrorMessage(runtimeDetailQuery.error, 'zh_CN')
               : '加载运行态详情失败'
           }
         />
@@ -722,7 +784,6 @@ export function RuntimeDetailContent({
     )
   }
 
-  const runtimeDetail = runtimeDetailQuery.data
   const record = runtimeDetail?.object
   if (!record) {
     return (
@@ -738,8 +799,7 @@ export function RuntimeDetailContent({
   const applicationDetail = buildApplicationDetailFromRuntime(kind, runtimeDetail)
   const runtimeArtifacts = runtimeDetail?.artifacts ?? []
   const bundleArtifacts = kind === 'release_bundle' ? runtimeArtifacts : undefined
-  const executionArtifacts =
-    kind === 'execution_task' || kind === 'workflow' ? runtimeArtifacts : undefined
+  const executionArtifacts = runtimeArtifacts
   const executionLogs = Array.isArray(runtimeDetail?.evidence?.logs)
     ? (runtimeDetail.evidence.logs as ExecutionLogItem[])
     : undefined
@@ -824,15 +884,60 @@ export function RuntimeDetailContent({
   }
 
   return (
-    <div className="soha-page">
+    <div
+      className="soha-page soha-runtime-evidence soha-workflow-execution"
+      data-motion-disabled={!token.motion}
+      data-motion-paused={hidden}
+    >
+      <ReadFeedback query={runtimeDetailQuery} label="执行证据" />
       {!embedded ? (
         <ManagementDetailHeader
-          title={`${runtimeKindTitle(kind)} · ${record.id}`}
-          description="直达运行态对象详情，展示关联应用、环境、模板和关键证据。"
+          title={runtimeKindTitle(kind)}
+          description={record.id}
           meta={<RuntimeHeader kind={kind} record={record} detail={applicationDetail} />}
           actions={<Button onClick={() => navigate(runtimeListPath(kind))}>返回列表</Button>}
         />
       ) : null}
+      <section
+        className={`soha-execution-feedback is-${kind === 'release_bundle' ? 'idle' : workflowExecutionState(record.status).tone}`}
+        aria-label="运行记录状态"
+      >
+        <div className="soha-execution-feedback-main" role="status" aria-live="polite">
+          <span className="soha-execution-state-mark" aria-hidden>
+            {workflowExecutionState(record.status).tone === 'success' ? (
+              <CheckOutlined />
+            ) : workflowExecutionState(record.status).tone === 'error' ? (
+              <CloseOutlined />
+            ) : (
+              <ClockCircleOutlined />
+            )}
+          </span>
+          <div>
+            <strong>
+              {kind === 'release_bundle'
+                ? (record as ReleaseBundle).version || '版本包'
+                : workflowExecutionState(record.status).label}
+            </strong>
+            <p>
+              {kind === 'release_bundle'
+                ? '核对制品引用与摘要，再查看来源记录和审计。'
+                : workflowExecutionIsLive(record.status)
+                  ? '状态自动更新，日志与制品以当前读取的证据为准。'
+                  : '运行记录已保留，可继续核对制品、来源和审计。'}
+            </p>
+          </div>
+        </div>
+        <div className="soha-execution-counts">
+          <span>
+            <b>{runtimeArtifacts.length}</b> 项制品
+          </span>
+          <small>
+            {runtimeDetailQuery.isError
+              ? '证据更新已暂停'
+              : `读取于 ${formatDateTime(new Date(runtimeDetailQuery.dataUpdatedAt).toISOString())}`}
+          </small>
+        </div>
+      </section>
       <Card
         className="soha-detail-card"
         title="基础信息"
@@ -840,6 +945,7 @@ export function RuntimeDetailContent({
         extra={
           <Button
             size="small"
+            icon={<ReloadOutlined />}
             loading={runtimeDetailQuery.isFetching}
             onClick={() => void runtimeDetailQuery.refetch()}
           >
@@ -874,7 +980,11 @@ export function RuntimeDetailContent({
               children: formatDateTime(
                 (
                   record as
-                    BuildRecord | ReleaseRecord | ReleaseBundle | ExecutionTask | WorkflowRun
+                    | BuildRecord
+                    | ReleaseRecord
+                    | ReleaseBundle
+                    | ExecutionTask
+                    | WorkflowRun
                 ).createdAt,
               ),
             },

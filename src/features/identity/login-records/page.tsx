@@ -1,37 +1,37 @@
-import { useState } from 'react'
-import '../shared/application-access.css'
-import { Alert, Button, DatePicker, Select } from 'antd'
-import { InfoCircleOutlined } from '@ant-design/icons'
-import type { TableColumnsType } from 'antd'
-import type { Dayjs } from 'dayjs'
-import { useQuery } from '@tanstack/react-query'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
+  ManagementDensityButton,
+  ManagementIconButton,
+  ManagementKeywordField,
   ManagementQueryActions,
   ManagementQueryField,
   ManagementQueryScope,
-  ManagementKeywordField,
-  ManagementDensityButton,
-  ManagementIconButton,
   ManagementRefreshButton,
   ManagementState,
   ManagementTableToolbar,
 } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
 import { StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { systemQueries } from '@/features/system'
 import { useI18n } from '@/i18n'
-import { isApiError } from '@/services/api-error'
-import { formatDateTime } from '@/utils/time'
+import { readableQueryData } from '@/utils/query-feedback'
 import { tableColumnPresets } from '@/utils/table-columns'
+import { formatDateTime } from '@/utils/time'
+import { InfoCircleOutlined } from '@ant-design/icons'
+import { useQuery } from '@tanstack/react-query'
+import type { TableColumnsType } from 'antd'
+import { Alert, DatePicker, Select } from 'antd'
+import type { Dayjs } from 'dayjs'
+import { useState } from 'react'
 import { identityApplicationQueries } from '../applications'
+import '../shared/application-access.css'
 import {
   APPLICATION_LOGIN_ACTION_PREFIXES,
   APPLICATION_LOGIN_LIMIT,
   applicationLoginRecord,
   type ApplicationLoginRecord,
 } from './model'
-
 interface Filters {
   keyword: string
   applicationId?: string
@@ -39,7 +39,6 @@ interface Filters {
   dates: [Dayjs | null, Dayjs | null] | null
 }
 const EMPTY_FILTERS: Filters = { keyword: '', dates: null }
-
 export function IdentityLoginRecordsPage() {
   const { t } = useI18n()
   const snapshotQuery = usePermissionSnapshot()
@@ -60,14 +59,18 @@ export function IdentityLoginRecordsPage() {
     }),
     enabled: canView,
   })
+  const visibleLogsQueryData =
+    logsQuery.isEnabled === false ? undefined : readableQueryData(logsQuery)
   const appsQuery = useQuery({
     ...identityApplicationQueries.list({}),
     enabled: canView && canViewApplications,
   })
+  const visibleAppsQueryData =
+    appsQuery.isEnabled === false ? undefined : readableQueryData(appsQuery)
   const appNames = new Map(
-    (canViewApplications ? (appsQuery.data ?? []) : []).map((app) => [app.id, app.name]),
+    (canViewApplications ? (visibleAppsQueryData ?? []) : []).map((app) => [app.id, app.name]),
   )
-  const records = (logsQuery.data ?? []).flatMap((log) => {
+  const records = (visibleLogsQueryData ?? []).flatMap((log) => {
     const record = applicationLoginRecord(log)
     return record ? [record] : []
   })
@@ -150,7 +153,6 @@ export function IdentityLoginRecordsPage() {
       render: (value: string) => (value ? t(`identity.loginRecords.reason.${value}`, value) : '—'),
     },
   ]
-
   if (snapshotQuery.isLoading) return <ManagementState kind="loading" />
   if (!canView)
     return <ManagementState kind="no-permission" title={t('identity.loginRecords.noPermission')} />
@@ -218,58 +220,50 @@ export function IdentityLoginRecordsPage() {
           </>
         ),
       }}
-      {...(error
-        ? {
-            tableNode: (
-              <ManagementState
-                kind={isApiError(error) && error.status === 403 ? 'no-permission' : 'error'}
-                title={t('identity.loginRecords.loadError')}
-                description={error.message}
-                actions={
-                  <Button onClick={() => void logsQuery.refetch()}>{t('common.retry')}</Button>
-                }
-              />
-            ),
-          }
-        : {
-            table: {
-              columns,
-              dataSource: filteredRecords,
-              rowKey: 'id',
-              loading: logsQuery.isPending,
-              empty: <ManagementState kind="empty" title={t('identity.loginRecords.empty')} />,
-              pageSize: 15,
-              scroll: { x: 1130 },
-              tableSize,
-              columnSettingPlacement: 'header',
-              columnSettingIconOnly: true,
-              headerExtra: (
-                <ManagementTableToolbar>
-                  <ManagementIconButton
-                    aria-label={t('identity.loginRecords.scopeHelp')}
-                    icon={<InfoCircleOutlined />}
-                    tooltip={t('identity.loginRecords.scope')}
-                  />
-                  <ManagementDensityButton
-                    aria-label={t('table.density')}
-                    tooltip={t('table.density')}
-                    onClick={() => setTableSize((size) => (size === 'small' ? 'middle' : 'small'))}
-                  />
-                  <ManagementRefreshButton
-                    aria-label={t('common.refresh')}
-                    tooltip={t('common.refresh')}
-                    loading={logsQuery.isFetching}
-                    onClick={() => void logsQuery.refetch()}
-                  />
-                </ManagementTableToolbar>
-              ),
-            },
-          })}
+      table={{
+        error: logsQuery.isEnabled === false ? null : error,
+        hasReadData: visibleLogsQueryData !== undefined,
+        onRetry: () => {
+          if (logsQuery.isEnabled !== false) void logsQuery.refetch()
+        },
+        columns,
+        dataSource: filteredRecords,
+        rowKey: 'id',
+        loading: logsQuery.isPending,
+        empty: <ManagementState kind="empty" title={t('identity.loginRecords.empty')} />,
+        pageSize: 15,
+        scroll: { x: 1130 },
+        tableSize,
+        columnSettingPlacement: 'header',
+        columnSettingIconOnly: true,
+        headerExtra: (
+          <ManagementTableToolbar>
+            <ManagementIconButton
+              aria-label={t('identity.loginRecords.scopeHelp')}
+              icon={<InfoCircleOutlined />}
+              tooltip={t('identity.loginRecords.scope')}
+            />
+            <ManagementDensityButton
+              aria-label={t('table.density')}
+              tooltip={t('table.density')}
+              onClick={() => setTableSize((size) => (size === 'small' ? 'middle' : 'small'))}
+            />
+            <ManagementRefreshButton
+              aria-label={t('common.refresh')}
+              tooltip={t('common.refresh')}
+              loading={logsQuery.isFetching}
+              onClick={() => void (logsQuery.isEnabled === false ? undefined : logsQuery.refetch())}
+            />
+          </ManagementTableToolbar>
+        ),
+      }}
     >
-      {(logsQuery.data?.length ?? 0) >= APPLICATION_LOGIN_LIMIT ? (
+      <ReadFeedback canRead={appsQuery.isEnabled} query={appsQuery} label="身份数据" />
+
+      {(visibleLogsQueryData?.length ?? 0) >= APPLICATION_LOGIN_LIMIT ? (
         <Alert type="warning" showIcon title={t('identity.loginRecords.limit')} />
       ) : null}
-      {appsQuery.isError ? (
+      {appsQuery.isError && !visibleAppsQueryData ? (
         <Alert type="warning" showIcon title={t('identity.loginRecords.applicationError')} />
       ) : null}
     </ManagementDataPage>

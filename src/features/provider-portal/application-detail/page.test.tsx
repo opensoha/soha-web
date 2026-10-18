@@ -1,13 +1,15 @@
 /** @vitest-environment jsdom */
 
-import { act } from 'react'
+import { ApiError } from '@/services/api-error'
+
+import { I18nProvider } from '@/i18n'
+import { usePreferencesStore } from '@/stores/preferences-store'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { App as AntdApp } from 'antd'
+import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { I18nProvider } from '@/i18n'
-import { usePreferencesStore } from '@/stores/preferences-store'
 import { PortalApplicationDetailPage } from './page'
 
 const apiMocks = vi.hoisted(() => ({
@@ -184,7 +186,7 @@ describe('Provider Portal application detail page', () => {
     for (const label of ['暂无描述', '未配置应用访问地址', '暂无元数据', '无']) {
       expect(emptyFields.textContent).toContain(label)
     }
-    apiMocks.get.mockResolvedValue({ data: undefined })
+    apiMocks.get.mockRejectedValue(new ApiError(404, 'Application not found', { method: 'GET' }))
     const unavailable = await renderPage()
     expect(unavailable.textContent).toContain('应用不可用')
     expect(unavailable.textContent).toContain('该应用已停用、已隐藏或尚未授权给你。')

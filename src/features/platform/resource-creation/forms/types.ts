@@ -58,6 +58,7 @@ export interface ResourceFormRendererProps<Values> {
   clusterId?: string
   identityDisabled?: boolean
   localeCode?: string
+  disabled?: boolean
   loading?: boolean
   namespaceLoading?: boolean
   namespaceOptions?: readonly string[]

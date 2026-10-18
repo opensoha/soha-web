@@ -1,5 +1,5 @@
-import { queryOptions } from '@tanstack/react-query'
 import { clusterQueries } from '@/features/platform/clusters/queries'
+import { queryOptions } from '@tanstack/react-query'
 import {
   getOverviewEvents,
   getOverviewMonitoringSummary,
@@ -16,7 +16,7 @@ export const platformOverviewQueries = {
       queryKey: platformOverviewKeys.monitoringSummary(),
       queryFn: getOverviewMonitoringSummary,
       enabled,
-      refetchInterval: 15_000,
+      refetchInterval: (query) => (query.state.status === 'error' ? false : 15_000),
     }),
   events: (clusterId: string | null | undefined, enabled = true, limit = 20) =>
     queryOptions({

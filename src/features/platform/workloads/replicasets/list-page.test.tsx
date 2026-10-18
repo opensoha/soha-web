@@ -6,7 +6,10 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { WorkloadsReplicaSetsPage } from './list-page'
 
 vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }))
-vi.mock('@/i18n', () => ({ useI18n: () => ({ localeCode: 'zh_CN' as const }) }))
+vi.mock('@/i18n', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/i18n')>()),
+  useI18n: () => ({ localeCode: 'zh_CN' as const }),
+}))
 vi.mock('@/stores/platform-scope-store', () => ({
   usePlatformScopeStore: () => 'cluster-a',
 }))

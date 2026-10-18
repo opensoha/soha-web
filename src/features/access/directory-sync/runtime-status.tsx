@@ -18,21 +18,25 @@ export function DirectoryRuntimePanel({
   connection,
   events,
   eventsLoading,
+  eventsUnavailable = false,
   onRetry,
   retryingEventId,
   status,
   statusError,
   statusLoading,
+  statusUnavailable = false,
 }: {
   canRetry: boolean
   connection: DirectoryConnection
   events: DirectoryEvent[]
   eventsLoading: boolean
+  eventsUnavailable?: boolean
   onRetry: (eventId: string) => void
   retryingEventId?: string
   status?: DirectoryRuntimeStatus
   statusError?: string
   statusLoading: boolean
+  statusUnavailable?: boolean
 }) {
   const callbackUrl = status?.callbackUrl
     ? new URL(status.callbackUrl, window.location.origin).toString()
@@ -106,99 +110,108 @@ export function DirectoryRuntimePanel({
           description="编辑连接并选择“定时 + 实时事件”后，才会接收增量组织与人员变更。"
         />
       ) : null}
-      <Descriptions
-        bordered
-        column={{ xs: 1, sm: 1, md: 2 }}
-        size="small"
-        items={[
-          {
-            key: 'callbackUrl',
-            label: '事件回调地址',
-            span: 2,
-            children: callbackUrl ? (
-              <Text code copyable={{ text: callbackUrl, tooltips: ['复制地址', '已复制'] }}>
-                {callbackUrl}
-              </Text>
-            ) : (
-              '-'
-            ),
-          },
-          {
-            key: 'callbackStatus',
-            label: '回调验证',
-            children: (
-              <BooleanTag
-                value={status?.callbackStatus === 'verified'}
-                trueLabel="已验证"
-                falseLabel={status?.callbackConfigured ? '等待首个事件' : '未配置'}
-                falseColor="warning"
-              />
-            ),
-          },
-          {
-            key: 'callbackVerifiedAt',
-            label: '验证时间',
-            children: formatDateTime(status?.callbackVerifiedAt),
-          },
-          {
-            key: 'queue',
-            label: '事件队列',
-            span: 2,
-            children: (
-              <Space wrap size={4}>
-                <MetadataTag label={`待处理 ${status?.queuedEvents ?? 0}`} tone="blue" />
-                <MetadataTag label={`失败 ${status?.failedEvents ?? 0}`} tone="orange" />
-              </Space>
-            ),
-          },
-          {
-            key: 'lastEventAt',
-            label: '最近事件',
-            children: formatDateTime(status?.lastEventAt),
-          },
-          {
-            key: 'lastIncrementalRun',
-            label: '最近增量同步',
-            children: runTime(status?.lastIncrementalRun),
-          },
-          {
-            key: 'lastFullRun',
-            label: '最近全量对账',
-            children: runTime(status?.lastFullRun),
-          },
-          {
-            key: 'reconcileRequired',
-            label: '对账状态',
-            children: (
-              <Space size={4}>
+      {statusUnavailable ? null : !status ? (
+        <ManagementState
+          compact
+          kind={statusLoading ? 'loading' : 'empty'}
+          title="尚无目录运行状态"
+          description="读取到运行状态后展示回调、队列与对账结果。"
+        />
+      ) : (
+        <Descriptions
+          bordered
+          column={{ xs: 1, sm: 1, md: 2 }}
+          size="small"
+          items={[
+            {
+              key: 'callbackUrl',
+              label: '事件回调地址',
+              span: 2,
+              children: callbackUrl ? (
+                <Text code copyable={{ text: callbackUrl, tooltips: ['复制地址', '已复制'] }}>
+                  {callbackUrl}
+                </Text>
+              ) : (
+                '-'
+              ),
+            },
+            {
+              key: 'callbackStatus',
+              label: '回调验证',
+              children: (
                 <BooleanTag
-                  value={!status?.needsFullReconcile}
-                  trueLabel="无需对账"
-                  falseLabel="需要对账"
+                  value={status?.callbackStatus === 'verified'}
+                  trueLabel="已验证"
+                  falseLabel={status?.callbackConfigured ? '等待首个事件' : '未配置'}
                   falseColor="warning"
                 />
-                {status?.reconcileReason ? (
-                  <Text type="secondary">{status.reconcileReason}</Text>
-                ) : null}
-              </Space>
-            ),
-          },
-          {
-            key: 'disablePolicy',
-            label: '离职处理',
-            children:
-              connection.policy.userDisablePolicy === 'never'
-                ? '保留账号，仅移除成员关系'
-                : '停用目录托管账号并移除成员关系',
-          },
-          {
-            key: 'archivePolicy',
-            label: '组织归档',
-            children: '上游缺失时归档，不直接删除',
-          },
-        ]}
-      />
-      {!eventsLoading && events.length === 0 ? (
+              ),
+            },
+            {
+              key: 'callbackVerifiedAt',
+              label: '验证时间',
+              children: formatDateTime(status?.callbackVerifiedAt),
+            },
+            {
+              key: 'queue',
+              label: '事件队列',
+              span: 2,
+              children: (
+                <Space wrap size={4}>
+                  <MetadataTag label={`待处理 ${status?.queuedEvents ?? 0}`} tone="blue" />
+                  <MetadataTag label={`失败 ${status?.failedEvents ?? 0}`} tone="orange" />
+                </Space>
+              ),
+            },
+            {
+              key: 'lastEventAt',
+              label: '最近事件',
+              children: formatDateTime(status?.lastEventAt),
+            },
+            {
+              key: 'lastIncrementalRun',
+              label: '最近增量同步',
+              children: runTime(status?.lastIncrementalRun),
+            },
+            {
+              key: 'lastFullRun',
+              label: '最近全量对账',
+              children: runTime(status?.lastFullRun),
+            },
+            {
+              key: 'reconcileRequired',
+              label: '对账状态',
+              children: (
+                <Space size={4}>
+                  <BooleanTag
+                    value={!status?.needsFullReconcile}
+                    trueLabel="无需对账"
+                    falseLabel="需要对账"
+                    falseColor="warning"
+                  />
+                  {status?.reconcileReason ? (
+                    <Text type="secondary">{status.reconcileReason}</Text>
+                  ) : null}
+                </Space>
+              ),
+            },
+            {
+              key: 'disablePolicy',
+              label: '离职处理',
+              children:
+                connection.policy.userDisablePolicy === 'never'
+                  ? '保留账号，仅移除成员关系'
+                  : '停用目录托管账号并移除成员关系',
+            },
+            {
+              key: 'archivePolicy',
+              label: '组织归档',
+              children: '上游缺失时归档，不直接删除',
+            },
+          ]}
+        />
+      )}
+      {eventsUnavailable ? null : !eventsLoading && events.length === 0 ? (
         <ManagementState
           compact
           kind="empty"

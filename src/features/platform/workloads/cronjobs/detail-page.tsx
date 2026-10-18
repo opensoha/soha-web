@@ -1,21 +1,23 @@
-import { useState } from 'react'
-import { Button, Card, Descriptions, Tag } from 'antd'
-import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
 import { ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
 import { ResourceEventsTimeline } from '@/components/resource-events-timeline'
 import { BooleanTag } from '@/components/status-tag'
 import { TableCellText } from '@/components/table-cell-content'
-import { useI18n } from '@/i18n'
-import { usePlatformScopeStore } from '@/stores/platform-scope-store'
-import { toScopeKey } from '@/types'
-import { formatAgeSeconds, formatDateTime } from '@/utils/time'
 import { buildWorkloadDetailPath } from '@/features/platform/workloads-model'
 import { WorkloadDetailShell } from '@/features/platform/workloads/shared/detail-shell'
 import { WorkloadRelationsCard } from '@/features/platform/workloads/shared/workload-relations'
+import '@/features/platform/workloads/styles.css'
+import { useI18n } from '@/i18n'
+import { usePlatformScopeStore } from '@/stores/platform-scope-store'
+import { toScopeKey } from '@/types'
+import { readableQueryData } from '@/utils/query-feedback'
+import { formatAgeSeconds, formatDateTime } from '@/utils/time'
+import { useQuery } from '@tanstack/react-query'
+import { Button, Card, Descriptions, Tag } from 'antd'
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { cronJobQueries } from './queries'
 import type { CronJobChildJob, CronJobDetail } from './types'
-import '@/features/platform/workloads/styles.css'
 
 function CronJobOverview({ detail }: { detail: CronJobDetail }) {
   const { localeCode } = useI18n()
@@ -151,13 +153,18 @@ function CronJobEventsTab({ detail, enabled }: { detail: CronJobDetail; enabled:
   const { clusterId } = usePlatformScopeStore()
   const options = cronJobQueries.events(toScopeKey(clusterId, detail.namespace), detail.name)
   const eventsQuery = useQuery({ ...options, enabled: Boolean(options.enabled) && enabled })
+  const visibleEventsQueryData =
+    Boolean(options.enabled) && enabled ? readableQueryData(eventsQuery) : undefined
 
   return (
-    <ResourceEventsTimeline
-      events={eventsQuery.data ?? []}
-      loading={eventsQuery.isLoading}
-      emptyDescription={localeCode === 'zh_CN' ? '当前 CronJob 暂无事件' : 'No CronJob events'}
-    />
+    <>
+      <ReadFeedback canRead={eventsQuery.isEnabled} query={eventsQuery} label="资源事件" />
+      <ResourceEventsTimeline
+        events={visibleEventsQueryData ?? []}
+        loading={eventsQuery.isLoading}
+        emptyDescription={localeCode === 'zh_CN' ? '当前 CronJob 暂无事件' : 'No CronJob events'}
+      />
+    </>
   )
 }
 

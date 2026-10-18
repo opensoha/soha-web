@@ -1,22 +1,22 @@
-import { Link } from 'react-router-dom'
-import { Alert, Button, Descriptions, Drawer, Space, Tabs, Typography } from 'antd'
-import { useQuery } from '@tanstack/react-query'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
 import { StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
-import { isApiError } from '@/services/api-error'
-import { identityProviderQueries, type IdentityProvider } from '../../providers'
+import { readableQueryData } from '@/utils/query-feedback'
+import { useQuery } from '@tanstack/react-query'
+import { Alert, Button, Descriptions, Drawer, Space, Tabs, Typography } from 'antd'
+import { Link } from 'react-router-dom'
 import { identityApplicationQueries } from '../../applications'
+import { identityProviderQueries, type IdentityProvider } from '../../providers'
+import { outpostDeploymentConfig, providersForOutpost } from '../deployment-model'
 import { identityOutpostQueries } from '../queries'
 import {
+  outpostConfigurationSummary,
   outpostRuntimeLabels,
   outpostRuntimeReason,
-  outpostConfigurationSummary,
 } from '../runtime-model'
-import { outpostDeploymentConfig, providersForOutpost } from '../deployment-model'
 import type { IdentityOutpost } from '../types'
-
 const nextSteps: Record<string, string> = {
   awaiting_registration: '按照部署页安装 Agent，并注入本节点的控制面 token。',
   awaiting_heartbeat: '节点已注册，等待首次配置应用与心跳；如持续未收到，请检查 Agent 日志。',
@@ -29,7 +29,6 @@ const nextSteps: Record<string, string> = {
   configuration_pending: '等待节点应用最新配置；如持续不收敛，查看 Agent 日志。',
   legacy_runtime: '升级节点，使用签名配置与租约观测。',
 }
-
 export function OutpostDetailDrawer({
   id,
   initialTab = 'overview',
@@ -43,17 +42,24 @@ export function OutpostDetailDrawer({
 }) {
   const snapshot = usePermissionSnapshot().data?.data
   const canViewProviders = hasPermission(snapshot, 'identity.providers.view')
-  const query = useQuery({ ...identityOutpostQueries.detail(id), refetchInterval: 15_000 })
+  const query = useQuery({
+    ...identityOutpostQueries.detail(id),
+    refetchInterval: (state) => (state.state.error ? false : 15000),
+  })
+  const visibleQueryData = query.isEnabled === false ? undefined : readableQueryData(query)
   const providers = useQuery({
     ...identityProviderQueries.list({ type: 'proxy' }),
     enabled: Boolean(id) && canViewProviders,
   })
+  const visibleProvidersData =
+    providers.isEnabled === false ? undefined : readableQueryData(providers)
   const apps = useQuery({
     ...identityApplicationQueries.list({}),
     enabled: Boolean(id) && hasPermission(snapshot, 'identity.applications.view'),
   })
-  const outpost = query.data
-  const linked = providersForOutpost(providers.data ?? [], id)
+  const visibleAppsData = apps.isEnabled === false ? undefined : readableQueryData(apps)
+  const outpost = visibleQueryData
+  const linked = providersForOutpost(visibleProvidersData ?? [], id)
   const config = outpost && outpostDeploymentConfig(outpost)
   return (
     <Drawer
@@ -73,14 +79,11 @@ export function OutpostDetailDrawer({
         )
       }
     >
-      {query.isError ? (
-        <ManagementState
-          kind={isApiError(query.error) && query.error.status === 403 ? 'no-permission' : 'error'}
-          title="节点详情加载失败"
-          description={query.error.message}
-          actions={<Button onClick={() => void query.refetch()}>重试</Button>}
-        />
-      ) : !outpost ? (
+      <ReadFeedback canRead={query.isEnabled} query={query} label="当前记录" />
+      <ReadFeedback canRead={providers.isEnabled} query={providers} label="身份数据" />
+      <ReadFeedback canRead={apps.isEnabled} query={apps} label="身份数据" />
+
+      {!visibleQueryData && query.isError && !visibleQueryData ? null : !outpost ? (
         <ManagementState kind="loading" title="正在读取接入节点" />
       ) : (
         <Tabs
@@ -253,11 +256,19 @@ export function OutpostDetailDrawer({
               label: '关联应用',
               children: !canViewProviders ? (
                 <ManagementState kind="no-permission" title="没有查看认证绑定的权限" />
-              ) : providers.isError ? (
+              ) : providers.isError && !visibleProvidersData ? (
                 <ManagementState
                   kind="error"
                   title="关联应用加载失败"
-                  actions={<Button onClick={() => void providers.refetch()}>重试</Button>}
+                  actions={
+                    <Button
+                      onClick={() =>
+                        void (providers.isEnabled === false ? undefined : providers.refetch())
+                      }
+                    >
+                      重试
+                    </Button>
+                  }
                 />
               ) : providers.isPending ? (
                 <ManagementState kind="loading" title="正在读取关联应用" />
@@ -277,8 +288,8 @@ export function OutpostDetailDrawer({
                             encodeURIComponent(provider.applicationId)
                           }
                         >
-                          {apps.data?.find((app) => app.id === provider.applicationId)?.name ??
-                            provider.applicationId}
+                          {visibleAppsData?.find((app) => app.id === provider.applicationId)
+                            ?.name ?? provider.applicationId}
                         </Link>
                       ),
                     },

@@ -1,4 +1,5 @@
 import { Alert, Button, Descriptions, Modal, Space, Tag } from 'antd'
+import type { ReactNode } from 'react'
 import type { DirectoryChangeCounts, DirectorySyncPreview } from './types'
 
 function ChangeCounts({ counts }: { counts?: DirectoryChangeCounts }) {
@@ -21,6 +22,9 @@ export function ChangePreviewModal({
   open,
   preview,
   syncing,
+  blocked = false,
+  feedback,
+  target,
 }: {
   loading: boolean
   onClose: () => void
@@ -28,10 +32,13 @@ export function ChangePreviewModal({
   open: boolean
   preview: DirectorySyncPreview | null
   syncing: boolean
+  blocked?: boolean
+  feedback?: ReactNode
+  target?: string
 }) {
   return (
     <Modal
-      title="同步变更预览"
+      title={target ? `同步变更预览 · ${target}` : '同步变更预览'}
       open={open}
       footer={
         preview
@@ -39,15 +46,24 @@ export function ChangePreviewModal({
               <Button key="cancel" onClick={onClose} disabled={syncing}>
                 取消
               </Button>,
-              <Button key="sync" type="primary" onClick={onSync} loading={syncing}>
+              <Button
+                key="sync"
+                type="primary"
+                onClick={onSync}
+                loading={syncing}
+                disabled={blocked || loading}
+              >
                 立即同步
               </Button>,
             ]
           : null
       }
       onCancel={onClose}
+      closable={{ disabled: syncing }}
+      keyboard={!syncing}
       loading={loading}
     >
+      {feedback}
       {preview ? (
         <Space orientation="vertical" size={12} style={{ width: '100%' }}>
           <Alert showIcon type="info" title="当前仅为预览，尚未写入组织或用户数据" />

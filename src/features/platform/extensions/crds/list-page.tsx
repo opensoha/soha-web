@@ -1,10 +1,4 @@
-import { useDeferredValue, useMemo, useState } from 'react'
-import { Button, Space, Tag, Typography } from 'antd'
-import { DeleteOutlined } from '@ant-design/icons'
-import { useQuery } from '@tanstack/react-query'
-import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
-import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
 import {
   ManagementDensityButton,
   ManagementIconButton,
@@ -12,19 +6,26 @@ import {
   ManagementState,
   ManagementTableToolbar,
 } from '@/components/management-list'
-import { useI18n } from '@/i18n'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import '@/features/platform/extensions/styles.css'
+import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
+import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
+import { readableQueryData } from '@/utils/query-feedback'
 import { tableColumnPresets } from '@/utils/table-columns'
+import { DeleteOutlined } from '@ant-design/icons'
+import { useQuery } from '@tanstack/react-query'
 import type { TableColumnsType } from 'antd'
+import { Button, Space, Tag, Typography } from 'antd'
+import { useDeferredValue, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ResourceQueryPanel } from '../shared/resource-query-panel'
 import { includesSearch, normalizeSearchKeyword } from '../shared/search'
+import { DeleteCRDDefinitionModal } from './delete-definition-modal'
 import { buildCRDApiGroupDetailPath } from './paths'
 import { crdQueries } from './queries'
 import type { CRDApiGroupSummary } from './types'
 import { groupCRDsByApi } from './utils'
-import { DeleteCRDDefinitionModal } from './delete-definition-modal'
-import '@/features/platform/extensions/styles.css'
 
 const { Text } = Typography
 
@@ -62,7 +63,11 @@ export function CRDPage() {
   const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
   const normalizedKeyword = normalizeSearchKeyword(useDeferredValue(searchKeyword))
   const catalogQuery = useQuery(crdQueries.catalog(clusterId))
-  const apiGroups = useMemo(() => groupCRDsByApi(catalogQuery.data ?? []), [catalogQuery.data])
+  const visibleCatalogQueryData = readableQueryData(catalogQuery)
+  const apiGroups = useMemo(
+    () => groupCRDsByApi(visibleCatalogQueryData ?? []),
+    [visibleCatalogQueryData],
+  )
   const filteredApiGroups = useMemo(
     () =>
       apiGroups.filter((item) =>
@@ -202,6 +207,9 @@ export function CRDPage() {
         setSearchKeyword={setSearchKeyword}
       />
       <AdminTable
+        error={catalogQuery.isEnabled === false ? null : catalogQuery.error}
+        hasReadData={catalogQuery.data !== undefined}
+        onRetry={catalogQuery.isEnabled === false ? undefined : () => catalogQuery.refetch()}
         className="soha-platform-table"
         columnSettingIconOnly
         columnSettingPlacement="header"

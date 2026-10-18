@@ -1,9 +1,12 @@
+import { readableQueryData } from '@/utils/query-feedback'
+import { ReadFeedback } from '@/components/request-feedback'
+
 import { useState } from 'react'
-import { Button, Card, Descriptions, Tabs } from 'antd'
+import { Button, Card, Descriptions, Space, Tabs } from 'antd'
 import { EditOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { Link, Navigate, useParams } from 'react-router-dom'
-import { ManagementState } from '@/components/management-list'
+import { ManagementRefreshButton, ManagementState } from '@/components/management-list'
 import {
   ComputeRelationsPanel,
   computeQueries,
@@ -38,8 +41,12 @@ export function DockerHostDetailPage() {
     }),
     enabled: dockerModuleEnabled && canViewOperations && Boolean(id),
   })
-  const host = hostQuery.data
-  const latestTask = latestTaskForResource(tasksQuery.data?.items ?? [], 'runtime_host', id)
+  const host = readableQueryData(hostQuery)
+  const latestTask = latestTaskForResource(
+    canViewOperations ? (readableQueryData(tasksQuery)?.items ?? []) : [],
+    'runtime_host',
+    id,
+  )
 
   useAIPageContext({
     sourceWorkbench: 'compute',
@@ -60,6 +67,10 @@ export function DockerHostDetailPage() {
 
   return (
     <div className="soha-page soha-docker-page">
+      <ReadFeedback
+        query={hostQuery}
+        label={localeText(localeCode, '运行时主机', 'Runtime host')}
+      />
       <DockerTableHeader
         title={host?.name || localeText(localeCode, '运行时主机', 'Runtime host')}
         status={host?.status}
@@ -69,14 +80,22 @@ export function DockerHostDetailPage() {
           host?.endpoint || host?.ipAddress || id,
         ]}
         actions={
-          canUpdateHosts && host ? (
-            <Button icon={<EditOutlined />} onClick={() => setEditing(true)}>
-              {localeText(localeCode, '编辑', 'Edit')}
-            </Button>
-          ) : undefined
+          <Space>
+            <ManagementRefreshButton
+              tooltip={localeText(localeCode, '刷新', 'Refresh')}
+              aria-label={localeText(localeCode, '刷新主机', 'Refresh host')}
+              loading={hostQuery.isFetching}
+              onClick={() => void hostQuery.refetch()}
+            />
+            {canUpdateHosts && host ? (
+              <Button icon={<EditOutlined />} onClick={() => setEditing(true)}>
+                {localeText(localeCode, '编辑', 'Edit')}
+              </Button>
+            ) : null}
+          </Space>
         }
       />
-      {!host && !hostQuery.isLoading ? (
+      {!host && hostQuery.isError ? null : !host && !hostQuery.isLoading ? (
         <Card size="small" variant="outlined" className="soha-management-panel-card">
           <ManagementState
             compact
@@ -181,6 +200,10 @@ export function DockerHostDetailPage() {
                           </Link>
                         }
                       >
+                        <ReadFeedback
+                          query={tasksQuery}
+                          label={localeText(localeCode, '最近任务', 'Latest tasks')}
+                        />
                         <ResourceTaskActions
                           task={latestTask}
                           resourceKind="runtime_host"
@@ -194,7 +217,11 @@ export function DockerHostDetailPage() {
           ]}
         />
       )}
-      <RuntimeHostModal editing={host ?? null} open={editing} onClose={() => setEditing(false)} />
+      <RuntimeHostModal
+        editing={host ?? null}
+        open={editing && Boolean(host) && canUpdateHosts}
+        onClose={() => setEditing(false)}
+      />
     </div>
   )
 }

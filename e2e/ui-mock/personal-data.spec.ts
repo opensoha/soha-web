@@ -156,9 +156,10 @@ for (const width of [1440, 390])
       page.on('download', (download) => downloads.push(download.suggestedFilename()))
       const exportButton = page.getByRole('button', { name: '导出持久文件', exact: true })
       await exportButton.click()
+      await expect(page.getByText('导出环境数据：操作请求失败', { exact: true })).toBeVisible()
       await expect(
-        page.getByText('数据导出未完成，请核对环境后再试；不会自动重试。', { exact: true }),
-      ).toBeVisible()
+        page.getByRole('alert').filter({ hasText: '导出环境数据：操作请求失败' }),
+      ).toContainText('个人数据导出被截断或摘要不匹配')
       expect(downloads).toEqual([])
       archiveHash = createHash('sha256').update(archive).digest('hex')
       await expect(exportButton).toBeEnabled({ timeout: 15000 })

@@ -1,18 +1,20 @@
+import { ApiError } from '@/services/api-error'
 /** @vitest-environment jsdom */
-import { act } from 'react'
-import { createRoot, type Root } from 'react-dom/client'
-import { App } from 'antd'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type {
   PersonalEnvironment,
   PersonalWorkspaceRuntime,
 } from '@opensoha/contracts/gen/ts/sohaapi'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { App } from 'antd'
+import { act } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { PersonalWorkspace } from './personal-workspace'
 
 const state = vi.hoisted(() => ({
   value: undefined as PersonalWorkspaceRuntime | undefined,
   failed: false,
+  denied: false,
   invoke: vi.fn(),
 }))
 vi.mock('../queries', () => ({
@@ -22,6 +24,7 @@ vi.mock('../queries', () => ({
       enabled,
       retry: false,
       queryFn: async () => {
+        if (state.denied) throw new ApiError(403, 'workspace denied', { method: 'GET' })
         if (state.failed) throw new Error('unavailable')
         return { data: state.value }
       },
@@ -46,6 +49,7 @@ const environment: PersonalEnvironment = {
   expiresAt: '2099-01-01T00:00:00Z',
 }
 beforeEach(() => {
+  state.denied = false
   state.failed = false
   state.value = { assistantId: environment.assistantId, environmentVersion: 7 }
   state.invoke.mockReset()
@@ -136,5 +140,30 @@ it('keeps an old browser frame visible but rejects pointer input after a generat
   expect(pointer).not.toBeNull()
   expect(pointer.disabled).toBe(true)
   expect(document.body.textContent).toContain('保留的观察画面')
+  expect(state.invoke).not.toHaveBeenCalled()
+})
+
+it('hides cached runtime output immediately after access is denied', async () => {
+  state.value = {
+    assistantId: environment.assistantId,
+    environmentVersion: 7,
+    latest: {
+      id: 'private-runtime',
+      assistantId: environment.assistantId,
+      environmentVersion: 7,
+      kind: 'execute',
+      status: 'succeeded',
+      output: 'PRIVATE-RUNTIME-OUTPUT',
+    },
+  }
+  await open()
+  expect(document.body.textContent).toContain('PRIVATE-RUNTIME-OUTPUT')
+  state.denied = true
+  await act(async () => {
+    await client.invalidateQueries({ queryKey: ['workspace', 'user-one', environment.assistantId] })
+  })
+  await vi.waitFor(() => expect(document.body.textContent).not.toContain('PRIVATE-RUNTIME-OUTPUT'))
+  expect(button('打开个人工作空间').disabled).toBe(true)
+  expect(document.body.textContent).toContain('无访问权限')
   expect(state.invoke).not.toHaveBeenCalled()
 })

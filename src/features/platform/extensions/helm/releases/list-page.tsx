@@ -1,10 +1,4 @@
-import { useDeferredValue, useMemo, useState } from 'react'
-import { Alert, App, Button, Popconfirm, Space } from 'antd'
-import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
-import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
 import {
   ManagementDensityButton,
   ManagementIconButton,
@@ -18,22 +12,32 @@ import {
   capabilityActionTooltip,
   useClusterCapability,
 } from '@/features/platform/cluster-capabilities'
+import '@/features/platform/extensions/styles.css'
+import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
+import {
+  platformResourceTarget,
+  usePlatformMutation,
+} from '@/features/platform/shared/use-platform-mutation'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
-import { formatAgeSeconds } from '@/utils/time'
+import { readableQueryData } from '@/utils/query-feedback'
 import { tableColumnPresets } from '@/utils/table-columns'
+import { formatAgeSeconds } from '@/utils/time'
+import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { TableColumnsType } from 'antd'
+import { Alert, Button, Popconfirm, Space } from 'antd'
+import { useDeferredValue, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { ResourceQueryPanel } from '../../shared/resource-query-panel'
 import { includesSearch, normalizeSearchKeyword } from '../../shared/search'
 import { helmMutations } from '../mutations'
 import { buildHelmReleaseRoutePath } from '../paths'
 import { helmQueries } from '../queries'
 import type { HelmRelease } from '../types'
-import '@/features/platform/extensions/styles.css'
 
 export function HelmReleasesPage() {
   const { t, localeCode } = useI18n()
-  const { message } = App.useApp()
   const { clusterId, namespace } = usePlatformScopeStore()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -45,8 +49,13 @@ export function HelmReleasesPage() {
   const [deletingReleaseKey, setDeletingReleaseKey] = useState<string | null>(null)
   const normalizedKeyword = normalizeSearchKeyword(useDeferredValue(searchKeyword))
   const releasesQuery = useQuery(helmQueries.releases(clusterId, namespace))
-  const deleteMutation = useMutation(helmMutations.removeRelease(queryClient))
-  const rawItems = releasesQuery.data ?? []
+  const visibleReleasesQueryData = readableQueryData(releasesQuery)
+  const deleteMutation = usePlatformMutation(helmMutations.removeRelease(queryClient), {
+    label: ['删除资源', 'Delete resource'],
+    target: platformResourceTarget,
+  })
+  const platformWriteBlocked = deleteMutation.blocked
+  const rawItems = visibleReleasesQueryData ?? []
   const canShowActions =
     canViewValues ||
     rawItems.some((item) =>
@@ -159,15 +168,17 @@ export function HelmReleasesPage() {
                 description={`${record.name} (${record.namespace})`}
                 okText={localeCode === 'zh_CN' ? '删除' : 'Delete'}
                 cancelText={t('common.cancel', 'Cancel')}
-                okButtonProps={{ danger: true, loading: deletingReleaseKey === key }}
+                okButtonProps={{
+                  disabled: platformWriteBlocked,
+                  danger: true,
+                  loading: deletingReleaseKey === key,
+                }}
                 onConfirm={() => {
                   if (!clusterId) return
                   setDeletingReleaseKey(key)
                   deleteMutation.mutate(
                     { clusterId, name: record.name, namespace: record.namespace },
                     {
-                      onSuccess: () => void message.success('Helm Release 已删除'),
-                      onError: (error) => void message.error(error.message),
                       onSettled: () => setDeletingReleaseKey(null),
                     },
                   )
@@ -177,7 +188,7 @@ export function HelmReleasesPage() {
                   danger
                   icon={<DeleteOutlined />}
                   aria-label={deleteLabel}
-                  disabled={mutationsDisabled}
+                  disabled={platformWriteBlocked || mutationsDisabled}
                   loading={deletingReleaseKey === key}
                   tooltip={capabilityActionTooltip(deleteLabel, capability)}
                 />
@@ -191,6 +202,8 @@ export function HelmReleasesPage() {
 
   return (
     <div className="soha-page">
+      {deleteMutation.feedback}
+
       <ResourceQueryPanel
         placeholder={
           localeCode === 'zh_CN'
@@ -210,6 +223,9 @@ export function HelmReleasesPage() {
         />
       ) : null}
       <AdminTable
+        error={releasesQuery.isEnabled === false ? null : releasesQuery.error}
+        hasReadData={releasesQuery.data !== undefined}
+        onRetry={releasesQuery.isEnabled === false ? undefined : () => releasesQuery.refetch()}
         className="soha-platform-table"
         columnSettingIconOnly
         columnSettingPlacement="header"

@@ -1,6 +1,7 @@
-import { useQuery } from '@tanstack/react-query'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { systemIntegrationQueries, type SystemIntegrationCategory } from '@/features/settings'
+import { readableQueryData } from '@/utils/query-feedback'
+import { useQuery } from '@tanstack/react-query'
 import { identityApplicationQueries } from '../applications'
 import { identityOutpostQueries } from '../outposts'
 import { identityProviderQueries } from '../providers'
@@ -70,17 +71,38 @@ export function useIdentityOverviewData() {
   }
 
   return {
-    applications: applicationsQuery.data ?? [],
-    providers: providersQuery.data ?? [],
-    outposts: outpostsQuery.data ?? [],
-    sessions: sessionsQuery.data ?? [],
-    audits: auditQuery.data ?? [],
-    softwareStorage: softwareStorageQuery.data,
-    storageIntegrations: storageIntegrationsQuery.data ?? [],
+    reads: {
+      applications: applicationsQuery,
+      providers: providersQuery,
+      outposts: outpostsQuery,
+      sessions: sessionsQuery,
+      audits: auditQuery,
+      softwareStorage: softwareStorageQuery,
+      storageIntegrations: storageIntegrationsQuery,
+      runtime: runtimeQuery,
+    },
+    applications:
+      (applicationsQuery.isEnabled === false ? undefined : readableQueryData(applicationsQuery)) ??
+      [],
+    providers:
+      (providersQuery.isEnabled === false ? undefined : readableQueryData(providersQuery)) ?? [],
+    outposts:
+      (outpostsQuery.isEnabled === false ? undefined : readableQueryData(outpostsQuery)) ?? [],
+    sessions:
+      (sessionsQuery.isEnabled === false ? undefined : readableQueryData(sessionsQuery)) ?? [],
+    audits: (auditQuery.isEnabled === false ? undefined : readableQueryData(auditQuery)) ?? [],
+    softwareStorage:
+      softwareStorageQuery.isEnabled === false
+        ? undefined
+        : readableQueryData(softwareStorageQuery),
+    storageIntegrations:
+      (storageIntegrationsQuery.isEnabled === false
+        ? undefined
+        : readableQueryData(storageIntegrationsQuery)) ?? [],
     softwareError:
       softwareStorageQuery.isError ||
       (permissions.storageIntegrations && storageIntegrationsQuery.isError),
-    runtime: runtimeQuery.data,
+    runtime: runtimeQuery.isEnabled === false ? undefined : readableQueryData(runtimeQuery),
     loading: {
       applications: applicationsQuery.isLoading,
       providers: providersQuery.isLoading,

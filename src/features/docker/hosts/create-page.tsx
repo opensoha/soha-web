@@ -1,3 +1,6 @@
+import { readableQueryData } from '@/utils/query-feedback'
+import { ReadFeedback } from '@/components/request-feedback'
+import { ComputeMutationFeedback } from '@/features/compute'
 import { useEffect, useState } from 'react'
 import {
   Alert,
@@ -74,14 +77,15 @@ export function RuntimeHostModal({ editing, onClose, onSuccess, open }: RuntimeH
   const { message } = App.useApp()
   const { localeCode } = useI18n()
   const virtualMachinesQuery = useQuery(virtualizationQueries.vms({ page: 1, pageSize: 500 }, open))
-  const virtualMachines = Array.isArray(virtualMachinesQuery.data)
-    ? virtualMachinesQuery.data
-    : (virtualMachinesQuery.data?.items ?? [])
+  const vmOptionsData = readableQueryData(virtualMachinesQuery)
+  const virtualMachines = Array.isArray(vmOptionsData)
+    ? vmOptionsData
+    : (vmOptionsData?.items ?? [])
   const hostQuery = useQuery({
     ...dockerQueries.host(installation?.hostId ?? '', Boolean(installation)),
     refetchInterval: (query) => (hasAgentReport(query.state.data) ? false : 2_000),
   })
-  const agentReported = hasAgentReport(hostQuery.data)
+  const agentReported = hasAgentReport(readableQueryData(hostQuery))
   const saveMutation = useMutation({
     mutationFn: async (values: RuntimeHostFormValues) => {
       const host = editing
@@ -137,25 +141,20 @@ export function RuntimeHostModal({ editing, onClose, onSuccess, open }: RuntimeH
         message.success(
           editing
             ? localeText(localeCode, '运行时主机已更新', 'Runtime host updated')
-            : localeText(localeCode, '运行时主机已接入', 'Runtime host connected'),
+            : localeText(
+                localeCode,
+                '运行时主机记录已保存，等待 Agent 上报',
+                'Runtime host record saved; waiting for Agent report',
+              ),
         )
       }
       form.resetFields()
       onClose()
     },
-    onError: (error) =>
-      void message.error(
-        error.message.includes('临时主机记录')
-          ? error.message
-          : localeText(
-              localeCode,
-              `运行时主机接入失败：${error.message}`,
-              `Failed to connect runtime host: ${error.message}`,
-            ),
-      ),
   })
 
   const closeForm = () => {
+    if (saveMutation.isPending) return
     form.resetFields()
     saveMutation.reset()
     onClose()
@@ -176,6 +175,30 @@ export function RuntimeHostModal({ editing, onClose, onSuccess, open }: RuntimeH
 
   return (
     <>
+      {!open ? (
+        <ComputeMutationFeedback
+          operations={[
+            {
+              label: localeText(localeCode, '保存运行时主机', 'Save runtime host'),
+              mutation: saveMutation,
+              target: saveMutation.variables?.name,
+              receipt: {
+                message: saveMutation.data?.installation
+                  ? localeText(
+                      localeCode,
+                      '主机记录与安装命令已生成，等待 Agent 上报',
+                      'Host record and install command generated; waiting for Agent report',
+                    )
+                  : localeText(
+                      localeCode,
+                      '主机记录已保存，运行状态以 Agent 上报为准',
+                      'Host record saved; runtime state comes from Agent reports',
+                    ),
+              },
+            },
+          ]}
+        />
+      ) : null}
       <Modal
         title={
           editing
@@ -200,6 +223,19 @@ export function RuntimeHostModal({ editing, onClose, onSuccess, open }: RuntimeH
         style={{ top: 32 }}
         styles={{ body: { ...scrollableModalBodyStyle, maxHeight: 'calc(100dvh - 180px)' } }}
       >
+        <ReadFeedback
+          query={virtualMachinesQuery}
+          label={localeText(localeCode, '虚拟机选项', 'VM options')}
+        />
+        <ComputeMutationFeedback
+          operations={[
+            {
+              label: localeText(localeCode, '保存运行时主机', 'Save runtime host'),
+              mutation: saveMutation,
+              target: saveMutation.variables?.name,
+            },
+          ]}
+        />
         <Form<RuntimeHostFormValues>
           form={form}
           layout="vertical"
@@ -431,27 +467,35 @@ export function RuntimeHostModal({ editing, onClose, onSuccess, open }: RuntimeH
               size="small"
               column={{ xs: 1, sm: 1, md: 2, lg: 2, xl: 2, xxl: 2 }}
               items={[
-                { key: 'agentId', label: 'Agent ID', children: hostQuery.data?.agentId || '-' },
-                { key: 'endpoint', label: 'Endpoint', children: hostQuery.data?.endpoint || '-' },
+                {
+                  key: 'agentId',
+                  label: 'Agent ID',
+                  children: readableQueryData(hostQuery)?.agentId || '-',
+                },
+                {
+                  key: 'endpoint',
+                  label: 'Endpoint',
+                  children: readableQueryData(hostQuery)?.endpoint || '-',
+                },
                 {
                   key: 'ipAddress',
                   label: localeText(localeCode, 'IP 地址', 'IP address'),
-                  children: hostQuery.data?.ipAddress || '-',
+                  children: readableQueryData(hostQuery)?.ipAddress || '-',
                 },
                 {
                   key: 'architecture',
                   label: localeText(localeCode, '架构', 'Architecture'),
-                  children: hostQuery.data?.architecture || '-',
+                  children: readableQueryData(hostQuery)?.architecture || '-',
                 },
                 {
                   key: 'dockerVersion',
                   label: localeText(localeCode, 'Docker 版本', 'Docker version'),
-                  children: hostQuery.data?.dockerVersion || '-',
+                  children: readableQueryData(hostQuery)?.dockerVersion || '-',
                 },
                 {
                   key: 'composeVersion',
                   label: localeText(localeCode, 'Compose 版本', 'Compose version'),
-                  children: hostQuery.data?.composeVersion || '-',
+                  children: readableQueryData(hostQuery)?.composeVersion || '-',
                 },
               ]}
             />

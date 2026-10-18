@@ -1,6 +1,16 @@
+import { AdminTable } from '@/components/admin-table'
+import { ManagementIconButton } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
+import { BooleanTag, MetadataTag, StatusTag } from '@/components/status-tag'
 import { StepForm } from '@/components/step-form'
-import { useEffect, useRef, useState } from 'react'
+import { StepFormModal } from '@/components/step-form-modal'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import { formatDateTime } from '@/utils/time'
 import { EditOutlined, PlayCircleOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TableProps } from 'antd'
 import {
   Alert,
   App,
@@ -16,15 +26,8 @@ import {
   Switch,
   Typography,
 } from 'antd'
-import type { TableProps } from 'antd'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { StepFormModal } from '@/components/step-form-modal'
-import { AdminTable } from '@/components/admin-table'
-import { ManagementIconButton } from '@/components/management-list'
-import { BooleanTag, MetadataTag, StatusTag } from '@/components/status-tag'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
-import { formatDateTime } from '@/utils/time'
 import '../observability-pages.css'
 import {
   alertRuleConditionSummary,
@@ -70,22 +73,50 @@ export function AlertRulesPage() {
     ...observabilityRuleQueries.runs(selectedRuleId),
     enabled: runsOpen && selectedRuleId !== '',
   })
-  const mutationError = (error: Error) => message.error(error.message)
-  const createMutation = useMutation({
-    ...observabilityRuleMutations.create(queryClient),
-    onError: mutationError,
+  const createMutation = useOperationMutation(observabilityRuleMutations.create(queryClient), {
+    label: ['创建告警规则', 'Create alert rule'],
+    target: (input) => input.name,
+    receipt: () => ({ message: '告警规则记录已创建' }),
   })
-  const updateMutation = useMutation({
-    ...observabilityRuleMutations.update(queryClient),
-    onError: mutationError,
+  const updateMutation = useOperationMutation(observabilityRuleMutations.update(queryClient), {
+    label: ['更新告警规则', 'Update alert rule'],
+    target: ({ id }) => id,
+    receipt: () => ({ message: '告警规则记录已更新' }),
   })
-  const testMutation = useMutation({
-    ...observabilityRuleMutations.test(),
-    onError: mutationError,
+  const testMutation = useOperationMutation(observabilityRuleMutations.test(), {
+    label: ['测试告警规则', 'Test alert rule'],
+    target: ({ id }) => id,
+    readOnly: true,
+    resultError: (result) =>
+      result.state === 'error' ? new Error(result.summary || '规则测试返回错误') : undefined,
+    receipt: () => ({ message: '规则测试记录已返回', evidence: '本次测试未保存规则或执行处置。' }),
   })
+  const denied = queryAccessDenied(rulesQuery)
+  const writeBlocked = createMutation.blocked || updateMutation.blocked
+  const blocked =
+    writeBlocked ||
+    denied ||
+    !readableQueryData(notificationPoliciesQuery) ||
+    !readableQueryData(healingPoliciesQuery) ||
+    testMutation.isPending
+  function cancelEditor() {
+    if (writeBlocked || testMutation.isPending) return
+    setOpen(false)
+    setEditing(null)
+    form.resetFields()
+  }
+  useEffect(() => {
+    if (denied || queryAccessDenied(createMutation) || queryAccessDenied(updateMutation)) {
+      setOpen(false)
+      setEditing(null)
+      form.resetFields()
+      setTestOpen(false)
+      setTestResult(null)
+    }
+  }, [denied, createMutation.error, updateMutation.error, form])
 
   useEffect(() => {
-    if (dashboardDraftOpened.current || !canManageRule) return
+    if (dashboardDraftOpened.current || !canManageRule || denied) return
     const draft = alertRuleDashboardDraft(searchParams)
     if (!draft) return
     dashboardDraftOpened.current = true
@@ -93,32 +124,36 @@ export function AlertRulesPage() {
     setStep(0)
     form.setFieldsValue(draft)
     setOpen(true)
-  }, [canManageRule, form, searchParams])
+  }, [canManageRule, denied, form, searchParams])
 
   function openEditor(record: AlertRule | null) {
+    if (writeBlocked || denied || testMutation.isPending) return
+    createMutation.reset()
+    updateMutation.reset()
+    testMutation.reset()
+    setTestResult(null)
+    form.resetFields()
     setStep(0)
     setEditing(record)
     setOpen(true)
     form.setFieldsValue(alertRuleFormValues(record))
   }
 
-  function closeEditor(label: string) {
-    message.success(label)
+  function closeEditor() {
+    form.resetFields()
     setOpen(false)
     setEditing(null)
   }
 
   function submit(values: AlertRuleFormValues) {
+    if (blocked || !canManageRule) return
     try {
       const payload = buildAlertRulePayload(values)
       if (editing) {
-        updateMutation.mutate(
-          { id: editing.id, payload },
-          { onSuccess: () => closeEditor('告警规则已更新') },
-        )
+        updateMutation.mutate({ id: editing.id, payload }, { onSuccess: () => closeEditor() })
       } else {
         createMutation.mutate(payload, {
-          onSuccess: () => closeEditor('告警规则已保存'),
+          onSuccess: () => closeEditor(),
         })
       }
     } catch (error) {
@@ -127,13 +162,16 @@ export function AlertRulesPage() {
   }
 
   function testRule(record: AlertRule, values = buildAlertRulePayload(record)) {
+    if (testMutation.isPending || denied || !canTestRule) return
+    setTestResult(null)
+    setTestOpen(true)
+    testMutation.reset()
     testMutation.mutate(
       { id: record.id, payload: values },
       {
         onSuccess: (result) => {
           setTestResult(result)
           setTestOpen(true)
-          message.success('规则测试已执行')
         },
       },
     )
@@ -193,7 +231,7 @@ export function AlertRulesPage() {
         <Space className="soha-row-action-icons" size={2}>
           <ManagementIconButton
             aria-label="测试告警规则"
-            disabled={!canTestRule}
+            disabled={!canTestRule || testMutation.isPending || denied}
             size="small"
             tooltip="测试"
             icon={<PlayCircleOutlined />}
@@ -212,6 +250,7 @@ export function AlertRulesPage() {
           {canManageRule ? (
             <ManagementIconButton
               aria-label="编辑告警规则"
+              disabled={writeBlocked || denied || testMutation.isPending}
               size="small"
               tooltip="编辑"
               icon={<EditOutlined />}
@@ -225,17 +264,29 @@ export function AlertRulesPage() {
 
   return (
     <div className="soha-page">
+      {!open ? (
+        <>
+          {createMutation.feedback}
+          {updateMutation.feedback}
+        </>
+      ) : null}
       <h1 className="soha-observability-page-heading">告警规则</h1>
       <AdminTable
         enableDensity
         error={rulesQuery.error}
+        hasReadData={rulesQuery.data !== undefined}
         refreshing={rulesQuery.isFetching}
         onRefresh={() => void rulesQuery.refetch()}
         columnSettingPlacement="header"
         columnSettingIconOnly
         headerExtra={
           canManageRule ? (
-            <Button icon={<PlusOutlined />} type="primary" onClick={() => openEditor(null)}>
+            <Button
+              disabled={writeBlocked || denied || testMutation.isPending}
+              icon={<PlusOutlined />}
+              type="primary"
+              onClick={() => openEditor(null)}
+            >
               新建规则
             </Button>
           ) : null
@@ -249,14 +300,28 @@ export function AlertRulesPage() {
 
       <StepFormModal
         title={editing ? '编辑告警规则' : '新建告警规则'}
-        open={open}
-        onClose={() => setOpen(false)}
+        open={open && !denied}
+        closeDisabled={writeBlocked || testMutation.isPending}
+        feedback={
+          <>
+            {createMutation.feedback}
+            {updateMutation.feedback}
+            <ReadFeedback label="通知策略选项" query={notificationPoliciesQuery} />
+            <ReadFeedback label="自愈策略选项" query={healingPoliciesQuery} />
+          </>
+        }
+        onClose={cancelEditor}
         width={920}
       >
         <StepForm
-          onCancel={() => setOpen(false)}
+          onCancel={cancelEditor}
           contentMaxWidth="100%"
+          disabled={blocked}
           form={form}
+          onValuesChange={() => {
+            setTestResult(null)
+            testMutation.reset()
+          }}
           current={step}
           onCurrentChange={setStep}
           onFinish={submit}
@@ -289,6 +354,7 @@ export function AlertRulesPage() {
                   {' '}
                   <Form.Item name="mode" label="配置模式">
                     <Segmented
+                      disabled={blocked}
                       block
                       className="soha-form-segmented"
                       options={[
@@ -452,10 +518,12 @@ export function AlertRulesPage() {
                     <Form.Item name="notificationPolicyId" label="通知策略">
                       <Select
                         allowClear
-                        options={(notificationPoliciesQuery.data ?? []).map((item) => ({
-                          value: item.id,
-                          label: item.name,
-                        }))}
+                        options={(readableQueryData(notificationPoliciesQuery) ?? []).map(
+                          (item) => ({
+                            value: item.id,
+                            label: item.name,
+                          }),
+                        )}
                       />
                     </Form.Item>
                   </div>
@@ -463,7 +531,7 @@ export function AlertRulesPage() {
                     <Select
                       mode="multiple"
                       allowClear
-                      options={(healingPoliciesQuery.data ?? []).map((item) => ({
+                      options={(readableQueryData(healingPoliciesQuery) ?? []).map((item) => ({
                         value: item.id,
                         label: item.name,
                       }))}
@@ -476,6 +544,7 @@ export function AlertRulesPage() {
                   {canTestRule ? (
                     <Button
                       icon={<PlayCircleOutlined />}
+                      disabled={blocked}
                       loading={testMutation.isPending}
                       onClick={testEditor}
                     >
@@ -497,41 +566,67 @@ export function AlertRulesPage() {
           header: 'soha-observability-modal-header',
         }}
         title="规则测试结果"
-        open={testOpen}
-        onCancel={() => setTestOpen(false)}
+        open={testOpen && !denied}
+        closable={!testMutation.isPending}
+        keyboard={!testMutation.isPending}
+        mask={{ closable: false }}
+        onCancel={() => {
+          if (!testMutation.isPending) {
+            setTestOpen(false)
+            setTestResult(null)
+            testMutation.reset()
+          }
+        }}
         footer={null}
         width={920}
         destroyOnHidden
       >
-        <Space orientation="vertical" style={{ width: '100%' }} size={16}>
-          <Alert
-            type={
-              testResult?.state === 'error' ? 'error' : testResult?.matched ? 'warning' : 'success'
-            }
-            showIcon
-            title={
-              <Space>
-                <StatusTag value={String(testResult?.state ?? 'unknown')} />
-                {String(testResult?.summary ?? '-')}
-              </Space>
-            }
-          />
-          {(
-            [
-              ['errors', testResult?.errors],
-              ['dataSources', testResult?.dataSources],
-              ['samples', testResult?.samples],
-              ['notificationPreview', testResult?.notificationPreview],
-              ['querySnapshot', testResult?.querySnapshot],
-            ] as const
-          ).map(([key, value]) => (
-            <Card size="small" title={key} key={key}>
-              <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
-                {JSON.stringify(value ?? '-', null, 2)}
-              </pre>
-            </Card>
-          ))}
-        </Space>
+        {testMutation.feedback}
+        {(testMutation.error || testResult?.state === 'error') && testMutation.variables ? (
+          <Button
+            onClick={() => {
+              setTestResult(null)
+              testMutation.mutate(testMutation.variables!, { onSuccess: setTestResult })
+            }}
+          >
+            重试测试
+          </Button>
+        ) : null}
+        {testResult ? (
+          <Space orientation="vertical" style={{ width: '100%' }} size={16}>
+            <Alert
+              type={
+                testResult?.state === 'error'
+                  ? 'error'
+                  : testResult?.matched
+                    ? 'warning'
+                    : 'success'
+              }
+              showIcon
+              title={
+                <Space>
+                  <StatusTag value={String(testResult?.state ?? 'unknown')} />
+                  {String(testResult?.summary ?? '-')}
+                </Space>
+              }
+            />
+            {(
+              [
+                ['errors', testResult?.errors],
+                ['dataSources', testResult?.dataSources],
+                ['samples', testResult?.samples],
+                ['notificationPreview', testResult?.notificationPreview],
+                ['querySnapshot', testResult?.querySnapshot],
+              ] as const
+            ).map(([key, value]) => (
+              <Card size="small" title={key} key={key}>
+                <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+                  {JSON.stringify(value ?? '-', null, 2)}
+                </pre>
+              </Card>
+            ))}
+          </Space>
+        ) : null}
       </Modal>
 
       <Modal
@@ -551,6 +646,7 @@ export function AlertRulesPage() {
         <AdminTable
           enableDensity
           error={ruleRunsQuery.error}
+          hasReadData={ruleRunsQuery.data !== undefined}
           refreshing={ruleRunsQuery.isFetching}
           onRefresh={() => void ruleRunsQuery.refetch()}
           columnSettingPlacement="header"

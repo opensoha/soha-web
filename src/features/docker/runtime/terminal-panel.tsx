@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DisconnectOutlined, LinkOutlined } from '@ant-design/icons'
-import { Button, Card, Select, Space, Typography } from 'antd'
+import { Alert, Button, Card, Select, Space, Typography } from 'antd'
 import type { Terminal } from '@xterm/xterm'
 import type { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
@@ -27,6 +27,7 @@ export function DockerProjectTerminalPanel({
   serviceName,
   serviceOptions,
   servicesLoading,
+  servicesError,
   onServiceChange,
 }: DockerRuntimePanelProps) {
   const { localeCode } = useI18n()
@@ -40,7 +41,12 @@ export function DockerProjectTerminalPanel({
   const [connectionState, setConnectionState] = useState<
     'idle' | 'connecting' | 'connected' | 'closed' | 'error'
   >('idle')
-  const canConnectRuntime = enabled && Boolean(projectId && serviceName)
+  const [connectionError, setConnectionError] = useState('')
+  const canConnectRuntime =
+    enabled &&
+    Boolean(
+      projectId && serviceName && serviceOptions.some((option) => option.value === serviceName),
+    )
 
   const terminalURL = useMemo(() => {
     if (!canConnectRuntime) return ''
@@ -74,85 +80,119 @@ export function DockerProjectTerminalPanel({
       const runId = terminalRunRef.current + 1
       terminalRunRef.current = runId
       setConnectionState('connecting')
+      setConnectionError('')
       let ticketedURL: string
       try {
         ticketedURL = await withStreamTicket(terminalURL)
       } catch {
         if (terminalRunRef.current !== runId) return
         setConnectionState('error')
+        setConnectionError(
+          localeText(
+            localeCode,
+            '获取连接凭据失败，请重试连接。',
+            'Could not obtain a connection ticket; retry the connection.',
+          ),
+        )
         return
       }
-      const [{ Terminal: XTerm }, { FitAddon: XTermFitAddon }] = await Promise.all([
-        import('@xterm/xterm'),
-        import('@xterm/addon-fit'),
-      ])
-      if (terminalRunRef.current !== runId || !containerRef.current) {
-        return
-      }
-      const terminal = new XTerm({
-        cursorBlink: true,
-        convertEol: true,
-        fontFamily:
-          'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace',
-        fontSize: 13,
-        theme: readTerminalThemeColors(),
-      })
-      const fitAddon = new XTermFitAddon()
-      terminal.loadAddon(fitAddon)
-      terminal.open(containerRef.current)
-      fitAddon.fit()
-      terminal.writeln('Connecting to docker service...')
-      terminalRef.current = terminal
-      fitAddonRef.current = fitAddon
-
-      const socket = new WebSocket(ticketedURL)
-      socketRef.current = socket
-      socket.onopen = () => {
-        if (socketRef.current !== socket) return
-        setConnectionState('connected')
-        terminal.writeln('Connected.')
-      }
-      socket.onmessage = (event) => {
-        if (socketRef.current !== socket) return
-        const message = parseStreamMessage<TerminalMessage>(event.data)
-        if (!message) return
-        if (message.type === 'stdout' || message.type === 'stderr') {
-          terminal.write(message.data || '')
+      try {
+        const [{ Terminal: XTerm }, { FitAddon: XTermFitAddon }] = await Promise.all([
+          import('@xterm/xterm'),
+          import('@xterm/addon-fit'),
+        ])
+        if (terminalRunRef.current !== runId || !containerRef.current) {
+          return
         }
-        if (message.type === 'status' && message.message) {
-          terminal.writeln(`\r\n${message.message}`)
+        const terminal = new XTerm({
+          cursorBlink: true,
+          convertEol: true,
+          fontFamily:
+            'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace',
+          fontSize: 13,
+          theme: readTerminalThemeColors(),
+        })
+        const fitAddon = new XTermFitAddon()
+        terminalRef.current = terminal
+        fitAddonRef.current = fitAddon
+        terminal.loadAddon(fitAddon)
+        terminal.open(containerRef.current)
+        fitAddon.fit()
+        terminal.writeln('Connecting to docker service...')
+        const socket = new WebSocket(ticketedURL)
+        socketRef.current = socket
+        socket.onopen = () => {
+          if (socketRef.current !== socket) return
+          setConnectionState('connected')
+          terminal.writeln('Connected.')
         }
-        if (message.type === 'error') {
+        socket.onmessage = (event) => {
+          if (socketRef.current !== socket) return
+          const message = parseStreamMessage<TerminalMessage>(event.data)
+          if (!message) return
+          if (message.type === 'stdout' || message.type === 'stderr') {
+            terminal.write(message.data || '')
+          }
+          if (message.type === 'status' && message.message) {
+            terminal.writeln(`\r\n${message.message}`)
+          }
+          if (message.type === 'error') {
+            setConnectionState('error')
+            setConnectionError(
+              localeText(
+                localeCode,
+                'Shell 返回错误，请检查服务状态后重试连接。',
+                'The Shell reported an error; check the service and retry.',
+              ),
+            )
+            terminal.writeln(`\r\n${message.message || 'terminal error'}`)
+          }
+          if (message.type === 'exit') {
+            setConnectionState('closed')
+            terminal.writeln('\r\nSession closed.')
+          }
+        }
+        socket.onerror = () => {
+          if (socketRef.current !== socket) return
           setConnectionState('error')
-          terminal.writeln(`\r\n${message.message || 'terminal error'}`)
+          setConnectionError(
+            localeText(
+              localeCode,
+              'Shell 连接失败，请检查主机与服务后重试。',
+              'Shell connection failed; check the host and service before retrying.',
+            ),
+          )
         }
-        if (message.type === 'exit') {
-          setConnectionState('closed')
-          terminal.writeln('\r\nSession closed.')
+        socket.onclose = () => {
+          if (socketRef.current !== socket) return
+          setConnectionState((current) => (current === 'error' ? 'error' : 'closed'))
         }
-      }
-      socket.onerror = () => {
-        if (socketRef.current !== socket) return
+        terminal.onData((data) => {
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: 'input', data }))
+          }
+        })
+        resizeObserverRef.current = new ResizeObserver(() => fitAddon.fit())
+        resizeObserverRef.current.observe(containerRef.current)
+      } catch {
+        if (terminalRunRef.current !== runId) return
+        disposeTerminal()
         setConnectionState('error')
+        setConnectionError(
+          localeText(
+            localeCode,
+            '无法初始化 Shell，请重试连接。',
+            'Could not initialize the Shell; retry the connection.',
+          ),
+        )
       }
-      socket.onclose = () => {
-        if (socketRef.current !== socket) return
-        setConnectionState((current) => (current === 'error' ? 'error' : 'closed'))
-      }
-      terminal.onData((data) => {
-        if (socket.readyState === WebSocket.OPEN) {
-          socket.send(JSON.stringify({ type: 'input', data }))
-        }
-      })
-      resizeObserverRef.current = new ResizeObserver(() => fitAddon.fit())
-      resizeObserverRef.current.observe(containerRef.current)
     })()
-  }, [disposeTerminal, enabled, terminalURL])
+  }, [disposeTerminal, enabled, terminalURL, localeCode])
 
   useEffect(() => {
-    if (!terminalURL) {
-      disposeTerminal()
-    }
+    disposeTerminal()
+    setConnectionState('idle')
+    setConnectionError('')
   }, [disposeTerminal, terminalURL])
 
   useEffect(() => disposeTerminal, [disposeTerminal])
@@ -208,25 +248,55 @@ export function DockerProjectTerminalPanel({
           </div>
           <Space size={4} wrap>
             <Button
-              disabled={!enabled || !serviceName || connectionState === 'connecting'}
+              disabled={!canConnectRuntime || connectionState === 'connecting'}
               icon={<LinkOutlined />}
               size="small"
               type="primary"
               onClick={connect}
             >
-              {localeText(localeCode, '连接', 'Connect')}
+              {connectionState === 'error'
+                ? localeText(localeCode, '重试连接', 'Retry connection')
+                : localeText(localeCode, '连接', 'Connect')}
             </Button>
             <Button
+              disabled={connectionState === 'idle' || connectionState === 'closed'}
               icon={<DisconnectOutlined />}
               size="small"
               type="text"
-              onClick={disposeTerminal}
+              onClick={() => {
+                disposeTerminal()
+                setConnectionState('closed')
+                setConnectionError('')
+              }}
             >
               {localeText(localeCode, '断开', 'Disconnect')}
             </Button>
           </Space>
         </div>
-        <div className="soha-terminal-shell">
+        {connectionError ? <Alert showIcon type="error" title={connectionError} /> : null}
+        {serviceOptions.length === 0 ? (
+          <ManagementState
+            compact
+            kind={servicesLoading ? 'loading' : servicesError ? 'error' : 'empty'}
+            title={
+              servicesLoading
+                ? localeText(localeCode, '正在读取服务', 'Loading services')
+                : servicesError
+                  ? localeText(localeCode, '服务列表读取失败', 'Service list could not be read')
+                  : localeText(localeCode, '没有可用服务', 'No available services')
+            }
+            description={
+              servicesError && !servicesLoading
+                ? localeText(
+                    localeCode,
+                    '请通过页面上方的“重试读取”刷新项目服务。',
+                    'Retry reading project services using the action above.',
+                  )
+                : undefined
+            }
+          />
+        ) : null}
+        <div className="soha-terminal-shell" hidden={serviceOptions.length === 0}>
           <div ref={containerRef} className="soha-terminal-shell-inner" />
         </div>
       </Card>

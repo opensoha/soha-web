@@ -1,3 +1,5 @@
+import { readableQueryData } from '@/utils/query-feedback'
+import { ReadFeedback } from '@/components/request-feedback'
 import {
   ApiOutlined,
   AppstoreOutlined,
@@ -30,6 +32,7 @@ import { localeText, useI18n } from '@/i18n'
 import { formatDateTime } from '@/utils/time'
 import { canAccessRoute, getRouteMeta } from '@/routes/meta'
 import type { PermissionSnapshot } from '@/types'
+
 import { computeQueries } from '../queries'
 import { ProviderInstancesPanel } from './provider-instances-panel'
 import type { SummaryChartProps } from './summary-chart'
@@ -171,7 +174,7 @@ export function ComputeOverviewPage() {
   const overviewQuery = useQuery(
     computeQueries.overview(canViewVirtualization || canViewDocker || canViewTasks),
   )
-  const overview = overviewQuery.data?.data
+  const overview = readableQueryData(overviewQuery)?.data
   const virtualization = overview?.virtualization
   const agents = overview?.agents
   const runtimes = overview?.runtimes
@@ -465,7 +468,7 @@ export function ComputeOverviewPage() {
       value: taskSummary?.failed ?? '—',
       tone: (taskSummary?.failed ?? 0) > 0 ? 'danger' : 'default',
       className: 'soha-compute-metric-failed',
-      path: '/compute/tasks/operations?status=failed',
+      path: '/compute/tasks/operations',
     },
     {
       key: 'running',
@@ -619,38 +622,10 @@ export function ComputeOverviewPage() {
             </Space>
           }
         >
-          {overviewQuery.isError ? (
-            <Alert
-              action={
-                <Button
-                  aria-label={localeText(
-                    localeCode,
-                    '重试加载计算资源总览',
-                    'Retry compute overview',
-                  )}
-                  size="small"
-                  onClick={() => void overviewQuery.refetch()}
-                >
-                  {localeText(localeCode, '重试', 'Retry')}
-                </Button>
-              }
-              showIcon
-              type="error"
-              title={
-                overview
-                  ? localeText(
-                      localeCode,
-                      '更新失败，当前显示上次读取的数据',
-                      'Refresh failed; showing the previous snapshot',
-                    )
-                  : localeText(
-                      localeCode,
-                      '计算资源总览加载失败',
-                      'Failed to load compute overview',
-                    )
-              }
-            />
-          ) : null}
+          <ReadFeedback
+            query={overviewQuery}
+            label={localeText(localeCode, '计算资源总览', 'Compute overview')}
+          />
           {overview?.partial ? (
             <Alert
               showIcon
@@ -772,8 +747,12 @@ export function ComputeOverviewPage() {
                     snapshot={snapshot}
                     aria-label={localeText(
                       localeCode,
-                      `查看${String(item.label)}任务`,
-                      `View ${String(item.label)} tasks`,
+                      key === 'failed'
+                        ? '查看任务中心，筛选失败或超时任务'
+                        : `查看${String(item.label)}任务`,
+                      key === 'failed'
+                        ? 'Open task center to filter failed or timed-out tasks'
+                        : `View ${String(item.label)} tasks`,
                     )}
                     className="soha-overview-card-link"
                     key={key}
@@ -809,9 +788,14 @@ export function ComputeOverviewPage() {
                   : localeText(localeCode, '查看任务', 'View tasks')}
               </Button>
               {(taskSummary?.failed ?? 0) > 0 ? (
-                <Link to="/compute/tasks/operations">
-                  {localeText(localeCode, '所有任务', 'All tasks')}
-                </Link>
+                <Space wrap>
+                  <Link to="/compute/tasks/operations?status=timeout">
+                    {localeText(localeCode, '查看超时任务', 'View timed-out tasks')}
+                  </Link>
+                  <Link to="/compute/tasks/operations">
+                    {localeText(localeCode, '所有任务', 'All tasks')}
+                  </Link>
+                </Space>
               ) : null}
             </div>
             {tasks?.status === 'degraded' ? (
@@ -943,6 +927,10 @@ export function ComputeOverviewPage() {
           )}
         </Card>
         <ProviderInstancesPanel
+          canViewTask={
+            hasPermission(snapshot, 'virtualization.operations.view') ||
+            hasPermission(snapshot, 'virtualization.sync.view')
+          }
           canDiscover={canDiscoverProvider}
           canTest={canTestProvider}
           enabled={canViewVirtualization || canViewDocker}

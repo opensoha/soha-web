@@ -80,4 +80,21 @@ describe('deliveryQueries', () => {
     await expect(executeQuery(options)).resolves.toBe(detail)
     expect(runtime).toHaveBeenCalledWith('workflow', 'run-1')
   })
+  it('stops batch, plan and native rollout polling after a failed read', () => {
+    for (const options of [
+      deliveryQueries.executionHistory(),
+      deliveryQueries.batches.detail('batch'),
+      deliveryQueries.plans.detail('plan'),
+      deliveryQueries.executionTasks.rollout('task', true),
+    ]) {
+      const interval = options.refetchInterval
+      if (typeof interval !== 'function') throw new Error('Expected state-aware polling')
+      expect(interval({ state: { status: 'error', data: { status: 'running' } } } as never)).toBe(
+        false,
+      )
+      expect(
+        interval({ state: { status: 'success', data: { status: 'running' } } } as never),
+      ).toBeGreaterThan(0)
+    }
+  })
 })

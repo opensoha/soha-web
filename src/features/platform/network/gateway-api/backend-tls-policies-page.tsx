@@ -1,10 +1,11 @@
-import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
+import { ReadFeedback } from '@/components/request-feedback'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
 import { formatAgeSeconds } from '@/utils/time'
+import { useQuery } from '@tanstack/react-query'
 import type { TableColumnsType } from 'antd'
+import { Link } from 'react-router-dom'
 import { NetworkResourceListPage } from '../shared/list-page'
 import { buildGatewayAPIRoutePath } from '../shared/paths'
 import { renderNetworkTextList } from '../shared/renderers'
@@ -55,39 +56,43 @@ export function NetworkBackendTLSPoliciesPage() {
     },
   ]
   return (
-    <NetworkResourceListPage
-      buildAIPageContext={(items, searchKeyword) => ({
-        sourceWorkbench: 'platform',
-        sourceRoute: '/network/gateway-api/backendtlspolicies',
-        sourceTitle: 'BackendTLSPolicies',
-        entityKind: 'kubernetes.backendtlspolicy.list',
-        entityName: 'BackendTLSPolicies',
-        clusterId: clusterId ?? undefined,
-        namespace: namespace ?? undefined,
-        visibleFilters: { searchKeyword },
-        pinnedData: { total: items.length },
-      })}
-      columns={columns}
-      deletable={false}
-      emptyDescription={{
-        zh_CN: '当前范围没有 BackendTLSPolicy，或未安装 Gateway API CRD',
-        en_US: 'No BackendTLSPolicies in the current scope, or Gateway API CRDs are not installed',
-      }}
-      kind="backendtlspolicies"
-      noMatchDescription={{ zh_CN: '没有匹配的资源', en_US: 'No matching resources' }}
-      query={query}
-      searchPlaceholder={{
-        zh_CN: '搜索 BackendTLSPolicy / namespace / target / hostname',
-        en_US: 'Search BackendTLSPolicy / namespace / target / hostname',
-      }}
-      searchValues={(record) => [
-        record.name,
-        record.namespace,
-        record.hostname,
-        record.wellKnownCACertificates,
-        ...(record.targetRefs ?? []),
-        ...(record.caCertificateRefs ?? []),
-      ]}
-    />
+    <>
+      <ReadFeedback canRead={query.isEnabled} query={query} label="资源记录" />
+      <NetworkResourceListPage
+        buildAIPageContext={(items, searchKeyword) => ({
+          sourceWorkbench: 'platform',
+          sourceRoute: '/network/gateway-api/backendtlspolicies',
+          sourceTitle: 'BackendTLSPolicies',
+          entityKind: 'kubernetes.backendtlspolicy.list',
+          entityName: 'BackendTLSPolicies',
+          clusterId: clusterId ?? undefined,
+          namespace: namespace ?? undefined,
+          visibleFilters: { searchKeyword },
+          pinnedData: { total: items.length },
+        })}
+        columns={columns}
+        deletable={false}
+        emptyDescription={{
+          zh_CN: '当前范围没有 BackendTLSPolicy，或未安装 Gateway API CRD',
+          en_US:
+            'No BackendTLSPolicies in the current scope, or Gateway API CRDs are not installed',
+        }}
+        kind="backendtlspolicies"
+        noMatchDescription={{ zh_CN: '没有匹配的资源', en_US: 'No matching resources' }}
+        query={query}
+        searchPlaceholder={{
+          zh_CN: '搜索 BackendTLSPolicy / namespace / target / hostname',
+          en_US: 'Search BackendTLSPolicy / namespace / target / hostname',
+        }}
+        searchValues={(record) => [
+          record.name,
+          record.namespace,
+          record.hostname,
+          record.wellKnownCACertificates,
+          ...(record.targetRefs ?? []),
+          ...(record.caCertificateRefs ?? []),
+        ]}
+      />
+    </>
   )
 }

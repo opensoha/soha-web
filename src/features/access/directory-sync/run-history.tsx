@@ -14,11 +14,13 @@ export function DirectoryRunHistory({
   loading,
   onCancel,
   runs,
+  unavailable = false,
 }: {
   canSync: boolean
   loading: boolean
   onCancel: () => void
   runs: DirectorySyncRun[]
+  unavailable?: boolean
 }) {
   const columns: TableColumnsType<DirectorySyncRun> = [
     { title: '触发方式', dataIndex: 'trigger', width: 110 },
@@ -48,6 +50,7 @@ export function DirectoryRunHistory({
   ]
   const hasRunning = runs.some((run) => run.status === 'queued' || run.status === 'running')
 
+  if (unavailable) return null
   if (!loading && runs.length === 0) {
     return (
       <ManagementState

@@ -1,9 +1,11 @@
 import { useMemo } from 'react'
-import { Alert, App, Button, Popconfirm, Space, Tag, Typography } from 'antd'
+import { Alert, Button, Popconfirm, Space, Tag, Typography } from 'antd'
 import { ArrowRightOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ManagementIconButton } from '@/components/management-list'
+import { MutationFeedback } from '@/components/request-feedback'
+import { readableQueryData, writeOutcomeUnknown } from '@/utils/query-feedback'
 import { OverviewMetricCard, type OverviewMetricItem } from '@/components/overview-visuals'
 import { StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
@@ -24,7 +26,6 @@ import { summarizeDeliveryGovernance } from '../workbench/governance'
 const { Text } = Typography
 
 export function ExecutionTasksPage() {
-  const { message } = App.useApp()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -37,7 +38,13 @@ export function ExecutionTasksPage() {
   const tasksQuery = useQuery(deliveryQueries.executionTasks.list({ refetchInterval: 5000 }))
   const cancelMutation = useMutation(deliveryMutations.executionTasks.cancel(queryClient))
   const retryMutation = useMutation(deliveryMutations.executionTasks.retry(queryClient))
-  const executionTasks = tasksQuery.data ?? []
+  const taskData = readableQueryData(tasksQuery)
+  const executionTasks = taskData ?? []
+  const requestLocked =
+    cancelMutation.isPending ||
+    retryMutation.isPending ||
+    writeOutcomeUnknown(cancelMutation.error) ||
+    writeOutcomeUnknown(retryMutation.error)
   const focusedTask = focusedExecutionTaskId
     ? executionTasks.find((item) => item.id === focusedExecutionTaskId)
     : undefined
@@ -49,63 +56,60 @@ export function ExecutionTasksPage() {
     {
       key: 'total',
       label: '任务总数',
-      value: executionSummary.total,
-      helper: `${executionSummary.active} 个执行中`,
+      value: taskData === undefined ? '—' : executionSummary.total,
+      helper: taskData === undefined ? '执行状态不可用' : `${executionSummary.active} 个执行中`,
     },
     {
       key: 'blocked',
       label: '阻塞任务',
-      value: executionSummary.blocked,
-      helper: `${executionSummary.retryable} 个可重试`,
-      tone: executionSummary.blocked > 0 ? 'danger' : 'success',
+      value: taskData === undefined ? '—' : executionSummary.blocked,
+      helper: taskData === undefined ? '重试状态不可用' : `${executionSummary.retryable} 个可重试`,
+      tone:
+        taskData === undefined ? undefined : executionSummary.blocked > 0 ? 'danger' : 'success',
     },
     {
       key: 'artifacts',
       label: '交付物线索',
-      value: executionSummary.artifacts,
+      value: taskData === undefined ? '—' : executionSummary.artifacts,
       helper: '来自任务结果',
     },
     {
       key: 'callbacks',
       label: '回调可用',
-      value: executionSummary.callbackReady,
+      value: taskData === undefined ? '—' : executionSummary.callbackReady,
       helper: 'agent / callback token',
-      tone: 'success',
+      tone: taskData === undefined ? undefined : 'success',
     },
   ]
 
-  function refreshTaskEvidence() {
-    void tasksQuery.refetch()
-  }
-
   function handleCancel(task: ExecutionTask) {
-    cancelMutation.mutate(
-      { id: task.id, reason: 'Canceled from execution tasks console' },
-      {
-        onSuccess: () => {
-          message.success('任务已取消')
-          refreshTaskEvidence()
-        },
-        onError: (error) => message.error(error.message),
-      },
-    )
+    if (requestLocked) return
+    cancelMutation.mutate({ id: task.id, reason: 'Canceled from execution tasks console' })
   }
 
   function handleRetry(task: ExecutionTask) {
-    retryMutation.mutate(
-      { id: task.id, reason: 'Retried from execution tasks console' },
-      {
-        onSuccess: () => {
-          message.success('任务已重新入队')
-          refreshTaskEvidence()
-        },
-        onError: (error) => message.error(error.message),
-      },
-    )
+    if (requestLocked) return
+    retryMutation.mutate({ id: task.id, reason: 'Retried from execution tasks console' })
   }
 
   return (
     <div className="soha-page">
+      <MutationFeedback
+        operations={[
+          {
+            label: '取消执行任务',
+            mutation: cancelMutation,
+            target: cancelMutation.variables?.id,
+            receipt: { message: '取消请求已提交，请核对任务状态' },
+          },
+          {
+            label: '重试执行任务',
+            mutation: retryMutation,
+            target: retryMutation.variables?.id,
+            receipt: { message: '任务已重新入队，请查看执行记录' },
+          },
+        ]}
+      />
       {focusedExecutionTaskId || focusedReleaseBundleId ? (
         <Alert
           showIcon
@@ -129,6 +133,8 @@ export function ExecutionTasksPage() {
         refreshing={tasksQuery.isFetching}
         onRefresh={() => void tasksQuery.refetch()}
         isError={tasksQuery.isError}
+        error={tasksQuery.error}
+        hasReadData={tasksQuery.data !== undefined}
         errorDescription="暂时无法读取执行任务。"
         onRetry={() => void tasksQuery.refetch()}
         localSorting
@@ -243,9 +249,17 @@ export function ExecutionTasksPage() {
                   onClick={() => navigate(`/delivery/execution-tasks/${record.id}`)}
                 />
                 {canCancel && canCancelExecutionTask(record) ? (
-                  <Popconfirm title="确认取消该任务？" onConfirm={() => handleCancel(record)}>
+                  <Popconfirm
+                    title="确认取消该任务？"
+                    disabled={requestLocked}
+                    onConfirm={() => handleCancel(record)}
+                  >
                     <ManagementIconButton
                       aria-label="取消执行任务"
+                      disabled={requestLocked}
+                      loading={
+                        cancelMutation.isPending && cancelMutation.variables?.id === record.id
+                      }
                       danger
                       icon={<StopOutlined />}
                       size="small"
@@ -256,6 +270,8 @@ export function ExecutionTasksPage() {
                 {canRetry && canRetryExecutionTask(record) ? (
                   <ManagementIconButton
                     aria-label="重试执行任务"
+                    disabled={requestLocked}
+                    loading={retryMutation.isPending && retryMutation.variables?.id === record.id}
                     icon={<ReloadOutlined />}
                     size="small"
                     tooltip="重试"

@@ -1,18 +1,18 @@
 /** @vitest-environment jsdom */
 
-import { act } from 'react'
-import type { ReactNode } from 'react'
-import { App as AntdApp } from 'antd'
+import type { PermissionSnapshot } from '@/types'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { App as AntdApp } from 'antd'
+import type { ReactNode } from 'react'
+import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { PermissionSnapshot } from '@/types'
+import { TRACES_BACKEND_OPTIONS } from './ai-settings-model'
 import { AISettingsPage } from './ai/page'
 import { BrandingSettingsPage } from './branding/page'
 import { LoginSettingsPage } from './identity/page'
 import { SettingsOverviewPage } from './overview/page'
-import { TRACES_BACKEND_OPTIONS } from './ai-settings-model'
 
 const testState = vi.hoisted(() => ({
   snapshot: {
@@ -630,7 +630,7 @@ describe('settings ai page rendering', () => {
     const ai = await renderWithProviders(<AISettingsPage />, '/ai-workbench/model-settings')
 
     for (const container of [overview, login, branding, ai]) {
-      expect(container.textContent).toContain('加载失败')
+      expect(container.textContent).toMatch(/读取失败|加载失败/)
       expect(container.textContent).toContain('重试')
     }
   })
@@ -648,8 +648,14 @@ describe('settings ai page rendering', () => {
 
       expect(overview.textContent).toContain('用户总数')
       expect(overview.textContent).toContain('角色数')
-      expect(overview.textContent).toContain('部分系统活动加载失败')
-      expect(overview.textContent).toContain('重试失败项')
+      expect(overview.textContent).toContain(
+        ({
+          '/auth/sessions': '在线会话',
+          '/audit/summary': '审计汇总',
+          '/operations/summary': '操作汇总',
+        }[failingPath] ?? '') + '读取失败',
+      )
+      expect(overview.querySelector('button[aria-label^="重试读取"]')).not.toBeNull()
     },
   )
 
@@ -668,9 +674,16 @@ describe('settings ai page rendering', () => {
       expect(overview.textContent).toContain('角色数')
       expect(overview.textContent).toContain('组织数')
       expect(overview.textContent).toContain('访问策略')
-      expect(overview.textContent).toContain('部分访问治理数据加载失败')
+      expect(overview.textContent).toContain(
+        ({
+          '/access/users': '用户',
+          '/access/roles': '角色',
+          '/access/teams': '组织',
+          '/access/policies': '访问策略',
+        }[failingPath] ?? '') + '读取失败',
+      )
       expect(overview.textContent).toContain('加载失败')
-      expect(overview.textContent).toContain('重试失败项')
+      expect(overview.querySelector('button[aria-label^="重试读取"]')).not.toBeNull()
     },
   )
 

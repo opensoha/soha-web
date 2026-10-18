@@ -1,14 +1,4 @@
-import {
-  AlertOutlined,
-  CheckCircleOutlined,
-  DatabaseOutlined,
-  EyeOutlined,
-  FireOutlined,
-  WarningOutlined,
-} from '@ant-design/icons'
-import { useQuery } from '@tanstack/react-query'
-import { Button, Card, Typography } from 'antd'
-import { useNavigate } from 'react-router-dom'
+import { ManagementIconButton, ManagementState } from '@/components/management-list'
 import {
   OverviewChip,
   OverviewMetricCard,
@@ -16,13 +6,26 @@ import {
   type OverviewChipItem,
   type OverviewMetricItem,
 } from '@/components/overview-visuals'
-import { ManagementIconButton, ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
 import { StatusTag } from '@/components/status-tag'
+import { readableQueryData } from '@/utils/query-feedback'
 import { formatDateTime } from '@/utils/time'
+import {
+  AlertOutlined,
+  CheckCircleOutlined,
+  DatabaseOutlined,
+  EyeOutlined,
+  FireOutlined,
+  ReloadOutlined,
+  WarningOutlined,
+} from '@ant-design/icons'
+import { useQuery } from '@tanstack/react-query'
+import { Button, Card, Typography } from 'antd'
+import { useNavigate } from 'react-router-dom'
 import { observabilityAlertQueries } from '../alerts/queries'
 import { observabilityEventQueries } from '../events/queries'
-import { observabilityProviderQueries } from '../provider-queries'
 import '../observability-pages.css'
+import { observabilityProviderQueries } from '../provider-queries'
 import { observabilityOverviewQueries } from './queries'
 
 const { Text } = Typography
@@ -34,10 +37,11 @@ export function MonitoringPage() {
   const providersQuery = useQuery(observabilityProviderQueries.providers())
   const eventsQuery = useQuery(observabilityEventQueries.list())
 
-  const summary = summaryQuery.data
-  const recentAlerts = alertsQuery.data ?? []
-  const providers = providersQuery.data ?? []
-  const recentEvents = (eventsQuery.data ?? []).slice(0, 8)
+  const summary = readableQueryData(summaryQuery)
+  const recentAlerts = readableQueryData(alertsQuery) ?? []
+  const providersData = readableQueryData(providersQuery)
+  const providers = providersData ?? []
+  const recentEvents = (readableQueryData(eventsQuery) ?? []).slice(0, 8)
   const configuredProviders = providers.filter((item) => item.configured)
   const healthyProviders = configuredProviders.filter((item) => item.runtimeStatus === 'healthy')
   const unhealthyProviders = configuredProviders.filter((item) => item.runtimeStatus !== 'healthy')
@@ -47,25 +51,25 @@ export function MonitoringPage() {
       key: 'firing',
       label: '活跃告警',
       helper: '当前仍需处理的告警事件',
-      value: summaryQuery.isError ? '不可用' : (summary?.firingCount ?? 0),
+      value: summary?.firingCount ?? '不可用',
       icon: <AlertOutlined />,
-      tone: !summaryQuery.isError && (summary?.firingCount ?? 0) > 0 ? 'warning' : 'default',
+      tone: (summary?.firingCount ?? 0) > 0 ? 'warning' : 'default',
     },
     {
       key: 'critical',
       label: '严重告警',
       helper: 'Critical 优先级信号',
-      value: summaryQuery.isError ? '不可用' : (summary?.criticalCount ?? 0),
+      value: summary?.criticalCount ?? '不可用',
       icon: <FireOutlined />,
-      tone: !summaryQuery.isError && (summary?.criticalCount ?? 0) > 0 ? 'danger' : 'default',
+      tone: (summary?.criticalCount ?? 0) > 0 ? 'danger' : 'default',
     },
     {
       key: 'healthy-providers',
       label: '健康 Provider',
-      helper: providersQuery.isError
+      helper: !providersData
         ? 'Provider 状态暂不可用'
         : `已配置 ${configuredProviders.length} 个 Provider`,
-      value: providersQuery.isError ? '不可用' : healthyProviders.length,
+      value: providersData ? healthyProviders.length : '不可用',
       icon: <CheckCircleOutlined />,
       tone: healthyProviders.length > 0 ? 'success' : 'default',
     },
@@ -73,41 +77,41 @@ export function MonitoringPage() {
       key: 'unhealthy-providers',
       label: '异常 Provider',
       helper: '已配置但未通过运行态校验',
-      value: providersQuery.isError ? '不可用' : unhealthyProviders.length,
+      value: providersData ? unhealthyProviders.length : '不可用',
       icon: <WarningOutlined />,
       tone: unhealthyProviders.length > 0 ? 'warning' : 'default',
     },
   ] satisfies OverviewMetricItem[]
 
   const alertChips = [
-    { key: 'total', label: '总数', value: summary?.totalCount ?? 0, tone: 'default' },
-    { key: 'firing', label: '活跃', value: summary?.firingCount ?? 0, tone: 'warning' },
+    { key: 'total', label: '总数', value: summary?.totalCount ?? '不可用', tone: 'default' },
+    { key: 'firing', label: '活跃', value: summary?.firingCount ?? '不可用', tone: 'warning' },
     {
       key: 'resolved',
       label: '已恢复',
-      value: summary?.resolvedCount ?? 0,
+      value: summary?.resolvedCount ?? '不可用',
       tone: 'success',
     },
     {
       key: 'critical',
       label: 'Critical',
-      value: summary?.criticalCount ?? 0,
+      value: summary?.criticalCount ?? '不可用',
       tone: 'danger',
     },
     {
       key: 'warning',
       label: 'Warning',
-      value: summary?.warningCount ?? 0,
+      value: summary?.warningCount ?? '不可用',
       tone: 'warning',
     },
-    { key: 'info', label: 'Info', value: summary?.infoCount ?? 0, tone: 'default' },
+    { key: 'info', label: 'Info', value: summary?.infoCount ?? '不可用', tone: 'default' },
   ] satisfies OverviewChipItem[]
 
   const sourceStats = [
     {
       key: 'total',
       label: '已发现',
-      value: providers.length,
+      value: providersData ? providers.length : '不可用',
       helper: '当前 Provider 能力',
       icon: <DatabaseOutlined />,
       tone: 'default',
@@ -115,21 +119,21 @@ export function MonitoringPage() {
     {
       key: 'configured',
       label: '已配置',
-      value: configuredProviders.length,
+      value: providersData ? configuredProviders.length : '不可用',
       helper: '存在启用的数据源',
       tone: 'success',
     },
     {
       key: 'healthy',
       label: '健康',
-      value: healthyProviders.length,
+      value: providersData ? healthyProviders.length : '不可用',
       helper: '最近验证成功',
       tone: 'success',
     },
     {
       key: 'unconfigured',
       label: '未配置',
-      value: providers.filter((item) => !item.configured).length,
+      value: providersData ? providers.filter((item) => !item.configured).length : '不可用',
       helper: '仅声明适配能力',
       tone: 'default',
     },
@@ -138,6 +142,28 @@ export function MonitoringPage() {
   return (
     <div className="soha-page soha-overview-page soha-monitoring-overview-page">
       <h1 className="soha-monitoring-overview-heading">可观测性总览</h1>
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <ManagementIconButton
+          aria-label="刷新观测总览"
+          tooltip="刷新观测总览"
+          icon={
+            <ReloadOutlined
+              spin={
+                summaryQuery.isFetching ||
+                providersQuery.isFetching ||
+                alertsQuery.isFetching ||
+                eventsQuery.isFetching
+              }
+            />
+          }
+          onClick={() => {
+            void summaryQuery.refetch()
+            void providersQuery.refetch()
+            void alertsQuery.refetch()
+            void eventsQuery.refetch()
+          }}
+        />
+      </div>
       <div className="soha-overview-metric-grid">
         {overviewStats.map((item) => (
           <OverviewMetricCard
@@ -166,17 +192,9 @@ export function MonitoringPage() {
             ) : null
           }
         >
+          <ReadFeedback label="告警摘要" query={summaryQuery} />
           {summaryQuery.isLoading ? (
             <ManagementState bordered={false} compact kind="loading" title="正在加载告警摘要" />
-          ) : summaryQuery.isError ? (
-            <ManagementState
-              bordered={false}
-              compact
-              kind="error"
-              title="告警摘要加载失败"
-              description={summaryQuery.error.message}
-              actions={<Button onClick={() => void summaryQuery.refetch()}>重试</Button>}
-            />
           ) : summary ? (
             <div className="soha-overview-alert-stack">
               <OverviewSectionBar
@@ -207,7 +225,7 @@ export function MonitoringPage() {
                 ))}
               </div>
             </div>
-          ) : (
+          ) : summaryQuery.isError ? null : (
             <ManagementState bordered={false} compact description="暂无告警摘要" />
           )}
         </Card>
@@ -221,18 +239,10 @@ export function MonitoringPage() {
             </Button>
           }
         >
+          <ReadFeedback label="Provider 状态" query={providersQuery} />
           {providersQuery.isLoading ? (
             <ManagementState bordered={false} compact kind="loading" title="正在加载 Provider" />
-          ) : providersQuery.isError ? (
-            <ManagementState
-              bordered={false}
-              compact
-              kind="error"
-              title="Provider 状态加载失败"
-              description={providersQuery.error.message}
-              actions={<Button onClick={() => void providersQuery.refetch()}>重试</Button>}
-            />
-          ) : (
+          ) : providersData ? (
             <div className="soha-monitoring-operation-grid">
               {sourceStats.map((item) => (
                 <OverviewChip
@@ -245,7 +255,7 @@ export function MonitoringPage() {
                 />
               ))}
             </div>
-          )}
+          ) : null}
         </Card>
       </div>
 
@@ -263,22 +273,14 @@ export function MonitoringPage() {
             />
           }
         >
+          <ReadFeedback label="最近告警" query={alertsQuery} />
           {alertsQuery.isLoading ? (
             <div className="soha-monitoring-alert-list">
               {[0, 1, 2].map((item) => (
                 <Card key={item} loading size="small" />
               ))}
             </div>
-          ) : alertsQuery.isError ? (
-            <ManagementState
-              bordered={false}
-              compact
-              kind="error"
-              title="最近告警加载失败"
-              description={alertsQuery.error.message}
-              actions={<Button onClick={() => void alertsQuery.refetch()}>重试</Button>}
-            />
-          ) : recentAlerts.length === 0 ? (
+          ) : !readableQueryData(alertsQuery) ? null : recentAlerts.length === 0 ? (
             <ManagementState bordered={false} compact description="暂无最近告警" />
           ) : (
             <div className="soha-monitoring-alert-list">
@@ -326,18 +328,10 @@ export function MonitoringPage() {
             />
           }
         >
+          <ReadFeedback label="近期事件" query={eventsQuery} />
           {eventsQuery.isLoading ? (
             <ManagementState bordered={false} compact kind="loading" title="正在加载事件" />
-          ) : eventsQuery.isError ? (
-            <ManagementState
-              bordered={false}
-              compact
-              kind="error"
-              title="近期事件加载失败"
-              description={eventsQuery.error.message}
-              actions={<Button onClick={() => void eventsQuery.refetch()}>重试</Button>}
-            />
-          ) : recentEvents.length === 0 ? (
+          ) : !readableQueryData(eventsQuery) ? null : recentEvents.length === 0 ? (
             <ManagementState bordered={false} compact description="暂无近期事件" />
           ) : (
             <div className="soha-monitoring-alert-list">

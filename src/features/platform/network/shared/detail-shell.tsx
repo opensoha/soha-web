@@ -1,17 +1,24 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
-import type { ReactNode } from 'react'
-import { App, Card, Spin, Tabs } from 'antd'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { PlatformResourceOverview } from '@/features/platform/shared/resource-overview'
-import { ResourceGitOpsStatus } from '@/features/platform/shared/resource-gitops-status'
-import { useAIPageContext } from '@/features/copilot'
+import { ReadFeedback } from '@/components/request-feedback'
+import { useYamlDraft } from '@/components/use-yaml-draft'
 import type { AIPageContext } from '@/features/copilot'
+import { useAIPageContext } from '@/features/copilot'
+import { ResourceGitOpsStatus } from '@/features/platform/shared/resource-gitops-status'
+import { PlatformResourceOverview } from '@/features/platform/shared/resource-overview'
+import {
+  platformResourceTarget,
+  usePlatformMutation,
+} from '@/features/platform/shared/use-platform-mutation'
 import { useI18n } from '@/i18n'
+import { readableQueryData } from '@/utils/query-feedback'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { TabsProps } from 'antd'
+import { App, Card, Spin, Tabs } from 'antd'
+import type { ReactNode } from 'react'
+import { lazy, Suspense } from 'react'
+import '../styles.css'
 import { networkMutations } from './mutations'
 import { networkQueries } from './queries'
 import type { NetworkKind, NetworkResourceRecord, NetworkTarget } from './types'
-import '../styles.css'
 
 const K8sYamlEditor = lazy(async () => {
   const module = await import('@/components/k8s-yaml-editor')
@@ -77,13 +84,17 @@ function NetworkYAMLTab({
   const { message } = App.useApp()
   const queryClient = useQueryClient()
   const yamlQuery = useQuery(networkQueries.yaml(kind, target.scope, target.name, clusterScoped))
-  const updateMutation = useMutation(networkMutations.updateYAML(kind, queryClient))
-  const serverValue = yamlQuery.data?.content ?? ''
-  const [draft, setDraft] = useState('')
-
-  useEffect(() => {
-    setDraft(serverValue)
-  }, [serverValue])
+  const visibleYamlQueryData = readableQueryData(yamlQuery)
+  const updateMutation = usePlatformMutation(networkMutations.updateYAML(kind, queryClient), {
+    label: ['更新资源', 'Update resource'],
+    target: platformResourceTarget,
+  })
+  const platformWriteBlocked = updateMutation.blocked
+  const yamlState = useYamlDraft(
+    JSON.stringify([kind, target.scope.clusterId, target.scope.namespace, target.name]),
+    visibleYamlQueryData?.content,
+  )
+  const { value: draft, setValue: setDraft } = yamlState
 
   if (yamlQuery.isLoading) {
     return (
@@ -101,32 +112,40 @@ function NetworkYAMLTab({
         </Card>
       }
     >
+      <ReadFeedback canRead={yamlQuery.isEnabled} query={yamlQuery} label="YAML" />
+
+      {updateMutation.feedback}
+
       <div style={{ height: 620 }}>
-        <K8sYamlEditor
-          value={draft}
-          onChange={setDraft}
-          onReset={() => setDraft(serverValue)}
-          onSave={() =>
-            void message.info(
-              localeCode === 'zh_CN' ? '暂不支持本地草稿' : 'Local draft save disabled here',
-            )
-          }
-          onApply={() =>
-            updateMutation.mutate(
-              { ...target, content: draft },
-              {
-                onSuccess: (yaml) => {
-                  setDraft(yaml.content ?? draft)
-                  void message.success(localeCode === 'zh_CN' ? 'YAML 已应用' : 'YAML applied')
+        {yamlQuery.isError && visibleYamlQueryData === undefined ? null : (
+          <K8sYamlEditor
+            error={yamlQuery.error}
+            original={yamlState.original}
+            serverChanged={yamlState.serverChanged}
+            onCompareLatest={yamlState.compareLatest}
+            value={draft}
+            onChange={setDraft}
+            onReset={yamlState.reset}
+            onSave={() =>
+              void message.info(
+                localeCode === 'zh_CN' ? '暂不支持本地草稿' : 'Local draft save disabled here',
+              )
+            }
+            onApply={() =>
+              updateMutation.mutate(
+                { ...target, content: draft },
+                {
+                  onSuccess: (yaml) => {
+                    yamlState.applied(yaml.content ?? draft)
+                  },
                 },
-                onError: (error) => void message.error(error.message),
-              },
-            )
-          }
-          saveDisabled
-          applyDisabled={!draft.trim() || updateMutation.isPending}
-          applying={updateMutation.isPending}
-        />
+              )
+            }
+            saveDisabled
+            applyDisabled={platformWriteBlocked || !draft.trim() || updateMutation.isPending}
+            applying={updateMutation.isPending}
+          />
+        )}
       </div>
     </Suspense>
   )

@@ -1,28 +1,47 @@
+import { operationModalStyles } from '@/components/modal-styles'
+import { OperationFeedback, ReadFeedback } from '@/components/request-feedback'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { identityRuntimeQueries } from '@/features/identity'
+import { isApiError } from '@/services/api-error'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
 import {
   ArrowLeftOutlined,
   ClockCircleOutlined,
   InfoCircleOutlined,
   KeyOutlined,
   LockOutlined,
+  ReloadOutlined,
   SafetyCertificateOutlined,
   TeamOutlined,
 } from '@ant-design/icons'
-import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Button, Card, Descriptions, Space, Spin, Statistic, Typography } from 'antd'
-import { Alert, App, Empty, Input, Modal, Popconfirm } from 'antd'
-import { useNavigate } from 'react-router-dom'
-import { identityRuntimeQueries } from '@/features/identity'
 import type {
   MFAEnrollmentChallenge,
   MFARecoveryChallenge,
 } from '@opensoha/contracts/gen/ts/sohaapi'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  Alert,
+  Button,
+  Card,
+  Descriptions,
+  Empty,
+  Input,
+  Modal,
+  Popconfirm,
+  Space,
+  Spin,
+  Statistic,
+  Typography,
+} from 'antd'
+import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { providerPortalApi } from '../api'
 import { providerPortalMutations } from '../mutations'
+import '../provider-portal-pages.css'
 import { providerPortalQueries } from '../queries'
+import { PortalAccountMenu, PortalUserAvatar } from '../shared/account-menu'
 import { PortalTagsOrEmpty } from '../shared/application-ui'
 import { formatPortalDateTime } from '../shared/formatters'
-import { PortalAccountMenu, PortalUserAvatar } from '../shared/account-menu'
-import '../provider-portal-pages.css'
 
 const { Text, Title } = Typography
 
@@ -42,38 +61,163 @@ function encodeBase64Url(value: ArrayBuffer) {
 }
 
 export function PortalSecurityPage() {
-  const { message } = App.useApp()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const securityQuery = useQuery(providerPortalQueries.security())
   const runtimeQuery = useQuery(identityRuntimeQueries.capabilities())
-  const runtime = runtimeQuery.data
+  const runtime = readableQueryData(runtimeQuery)
   const mfaAvailable = Boolean(
     runtime?.totp.available || runtime?.webauthn.available || runtime?.recoveryCodes.available,
   )
   const credentialsQuery = useQuery(providerPortalQueries.mfaCredentials(mfaAvailable))
+  const readDenied =
+    queryAccessDenied(securityQuery) ||
+    queryAccessDenied(runtimeQuery) ||
+    queryAccessDenied(credentialsQuery)
+  const sensitiveGeneration = useRef(0)
   const [totpChallenge, setTOTPChallenge] = useState<MFAEnrollmentChallenge | null>(null)
   const [totpCode, setTOTPCode] = useState('')
   const [recoveryChallenge, setRecoveryChallenge] = useState<MFARecoveryChallenge | null>(null)
   const [recoveryCode, setRecoveryCode] = useState('')
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([])
-  const revokeMutation = useMutation(providerPortalMutations.revokeMFACredential(queryClient))
-  const beginTOTPMutation = useMutation(providerPortalMutations.beginTOTPEnrollment())
-  const verifyMutation = useMutation(providerPortalMutations.verifyMFAChallenge(queryClient))
-  const beginRecoveryMutation = useMutation(providerPortalMutations.beginRecoveryChallenge())
-  const beginWebAuthnMutation = useMutation(providerPortalMutations.beginWebAuthnEnrollment())
-  const authenticateWebAuthnMutation = useMutation(
-    providerPortalMutations.beginWebAuthnAuthentication(),
+  const [nativeError, setNativeError] = useState<Error | null>(null)
+  const [nativePending, setNativePending] = useState(false)
+  const nativeFence = useRef(false)
+  const revokeMutation = useOperationMutation(
+    providerPortalMutations.revokeMFACredential(queryClient),
+    {
+      label: ['撤销 MFA 凭据', 'Revoke MFA credential'],
+      target: (id) => id,
+    },
   )
-  const verifyWebAuthnMutation = useMutation(
-    providerPortalMutations.verifyWebAuthnChallenge(queryClient),
+  const beginTOTPMutation = useOperationMutation(
+    {
+      mutationKey: providerPortalMutations.beginTOTPEnrollment().mutationKey,
+      gcTime: 0,
+      mutationFn: async () => {
+        const generation = sensitiveGeneration.current
+        const challenge = await providerPortalApi.beginTOTPEnrollment()
+        if (generation === sensitiveGeneration.current) setTOTPChallenge(challenge)
+        return challenge.challengeId
+      },
+    },
+    {
+      label: ['创建 TOTP 注册挑战', 'Begin TOTP enrollment'],
+      target: () => '当前账户',
+      receipt: () => ({ message: '注册挑战已创建', evidence: '验证完成后才会注册认证器。' }),
+    },
   )
-  const recoveryMutation = useMutation(providerPortalMutations.regenerateRecoveryCodes())
+  const verifyMutation = useOperationMutation(
+    { ...providerPortalMutations.verifyMFAChallenge(queryClient), gcTime: 0 },
+    {
+      label: ['验证 MFA 挑战', 'Verify MFA challenge'],
+      target: (v) => v.challengeId,
+      receipt: () => ({ message: 'MFA 挑战已通过', evidence: '请核对当前凭据记录。' }),
+    },
+  )
+  const beginRecoveryMutation = useOperationMutation(
+    {
+      mutationKey: providerPortalMutations.beginRecoveryChallenge().mutationKey,
+      gcTime: 0,
+      mutationFn: async () => {
+        const generation = sensitiveGeneration.current
+        const challenge = await providerPortalApi.beginRecoveryChallenge()
+        if (generation === sensitiveGeneration.current) setRecoveryChallenge(challenge)
+        return challenge.challengeId
+      },
+    },
+    { label: ['创建恢复码挑战', 'Begin recovery challenge'], target: () => '当前账户' },
+  )
+  const beginWebAuthnMutation = useOperationMutation(
+    { ...providerPortalMutations.beginWebAuthnEnrollment(), gcTime: 0 },
+    {
+      label: ['创建 Passkey 注册挑战', 'Begin passkey enrollment'],
+      target: () => '当前账户',
+    },
+  )
+  const authenticateWebAuthnMutation = useOperationMutation(
+    { ...providerPortalMutations.beginWebAuthnAuthentication(), gcTime: 0 },
+    { label: ['创建 Passkey 验证挑战', 'Begin passkey verification'], target: () => '当前账户' },
+  )
+  const verifyWebAuthnMutation = useOperationMutation(
+    { ...providerPortalMutations.verifyWebAuthnChallenge(queryClient), gcTime: 0 },
+    { label: ['验证 Passkey 挑战', 'Verify passkey challenge'], target: (v) => v.challengeId },
+  )
+  const recoveryMutation = useOperationMutation(
+    {
+      mutationKey: providerPortalMutations.regenerateRecoveryCodes().mutationKey,
+      gcTime: 0,
+      mutationFn: async () => {
+        const generation = sensitiveGeneration.current
+        const result = await providerPortalApi.regenerateRecoveryCodes()
+        if (generation === sensitiveGeneration.current) setRecoveryCodes(result.codes)
+        return result.codes.length
+      },
+    },
+    {
+      label: ['重新生成恢复码', 'Regenerate recovery codes'],
+      target: () => '当前账户',
+      receipt: (count) => ({
+        message: `已生成 ${count} 个恢复码`,
+        evidence: '敏感值仅在专用窗口本次展示。',
+      }),
+    },
+  )
+  const credentials =
+    credentialsQuery.isEnabled === false ? undefined : readableQueryData(credentialsQuery)
+  const denied =
+    readDenied ||
+    [
+      revokeMutation,
+      beginTOTPMutation,
+      verifyMutation,
+      beginRecoveryMutation,
+      beginWebAuthnMutation,
+      authenticateWebAuthnMutation,
+      verifyWebAuthnMutation,
+      recoveryMutation,
+    ].some(queryAccessDenied)
+  const blocked =
+    nativePending ||
+    denied ||
+    [
+      revokeMutation,
+      beginTOTPMutation,
+      verifyMutation,
+      beginRecoveryMutation,
+      beginWebAuthnMutation,
+      authenticateWebAuthnMutation,
+      verifyWebAuthnMutation,
+      recoveryMutation,
+    ].some((m) => m.blocked)
+  useEffect(() => {
+    if (!denied) return
+    sensitiveGeneration.current += 1
+    setTOTPChallenge(null)
+    setTOTPCode('')
+    setRecoveryChallenge(null)
+    setRecoveryCode('')
+    setRecoveryCodes([])
+    setNativeError(null)
+  }, [denied])
+
+  useEffect(
+    () => () => {
+      sensitiveGeneration.current += 1
+    },
+    [],
+  )
 
   const enrollWebAuthn = async () => {
-    if (!window.PublicKeyCredential || !navigator.credentials) return
+    if (blocked || nativeFence.current || !window.PublicKeyCredential || !navigator.credentials)
+      return
+    const generation = sensitiveGeneration.current
+    nativeFence.current = true
+    setNativePending(true)
+    setNativeError(null)
     try {
       const options = await beginWebAuthnMutation.mutateAsync()
+      if (generation !== sensitiveGeneration.current) return
       const credential = (await navigator.credentials.create({
         publicKey: {
           challenge: decodeBase64Url(options.challenge),
@@ -91,7 +235,7 @@ export function PortalSecurityPage() {
           })),
         },
       })) as PublicKeyCredential | null
-      if (!credential) return
+      if (!credential || generation !== sensitiveGeneration.current) return
       const response = credential.response as AuthenticatorAttestationResponse
       await verifyWebAuthnMutation.mutateAsync({
         challengeId: options.challengeId,
@@ -101,17 +245,26 @@ export function PortalSecurityPage() {
           attestationObject: encodeBase64Url(response.attestationObject),
         },
       })
-      message.success('Passkey registered')
       void credentialsQuery.refetch()
     } catch (error) {
-      message.error(error instanceof Error ? error.message : 'Passkey registration failed')
+      if (!isApiError(error))
+        setNativeError(error instanceof Error ? error : new Error('Passkey registration failed'))
+    } finally {
+      nativeFence.current = false
+      setNativePending(false)
     }
   }
 
   const authenticateWebAuthn = async () => {
-    if (!window.PublicKeyCredential || !navigator.credentials) return
+    if (blocked || nativeFence.current || !window.PublicKeyCredential || !navigator.credentials)
+      return
+    const generation = sensitiveGeneration.current
+    nativeFence.current = true
+    setNativePending(true)
+    setNativeError(null)
     try {
       const options = await authenticateWebAuthnMutation.mutateAsync({ purpose: 'step_up' })
+      if (generation !== sensitiveGeneration.current) return
       const credential = (await navigator.credentials.get({
         publicKey: {
           challenge: decodeBase64Url(options.challenge),
@@ -124,7 +277,7 @@ export function PortalSecurityPage() {
           })),
         },
       })) as PublicKeyCredential | null
-      if (!credential) return
+      if (!credential || generation !== sensitiveGeneration.current) return
       const response = credential.response as AuthenticatorAssertionResponse
       await verifyWebAuthnMutation.mutateAsync({
         challengeId: options.challengeId,
@@ -136,13 +289,16 @@ export function PortalSecurityPage() {
           userHandle: response.userHandle ? encodeBase64Url(response.userHandle) : undefined,
         },
       })
-      message.success('Passkey verification successful')
     } catch (error) {
-      message.error(error instanceof Error ? error.message : 'Passkey verification failed')
+      if (!isApiError(error))
+        setNativeError(error instanceof Error ? error : new Error('Passkey verification failed'))
+    } finally {
+      nativeFence.current = false
+      setNativePending(false)
     }
   }
 
-  const security = securityQuery.data
+  const security = readableQueryData(securityQuery)
   const principal = security?.principal
 
   if (securityQuery.isLoading) {
@@ -166,6 +322,18 @@ export function PortalSecurityPage() {
           </div>
         </div>
         <Space wrap>
+          <Button
+            aria-label="刷新安全记录"
+            icon={<ReloadOutlined />}
+            loading={securityQuery.isFetching || credentialsQuery.isFetching}
+            onClick={() =>
+              void Promise.all([
+                securityQuery.refetch(),
+                runtimeQuery.refetch(),
+                credentialsQuery.isEnabled ? credentialsQuery.refetch() : undefined,
+              ])
+            }
+          />
           <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/portal')}>
             Portal
           </Button>
@@ -174,237 +342,268 @@ export function PortalSecurityPage() {
       </header>
 
       <main className="soha-portal-main">
-        <section className="soha-portal-security-overview">
-          <Card size="small">
-            <Statistic
-              title="MFA"
-              value={security?.mfaEnabled ? 'Enabled' : 'Not enabled'}
-              prefix={<LockOutlined />}
+        <ReadFeedback query={securityQuery} label="账户安全" />
+        {!readDenied ? (
+          <>
+            {revokeMutation.feedback}
+            {beginTOTPMutation.feedback}
+            {beginRecoveryMutation.feedback}
+            {beginWebAuthnMutation.feedback}
+            {authenticateWebAuthnMutation.feedback}
+            {verifyWebAuthnMutation.feedback}
+            {recoveryMutation.feedback}
+            {!totpChallenge && !recoveryChallenge ? verifyMutation.feedback : null}
+            <OperationFeedback
+              label="浏览器 Passkey 验证"
+              pending={nativePending}
+              error={nativeError}
+              readOnly
             />
-          </Card>
-          <Card size="small">
-            <Statistic
-              title="Active sessions"
-              value={security?.activeSession ?? 0}
-              prefix={<SafetyCertificateOutlined />}
-            />
-          </Card>
-          <Card size="small">
-            <Statistic
-              title="Linked sources"
-              value={security?.linkedSources.length ?? 0}
-              prefix={<KeyOutlined />}
-            />
-          </Card>
-          <Card size="small">
-            <Statistic
-              title="Recent login"
-              value={formatPortalDateTime(security?.recentLoginAt)}
-              prefix={<ClockCircleOutlined />}
-            />
-          </Card>
-        </section>
-
-        <section className="soha-portal-detail-layout">
-          <div className="soha-portal-detail-main">
-            <section className="soha-portal-side-panel">
-              <div className="soha-portal-principal is-large">
-                <PortalUserAvatar size={48} />
-                <div className="soha-portal-principal-copy">
-                  <Title level={4}>{principal?.userName || 'User'}</Title>
-                  <Text type="secondary" ellipsis title={principal?.email}>
-                    {principal?.email || principal?.userId || '-'}
-                  </Text>
-                </div>
-              </div>
-              <Descriptions
-                bordered
-                column={{ xs: 1, sm: 1, md: 2 }}
-                size="small"
-                items={[
-                  { key: 'userId', label: 'User ID', children: principal?.userId || '-' },
-                  { key: 'email', label: 'Email', children: principal?.email || '-' },
-                  {
-                    key: 'mfa',
-                    label: 'MFA',
-                    children: security?.mfaEnabled ? 'Enabled' : 'Not enabled',
-                  },
-                  {
-                    key: 'recentLoginAt',
-                    label: 'Recent login',
-                    children: formatPortalDateTime(security?.recentLoginAt),
-                  },
-                ]}
-              />
-            </section>
-
-            <section className="soha-portal-side-panel">
-              <div className="soha-portal-side-title">
-                <KeyOutlined />
-                <span>Linked sources</span>
-              </div>
-              <div className="soha-portal-app-tags">
-                <PortalTagsOrEmpty values={security?.linkedSources} />
-              </div>
-            </section>
-
-            <section className="soha-portal-side-panel">
-              <div className="soha-portal-side-title">
-                <LockOutlined />
-                <span>Multi-factor authentication</span>
-              </div>
-              {!mfaAvailable ? (
-                <Alert
-                  showIcon
-                  title="MFA runtime unavailable"
-                  description="This server has no usable MFA challenge runtime."
-                  type="warning"
+          </>
+        ) : null}
+        {security ? (
+          <>
+            <section className="soha-portal-security-overview">
+              <Card size="small">
+                <Statistic
+                  title="MFA"
+                  value={security?.mfaEnabled ? 'Enabled' : 'Not enabled'}
+                  prefix={<LockOutlined />}
                 />
-              ) : (
-                <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
-                  <Space wrap>
-                    <Button
-                      disabled={!runtime?.totp.available}
-                      loading={beginTOTPMutation.isPending}
-                      onClick={() =>
-                        beginTOTPMutation.mutate(undefined, {
-                          onSuccess: setTOTPChallenge,
-                          onError: (error) => message.error(error.message),
-                        })
-                      }
-                    >
-                      Add authenticator
-                    </Button>
-                    <Button
-                      disabled={
-                        !runtime?.webauthn.available ||
-                        !window.PublicKeyCredential ||
-                        !navigator.credentials
-                      }
-                      loading={beginWebAuthnMutation.isPending || verifyWebAuthnMutation.isPending}
-                      onClick={() => void enrollWebAuthn()}
-                    >
-                      Add passkey
-                    </Button>
-                    <Button
-                      disabled={
-                        !runtime?.webauthn.available ||
-                        !runtime?.stepUp.available ||
-                        !window.PublicKeyCredential ||
-                        !navigator.credentials
-                      }
-                      loading={
-                        authenticateWebAuthnMutation.isPending || verifyWebAuthnMutation.isPending
-                      }
-                      onClick={() => void authenticateWebAuthn()}
-                    >
-                      Verify passkey
-                    </Button>
-                    <Popconfirm
-                      title="Generate new recovery codes?"
-                      description="Previously generated recovery codes will stop working."
-                      onConfirm={() =>
-                        recoveryMutation.mutate(undefined, {
-                          onSuccess: (result) => setRecoveryCodes(result.codes),
-                          onError: (error) => message.error(error.message),
-                        })
-                      }
-                    >
-                      <Button
-                        disabled={!runtime?.recoveryCodes.available}
-                        loading={recoveryMutation.isPending}
-                      >
-                        Recovery codes
-                      </Button>
-                    </Popconfirm>
-                    <Button
-                      disabled={!runtime?.recoveryCodes.available}
-                      icon={<KeyOutlined />}
-                      loading={beginRecoveryMutation.isPending}
-                      onClick={() =>
-                        beginRecoveryMutation.mutate(undefined, {
-                          onSuccess: setRecoveryChallenge,
-                          onError: (error) => message.error(error.message),
-                        })
-                      }
-                    >
-                      Use recovery code
-                    </Button>
-                  </Space>
-                  {credentialsQuery.isLoading ? (
-                    <Spin size="small" />
-                  ) : credentialsQuery.data?.length ? (
-                    <ul className="soha-list-panel">
-                      {credentialsQuery.data.map((credential) => (
-                        <li key={credential.id} className="soha-list-row">
-                          <div className="soha-list-row-meta">
-                            <div>
-                              <Text strong>{credential.displayName}</Text>
-                              <div>
-                                <Text type="secondary">{`${credential.type} · ${formatPortalDateTime(credential.lastUsedAt || credential.createdAt)}`}</Text>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="soha-list-row-extra">
-                            <Popconfirm
-                              title="Revoke this credential?"
-                              onConfirm={() => revokeMutation.mutate(credential.id)}
-                            >
-                              <Button danger size="small">
-                                Revoke
-                              </Button>
-                            </Popconfirm>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No MFA credentials" />
-                  )}
-                </Space>
-              )}
+              </Card>
+              <Card size="small">
+                <Statistic
+                  title="Active sessions"
+                  value={security?.activeSession ?? '-'}
+                  prefix={<SafetyCertificateOutlined />}
+                />
+              </Card>
+              <Card size="small">
+                <Statistic
+                  title="Linked sources"
+                  value={security?.linkedSources.length ?? '-'}
+                  prefix={<KeyOutlined />}
+                />
+              </Card>
+              <Card size="small">
+                <Statistic
+                  title="Recent login"
+                  value={formatPortalDateTime(security?.recentLoginAt)}
+                  prefix={<ClockCircleOutlined />}
+                />
+              </Card>
             </section>
-          </div>
 
-          <aside className="soha-portal-side">
-            <section className="soha-portal-side-panel">
-              <div className="soha-portal-side-title">
-                <TeamOutlined />
-                <span>Roles</span>
+            <section className="soha-portal-detail-layout">
+              <div className="soha-portal-detail-main">
+                <section className="soha-portal-side-panel">
+                  <div className="soha-portal-principal is-large">
+                    <PortalUserAvatar size={48} />
+                    <div className="soha-portal-principal-copy">
+                      <Title level={4}>{principal?.userName || 'User'}</Title>
+                      <Text type="secondary" ellipsis title={principal?.email}>
+                        {principal?.email || principal?.userId || '-'}
+                      </Text>
+                    </div>
+                  </div>
+                  <Descriptions
+                    bordered
+                    column={{ xs: 1, sm: 1, md: 2 }}
+                    size="small"
+                    items={[
+                      { key: 'userId', label: 'User ID', children: principal?.userId || '-' },
+                      { key: 'email', label: 'Email', children: principal?.email || '-' },
+                      {
+                        key: 'mfa',
+                        label: 'MFA',
+                        children: security?.mfaEnabled ? 'Enabled' : 'Not enabled',
+                      },
+                      {
+                        key: 'recentLoginAt',
+                        label: 'Recent login',
+                        children: formatPortalDateTime(security?.recentLoginAt),
+                      },
+                    ]}
+                  />
+                </section>
+
+                <section className="soha-portal-side-panel">
+                  <div className="soha-portal-side-title">
+                    <KeyOutlined />
+                    <span>Linked sources</span>
+                  </div>
+                  <div className="soha-portal-app-tags">
+                    <PortalTagsOrEmpty values={security?.linkedSources} />
+                  </div>
+                </section>
+
+                <section className="soha-portal-side-panel">
+                  <div className="soha-portal-side-title">
+                    <LockOutlined />
+                    <span>Multi-factor authentication</span>
+                  </div>
+                  <ReadFeedback query={runtimeQuery} label="MFA 运行能力" />
+                  {runtimeQuery.isPending ? (
+                    <Spin size="small" />
+                  ) : !runtime ? null : !mfaAvailable ? (
+                    <Alert
+                      showIcon
+                      title="MFA runtime unavailable"
+                      description="This server has no usable MFA challenge runtime."
+                      type="warning"
+                    />
+                  ) : (
+                    <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+                      <Space wrap>
+                        <Button
+                          disabled={blocked || !runtime?.totp.available}
+                          loading={beginTOTPMutation.isPending}
+                          onClick={() => beginTOTPMutation.mutate(undefined)}
+                        >
+                          Add authenticator
+                        </Button>
+                        <Button
+                          disabled={
+                            blocked ||
+                            !runtime?.webauthn.available ||
+                            !window.PublicKeyCredential ||
+                            !navigator.credentials
+                          }
+                          loading={
+                            beginWebAuthnMutation.isPending || verifyWebAuthnMutation.isPending
+                          }
+                          onClick={() => void enrollWebAuthn()}
+                        >
+                          Add passkey
+                        </Button>
+                        <Button
+                          disabled={
+                            blocked ||
+                            !runtime?.webauthn.available ||
+                            !runtime?.stepUp.available ||
+                            !window.PublicKeyCredential ||
+                            !navigator.credentials
+                          }
+                          loading={
+                            authenticateWebAuthnMutation.isPending ||
+                            verifyWebAuthnMutation.isPending
+                          }
+                          onClick={() => void authenticateWebAuthn()}
+                        >
+                          Verify passkey
+                        </Button>
+                        <Popconfirm
+                          title="Generate new recovery codes?"
+                          description="Previously generated recovery codes will stop working."
+                          onConfirm={() => recoveryMutation.mutate(undefined)}
+                        >
+                          <Button
+                            disabled={blocked || !runtime?.recoveryCodes.available}
+                            loading={recoveryMutation.isPending}
+                          >
+                            Recovery codes
+                          </Button>
+                        </Popconfirm>
+                        <Button
+                          disabled={blocked || !runtime?.recoveryCodes.available}
+                          icon={<KeyOutlined />}
+                          loading={beginRecoveryMutation.isPending}
+                          onClick={() => beginRecoveryMutation.mutate(undefined)}
+                        >
+                          Use recovery code
+                        </Button>
+                      </Space>
+                      <ReadFeedback
+                        query={credentialsQuery}
+                        label="MFA 凭据"
+                        canRead={credentialsQuery.isEnabled}
+                      />
+                      {credentialsQuery.isLoading ? (
+                        <Spin size="small" />
+                      ) : credentialsQuery.isError && !credentials ? null : credentials?.length ? (
+                        <ul className="soha-list-panel">
+                          {credentials.map((credential) => (
+                            <li key={credential.id} className="soha-list-row">
+                              <div className="soha-list-row-meta">
+                                <div>
+                                  <Text strong>{credential.displayName}</Text>
+                                  <div>
+                                    <Text type="secondary">{`${credential.type} · ${formatPortalDateTime(credential.lastUsedAt || credential.createdAt)}`}</Text>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="soha-list-row-extra">
+                                <Popconfirm
+                                  title="Revoke this credential?"
+                                  onConfirm={() => revokeMutation.mutate(credential.id)}
+                                >
+                                  <Button danger size="small" disabled={blocked}>
+                                    Revoke
+                                  </Button>
+                                </Popconfirm>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <Empty
+                          image={Empty.PRESENTED_IMAGE_SIMPLE}
+                          description="No MFA credentials"
+                        />
+                      )}
+                    </Space>
+                  )}
+                </section>
               </div>
-              <div className="soha-portal-app-tags">
-                <PortalTagsOrEmpty values={principal?.roles} />
-              </div>
+
+              <aside className="soha-portal-side">
+                <section className="soha-portal-side-panel">
+                  <div className="soha-portal-side-title">
+                    <TeamOutlined />
+                    <span>Roles</span>
+                  </div>
+                  <div className="soha-portal-app-tags">
+                    <PortalTagsOrEmpty values={principal?.roles} />
+                  </div>
+                </section>
+                <section className="soha-portal-side-panel">
+                  <div className="soha-portal-side-title">
+                    <TeamOutlined />
+                    <span>Teams</span>
+                  </div>
+                  <div className="soha-portal-app-tags">
+                    <PortalTagsOrEmpty values={principal?.teams} />
+                  </div>
+                </section>
+                <section className="soha-portal-side-panel">
+                  <div className="soha-portal-side-title">
+                    <InfoCircleOutlined />
+                    <span>Tags</span>
+                  </div>
+                  <div className="soha-portal-app-tags">
+                    <PortalTagsOrEmpty values={principal?.tags} />
+                  </div>
+                </section>
+              </aside>
             </section>
-            <section className="soha-portal-side-panel">
-              <div className="soha-portal-side-title">
-                <TeamOutlined />
-                <span>Teams</span>
-              </div>
-              <div className="soha-portal-app-tags">
-                <PortalTagsOrEmpty values={principal?.teams} />
-              </div>
-            </section>
-            <section className="soha-portal-side-panel">
-              <div className="soha-portal-side-title">
-                <InfoCircleOutlined />
-                <span>Tags</span>
-              </div>
-              <div className="soha-portal-app-tags">
-                <PortalTagsOrEmpty values={principal?.tags} />
-              </div>
-            </section>
-          </aside>
-        </section>
+          </>
+        ) : null}
       </main>
 
       <Modal
+        styles={operationModalStyles}
+        style={{ top: 32 }}
+        closable={!blocked}
+        keyboard={!blocked}
+        mask={{ closable: false }}
+        cancelButtonProps={{ disabled: blocked }}
         destroyOnHidden
         okButtonProps={{
-          disabled: totpCode.trim().length < 6,
+          disabled: blocked || totpCode.trim().length < 6,
           loading: verifyMutation.isPending,
         }}
         onCancel={() => {
+          if (blocked) return
           setTOTPChallenge(null)
           setTOTPCode('')
         }}
@@ -416,32 +615,44 @@ export function PortalSecurityPage() {
               onSuccess: () => {
                 setTOTPChallenge(null)
                 setTOTPCode('')
-                message.success('Authenticator registered')
                 void credentialsQuery.refetch()
               },
-              onError: (error) => message.error(error.message),
             },
           )
         }
-        open={Boolean(totpChallenge)}
+        open={!denied && Boolean(totpChallenge)}
         title="Register authenticator"
       >
+        {verifyMutation.feedback}
         <Alert
           showIcon
           title="Scan this provisioning URI in your authenticator app"
           description={<Text copyable>{totpChallenge?.provisioningUri}</Text>}
           type="info"
         />
-        <Input.OTP length={6} onChange={setTOTPCode} value={totpCode} style={{ marginTop: 16 }} />
+        <Input.OTP
+          disabled={blocked}
+          length={6}
+          onChange={setTOTPCode}
+          value={totpCode}
+          style={{ marginTop: 16 }}
+        />
       </Modal>
 
       <Modal
+        styles={operationModalStyles}
+        style={{ top: 32 }}
+        closable={!blocked}
+        keyboard={!blocked}
+        mask={{ closable: false }}
+        cancelButtonProps={{ disabled: blocked }}
         destroyOnHidden
         okButtonProps={{
-          disabled: recoveryCode.trim().length < 16,
+          disabled: blocked || recoveryCode.trim().length < 16,
           loading: verifyMutation.isPending,
         }}
         onCancel={() => {
+          if (blocked) return
           setRecoveryChallenge(null)
           setRecoveryCode('')
         }}
@@ -453,16 +664,16 @@ export function PortalSecurityPage() {
               onSuccess: () => {
                 setRecoveryChallenge(null)
                 setRecoveryCode('')
-                message.success('Recovery code verified')
               },
-              onError: (error) => message.error(error.message),
             },
           )
         }
-        open={Boolean(recoveryChallenge)}
+        open={!denied && Boolean(recoveryChallenge)}
         title="Use recovery code"
       >
+        {verifyMutation.feedback}
         <Input
+          disabled={blocked}
           autoComplete="one-time-code"
           maxLength={17}
           onChange={(event) => setRecoveryCode(event.target.value)}
@@ -472,10 +683,13 @@ export function PortalSecurityPage() {
       </Modal>
 
       <Modal
+        styles={operationModalStyles}
+        style={{ top: 32 }}
         cancelButtonProps={{ style: { display: 'none' } }}
         destroyOnHidden
         onOk={() => setRecoveryCodes([])}
-        open={recoveryCodes.length > 0}
+        onCancel={() => setRecoveryCodes([])}
+        open={!denied && recoveryCodes.length > 0}
         title="Recovery codes"
       >
         <Alert

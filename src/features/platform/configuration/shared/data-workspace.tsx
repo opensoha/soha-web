@@ -1,5 +1,5 @@
-import { lazy, Suspense, useRef, useState } from 'react'
-import { Alert, App, Button, Card, Input, Segmented, Spin } from 'antd'
+import { ManagementState } from '@/components/management-list'
+import { useI18n } from '@/i18n'
 import {
   CopyOutlined,
   DeleteOutlined,
@@ -10,8 +10,8 @@ import {
   PlusOutlined,
   UndoOutlined,
 } from '@ant-design/icons'
-import { ManagementState } from '@/components/management-list'
-import { useI18n } from '@/i18n'
+import { Alert, App, Button, Card, Input, Segmented, Spin } from 'antd'
+import { lazy, Suspense, useRef, useState } from 'react'
 import {
   configurationDataRows,
   configurationDataSize,
@@ -51,12 +51,14 @@ function dataEntries(detail: {
 
 export function ConfigurationDataWorkspace({
   applying,
+  blocked,
   canEdit,
   detail,
   encodedData,
   readOnlyReason,
   onApply,
 }: {
+  blocked?: boolean
   applying?: boolean
   canEdit: boolean
   detail: { data?: Record<string, string>; binaryData?: Record<string, string>; immutable: boolean }
@@ -86,7 +88,7 @@ export function ConfigurationDataWorkspace({
   const baseline = JSON.stringify([detail.data ?? {}, detail.binaryData ?? {}, encodedData])
   const conflict = Boolean(edit && edit.baseline !== baseline)
   const permitted = canEdit && !detail.immutable
-  const busy = Boolean(applying || saving)
+  const busy = Boolean(applying || saving || blocked)
   const originalValue = (entry: DataEntry) => edit?.original[entry.originalKey ?? ''] ?? ''
   const entryChanged = (entry: DataEntry) =>
     !entry.binary &&

@@ -1,8 +1,8 @@
 /** @vitest-environment jsdom */
 
-import { act, type ReactNode } from 'react'
-import { App as AntdApp } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { App as AntdApp } from 'antd'
+import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -230,14 +230,14 @@ describe('MonitoringPage', () => {
       Promise.resolve({ data: responses[path] ?? [] }),
     )
     const retry = Array.from(container.querySelectorAll('button')).find(
-      (button) => button.textContent?.replace(/\s/g, '') === '重试',
+      (button) => button.textContent?.replace(/\s/g, '') === '重试读取',
     )!
     await act(async () => {
       retry.click()
       await new Promise((resolve) => setTimeout(resolve, 20))
     })
     expect(container.textContent).toContain('健康 Provider: 1')
-    expect(container.textContent).not.toContain('Provider 状态加载失败')
+    expect(container.textContent).not.toContain('Provider 状态读取失败')
   })
 
   it('renders the bounded overview from canonical capability queries', async () => {
@@ -260,7 +260,7 @@ describe('MonitoringPage', () => {
 
     const container = await renderMonitoringPage()
 
-    expect(container.textContent).toContain('Provider 状态加载失败')
+    expect(container.textContent).toContain('Provider 状态读取失败')
     expect(container.textContent).toContain('provider offline')
     expect(container.textContent).toContain('健康 Provider: 不可用')
     expect(container.textContent).not.toContain('健康 Provider: 0')

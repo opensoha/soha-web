@@ -1,12 +1,12 @@
 /** @vitest-environment jsdom */
 
-import { act, StrictMode } from 'react'
 import { App as AntdApp } from 'antd'
+import { act, StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { LogDataSourcesPage } from './data-sources-page'
 
-const mutation = { isPending: false, mutate: vi.fn(), variables: undefined }
+const mutation = { isPending: false, mutate: vi.fn(), reset: vi.fn(), variables: undefined }
 
 vi.mock('@tanstack/react-query', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@tanstack/react-query')>()),

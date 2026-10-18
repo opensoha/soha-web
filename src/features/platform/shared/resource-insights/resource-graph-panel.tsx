@@ -1,7 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { ManagementRefreshButton } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
+import { StatusTag } from '@/components/status-tag'
+import { buildKubernetesResourcePath } from '@/features/platform/shared/resource-ref'
+import { useI18n } from '@/i18n'
+import type { ScopeKey } from '@/types'
+import { readableQueryData } from '@/utils/query-feedback'
 import { CloseOutlined } from '@ant-design/icons'
 import type { KubernetesResourceGraph } from '@opensoha/contracts/gen/ts/sohaapi'
-import { Alert, Button, Empty, Space, Spin, Typography } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import {
   Background,
@@ -15,14 +20,12 @@ import {
   type Edge,
   type Node,
 } from '@xyflow/react'
-import dagre from 'dagre'
-import { useNavigate } from 'react-router-dom'
-import { StatusTag } from '@/components/status-tag'
-import { buildKubernetesResourcePath } from '@/features/platform/shared/resource-ref'
-import { useI18n } from '@/i18n'
-import type { ScopeKey } from '@/types'
-import { resourceInsightQueries } from './queries'
 import '@xyflow/react/dist/style.css'
+import { Alert, Button, Empty, Space, Spin, Typography } from 'antd'
+import dagre from 'dagre'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { resourceInsightQueries } from './queries'
 import './resource-graph-panel.css'
 
 const NODE_WIDTH = 240
@@ -109,9 +112,9 @@ function ResourceGraphCanvas({ graph }: { graph: KubernetesResourceGraph }) {
   const zh = localeCode === 'zh_CN'
 
   useEffect(() => {
-    const frame = requestAnimationFrame(() => fitView({ padding: 0.18, duration: 180 }))
+    const frame = requestAnimationFrame(() => fitView({ padding: 0.18, duration: 0 }))
     return () => cancelAnimationFrame(frame)
-  }, [fitView, graph.generatedAt, canvasWidth, canvasHeight])
+  }, [fitView, canvasWidth, canvasHeight])
 
   return (
     <div className="soha-resource-graph-workspace">
@@ -254,7 +257,7 @@ export function ResourceGraphPanel({
 }) {
   const { localeCode } = useI18n()
   const graphQuery = useQuery(resourceInsightQueries.graph(scope, kind, name))
-  const graph = graphQuery.data
+  const graph = readableQueryData(graphQuery)
 
   if (graphQuery.isLoading) {
     return (
@@ -263,25 +266,44 @@ export function ResourceGraphPanel({
       </div>
     )
   }
-  if (graphQuery.error || !graph) {
+  if (!graph)
     return (
-      <Alert
-        showIcon
-        type="warning"
-        title={localeCode === 'zh_CN' ? '资源关系暂不可用' : 'Resource relationships unavailable'}
-        description={graphQuery.error?.message}
+      <ReadFeedback
+        label={localeCode === 'zh_CN' ? '资源关系' : 'Resource relationships'}
+        query={graphQuery}
       />
     )
-  }
   if (graph.nodes.length === 0) {
     return (
-      <Empty description={localeCode === 'zh_CN' ? '未发现关联资源' : 'No related resources'} />
+      <>
+        <ReadFeedback
+          label={localeCode === 'zh_CN' ? '资源关系' : 'Resource relationships'}
+          query={graphQuery}
+        />
+        <ManagementRefreshButton
+          aria-label="刷新资源关系"
+          tooltip="刷新资源关系"
+          loading={graphQuery.isFetching}
+          onClick={() => void graphQuery.refetch()}
+        />
+        <Empty description={localeCode === 'zh_CN' ? '未发现关联资源' : 'No related resources'} />
+      </>
     )
   }
 
   return (
     <div className="soha-detail-stack">
+      <ReadFeedback
+        label={localeCode === 'zh_CN' ? '资源关系' : 'Resource relationships'}
+        query={graphQuery}
+      />
       <Space wrap>
+        <ManagementRefreshButton
+          aria-label="刷新资源关系"
+          tooltip="刷新资源关系"
+          loading={graphQuery.isFetching}
+          onClick={() => void graphQuery.refetch()}
+        />
         <Typography.Text strong>
           {localeCode === 'zh_CN' ? '资源关系与影响范围' : 'Resource relationships and impact'}
         </Typography.Text>

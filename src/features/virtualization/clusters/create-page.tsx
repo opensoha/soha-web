@@ -1,4 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { writeOutcomeUnknown } from '@/utils/query-feedback'
+import { ReadFeedback } from '@/components/request-feedback'
+import { ComputeMutationFeedback } from '@/features/compute'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, App, Collapse, Descriptions, Form, Input, Segmented, Select, Switch } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { StepFormModal } from '@/components/step-form-modal'
@@ -118,9 +121,17 @@ export function VirtualizationConnectionStepModal({
   const updateMutation = useMutation(
     withVirtualizationMutationSuccess(virtualizationMutations.updateCluster(queryClient), finish),
   )
+  const resetEditorFeedback = useRef(() => {})
+  resetEditorFeedback.current = () => {
+    if (!createMutation.isPending && !writeOutcomeUnknown(createMutation.error))
+      createMutation.reset()
+    if (!updateMutation.isPending && !writeOutcomeUnknown(updateMutation.error))
+      updateMutation.reset()
+  }
 
   useEffect(() => {
     if (!open) return
+    resetEditorFeedback.current()
     setCurrent(0)
     setPveAuthMode('password')
     setReplaceCredential(!editing)
@@ -452,30 +463,100 @@ export function VirtualizationConnectionStepModal({
   ]
 
   return (
-    <StepFormModal
-      current={current}
-      form={form}
-      initialValues={initialValues}
-      loading={createMutation.isPending || updateMutation.isPending}
-      onClose={onClose}
-      onCurrentChange={setCurrent}
-      onFinish={(values) => {
-        const payload = buildClusterPayload(values)
-        if (editing) updateMutation.mutate({ id: editing.id, payload })
-        else createMutation.mutate(payload)
-      }}
-      open={open}
-      steps={steps}
-      submitText={
-        editing
-          ? localeText(localeCode, '保存连接', 'Save connection')
-          : localeText(localeCode, '创建连接', 'Create connection')
-      }
-      title={
-        editing
-          ? localeText(localeCode, '编辑虚拟化连接', 'Edit virtualization connection')
-          : localeText(localeCode, '新增虚拟化连接', 'Add virtualization connection')
-      }
-    />
+    <>
+      {!open ? (
+        <ComputeMutationFeedback
+          operations={[
+            {
+              label: localeText(localeCode, '保存连接', 'Save connection'),
+              mutation: createMutation,
+              target: createMutation.variables?.name,
+              receipt: {
+                message: localeText(
+                  localeCode,
+                  '连接记录已保存，连接健康以检查结果为准',
+                  'Connection record saved; check health separately',
+                ),
+              },
+            },
+            {
+              label: localeText(localeCode, '更新连接', 'Update connection'),
+              mutation: updateMutation,
+              target: updateMutation.variables?.id,
+              receipt: {
+                message: localeText(
+                  localeCode,
+                  '连接记录已保存，连接健康以检查结果为准',
+                  'Connection record saved; check health separately',
+                ),
+              },
+            },
+          ]}
+        />
+      ) : null}
+      <StepFormModal
+        feedback={
+          <>
+            <ReadFeedback
+              query={platformClustersQuery}
+              label={localeText(localeCode, 'Kubernetes 集群选项', 'Kubernetes cluster options')}
+            />
+            <ComputeMutationFeedback
+              operations={[
+                {
+                  label: localeText(localeCode, '保存连接', 'Save connection'),
+                  mutation: createMutation,
+                  target: createMutation.variables?.name,
+                  receipt: {
+                    message: localeText(
+                      localeCode,
+                      '连接记录已保存，连接健康以检查结果为准',
+                      'Connection record saved; check health separately',
+                    ),
+                  },
+                },
+                {
+                  label: localeText(localeCode, '更新连接', 'Update connection'),
+                  mutation: updateMutation,
+                  target: updateMutation.variables?.id,
+                  receipt: {
+                    message: localeText(
+                      localeCode,
+                      '连接记录已保存，连接健康以检查结果为准',
+                      'Connection record saved; check health separately',
+                    ),
+                  },
+                },
+              ]}
+            />
+          </>
+        }
+        current={current}
+        form={form}
+        initialValues={initialValues}
+        loading={createMutation.isPending || updateMutation.isPending}
+        onClose={() => {
+          if (!createMutation.isPending && !updateMutation.isPending) onClose()
+        }}
+        onCurrentChange={setCurrent}
+        onFinish={(values) => {
+          const payload = buildClusterPayload(values, editing)
+          if (editing) updateMutation.mutate({ id: editing.id, payload })
+          else createMutation.mutate(payload)
+        }}
+        open={open}
+        steps={steps}
+        submitText={
+          editing
+            ? localeText(localeCode, '保存连接', 'Save connection')
+            : localeText(localeCode, '创建连接', 'Create connection')
+        }
+        title={
+          editing
+            ? localeText(localeCode, '编辑虚拟化连接', 'Edit virtualization connection')
+            : localeText(localeCode, '新增虚拟化连接', 'Add virtualization connection')
+        }
+      />
+    </>
   )
 }

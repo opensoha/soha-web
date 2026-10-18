@@ -1,4 +1,8 @@
-import { useMemo, useState } from 'react'
+import { MutationFeedback, OperationFeedback, ReadFeedback } from '@/components/request-feedback'
+import { readableQueryData, writeOutcomeUnknown } from '@/utils/query-feedback'
+import { useAccessResourceCrud } from '../shared/use-resource-crud'
+import { AccessMutationFooter, accessMutationModalStyles } from '../shared/mutation-footer'
+import { useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import {
   App,
@@ -87,57 +91,88 @@ export function AccessUsersPage() {
   const canReplaceUserTeams = hasPermission(snapshot, 'access.users.replace-teams')
   const canViewScopeGrants = hasPermission(snapshot, 'access.scope-grants.view')
   const [form] = Form.useForm<Record<string, unknown>>()
-  const [modalVisible, setModalVisible] = useState(false)
-  const [editing, setEditing] = useState<AccessUser | null>(null)
   const [grantUser, setGrantUser] = useState<AccessUser | null>(null)
   const [searchText, setSearchText] = useState('')
   const [selectedOrgId, setSelectedOrgId] = useState(ORG_ALL_KEY)
   const [includeSubOrganizations, setIncludeSubOrganizations] = useState(true)
   const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
-  const usersQuery = useQuery(accessQueries.users(canViewUsers))
+  const crud = useAccessResourceCrud({
+    query: accessQueries.users(canViewUsers),
+    create: accessMutations.users.create(),
+    update: accessMutations.users.update(),
+    delete: accessMutations.users.delete(),
+    invalidate: invalidateAccessUsers,
+  })
+  const { modalVisible, editing, createMutation, updateMutation, deleteMutation } = crud
+  const usersQuery = crud.query
+  const resettingMFA = useRef(false)
   const rolesQuery = useQuery(accessQueries.roles(canViewRoles))
   const teamsQuery = useQuery(accessQueries.teams(canViewTeams))
 
   const roleMap = useMemo(
-    () => Object.fromEntries((rolesQuery.data ?? []).map((item) => [item.id, item.name])),
-    [rolesQuery.data],
+    () =>
+      Object.fromEntries(
+        ((canViewRoles ? readableQueryData(rolesQuery) : undefined) ?? []).map((item) => [
+          item.id,
+          item.name,
+        ]),
+      ),
+    [canViewRoles, rolesQuery.data, rolesQuery.error],
   )
   const teamMap = useMemo(
-    () => Object.fromEntries((teamsQuery.data ?? []).map((item) => [item.id, item.name])),
-    [teamsQuery.data],
+    () =>
+      Object.fromEntries(
+        ((canViewTeams ? readableQueryData(teamsQuery) : undefined) ?? []).map((item) => [
+          item.id,
+          item.name,
+        ]),
+      ),
+    [canViewTeams, teamsQuery.data, teamsQuery.error],
   )
   const roleOptions = useMemo(
-    () => (rolesQuery.data ?? []).map((item) => ({ value: item.id, label: item.name })),
-    [rolesQuery.data],
+    () =>
+      ((canViewRoles ? readableQueryData(rolesQuery) : undefined) ?? []).map((item) => ({
+        value: item.id,
+        label: item.name,
+      })),
+    [canViewRoles, rolesQuery.data, rolesQuery.error],
   )
   const teamOptions = useMemo(
     () =>
-      (teamsQuery.data ?? []).map((item) => ({
+      ((canViewTeams ? readableQueryData(teamsQuery) : undefined) ?? []).map((item) => ({
         value: item.id,
         label: item.path ? `${item.name} (${item.path})` : item.name,
       })),
-    [teamsQuery.data],
+    [canViewTeams, teamsQuery.data, teamsQuery.error],
   )
   const userCountByOrg = useMemo(() => {
-    return buildOrganizationUserCounts(teamsQuery.data ?? [], usersQuery.data ?? [])
-  }, [teamsQuery.data, usersQuery.data])
+    return buildOrganizationUserCounts(
+      (canViewTeams ? readableQueryData(teamsQuery) : undefined) ?? [],
+      readableQueryData(usersQuery) ?? [],
+    )
+  }, [canViewTeams, teamsQuery.data, usersQuery.data, teamsQuery.error, usersQuery.error])
   const organizationTreeData = useMemo(
-    () => buildOrganizationTree(teamsQuery.data ?? [], userCountByOrg),
-    [teamsQuery.data, userCountByOrg],
+    () =>
+      buildOrganizationTree(
+        (canViewTeams ? readableQueryData(teamsQuery) : undefined) ?? [],
+        userCountByOrg,
+      ),
+    [canViewTeams, teamsQuery.data, userCountByOrg, teamsQuery.error],
   )
   const scopedOrganizationIds = useMemo(() => {
     if (selectedOrgId === ORG_ALL_KEY) return new Set<string>()
     const ids = new Set<string>([selectedOrgId])
     if (includeSubOrganizations) {
-      collectOrganizationDescendantIds(teamsQuery.data ?? [], selectedOrgId).forEach((id) =>
-        ids.add(id),
-      )
+      collectOrganizationDescendantIds(
+        (canViewTeams ? readableQueryData(teamsQuery) : undefined) ?? [],
+        selectedOrgId,
+      ).forEach((id) => ids.add(id))
     }
     return ids
-  }, [includeSubOrganizations, selectedOrgId, teamsQuery.data])
+  }, [canViewTeams, includeSubOrganizations, selectedOrgId, teamsQuery.data, teamsQuery.error])
   const filteredUsers = useMemo(() => {
     const query = searchText.trim().toLowerCase()
-    return (usersQuery.data ?? []).filter((item) => {
+    return (readableQueryData(usersQuery) ?? []).filter((item) => {
       if (!organizationMatchesSelection(item, selectedOrgId, scopedOrganizationIds)) return false
       if (!query) return true
       return [
@@ -155,35 +190,8 @@ export function AccessUsersPage() {
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(query))
     })
-  }, [scopedOrganizationIds, searchText, selectedOrgId, teamMap, usersQuery.data])
+  }, [scopedOrganizationIds, searchText, selectedOrgId, teamMap, usersQuery.data, usersQuery.error])
 
-  const createMutation = useMutation({
-    ...accessMutations.users.create(),
-    onSuccess: async () => {
-      message.success('用户创建成功')
-      await invalidateAccessUsers(queryClient)
-      setModalVisible(false)
-    },
-    onError: (error) => message.error(error.message),
-  })
-  const updateMutation = useMutation({
-    ...accessMutations.users.update(),
-    onSuccess: async () => {
-      message.success('用户更新成功')
-      await invalidateAccessUsers(queryClient)
-      setModalVisible(false)
-      setEditing(null)
-    },
-    onError: (error) => message.error(error.message),
-  })
-  const deleteMutation = useMutation({
-    ...accessMutations.users.delete(),
-    onSuccess: async () => {
-      message.success('用户删除成功')
-      await invalidateAccessUsers(queryClient)
-    },
-    onError: (error) => message.error(error.message),
-  })
   const resetMFAMutation = useMutation({
     ...accessMutations.users.resetMFA(),
     onSuccess: async (result) => {
@@ -192,13 +200,12 @@ export function AccessUsersPage() {
       )
       await invalidateAccessUsers(queryClient)
     },
-    onError: (error) => message.error(error.message),
+    onSettled: () => {
+      resettingMFA.current = false
+    },
   })
 
-  const closeModal = () => {
-    setModalVisible(false)
-    setEditing(null)
-  }
+  const closeModal = crud.closeModal
   const submitUser = (values: Record<string, unknown>) => {
     const payload = {
       username: String(values.username ?? '').trim(),
@@ -210,11 +217,12 @@ export function AccessUsersPage() {
       teamIds: canReplaceUserTeams ? toStringArray(values.teamIds) : undefined,
       tags: toStringArray(values.tags),
     }
-    if (editing) {
-      updateMutation.mutate({ id: editing.id, values: payload })
+    if (
+      (canReplaceUserRoles && canViewRoles && (rolesQuery.isPending || rolesQuery.isError)) ||
+      (canReplaceUserTeams && canViewTeams && (teamsQuery.isPending || teamsQuery.isError))
+    )
       return
-    }
-    createMutation.mutate(payload)
+    crud.handleSubmit(payload)
   }
 
   const columns: ColumnProps<AccessUser>[] = [
@@ -315,20 +323,21 @@ export function AccessUsersPage() {
               {canUpdateUsers ? (
                 <ManagementIconButton
                   aria-label="编辑用户"
+                  disabled={crud.saveBlocked && editing?.id !== record.id}
                   icon={<EditOutlined />}
                   size="small"
                   tooltip="编辑"
-                  onClick={() => {
-                    setEditing(record)
-                    setModalVisible(true)
-                  }}
+                  onClick={() => crud.openEdit(record)}
                 />
               ) : null}
               {canUpdateUsers ? (
                 <Popconfirm
-                  title="确认重置此用户的 MFA？"
+                  title={`确认重置 ${record.username} 的 MFA？`}
                   description="所有 MFA 凭据和恢复码将失效，并撤销现有会话。"
-                  onConfirm={() =>
+                  okButtonProps={{ 'aria-label': '确认重置 MFA' }}
+                  onConfirm={() => {
+                    if (resettingMFA.current || writeOutcomeUnknown(resetMFAMutation.error)) return
+                    resettingMFA.current = true
                     resetMFAMutation.mutate({
                       id: record.id,
                       input: {
@@ -336,10 +345,13 @@ export function AccessUsersPage() {
                         revokeSessions: true,
                       },
                     })
-                  }
+                  }}
                 >
                   <ManagementIconButton
                     aria-label="重置 MFA"
+                    disabled={
+                      resetMFAMutation.isPending || writeOutcomeUnknown(resetMFAMutation.error)
+                    }
                     danger
                     icon={<SafetyCertificateOutlined />}
                     loading={resetMFAMutation.isPending}
@@ -349,9 +361,13 @@ export function AccessUsersPage() {
                 </Popconfirm>
               ) : null}
               {canDeleteUsers ? (
-                <Popconfirm title="确认删除？" onConfirm={() => deleteMutation.mutate(record.id)}>
+                <Popconfirm
+                  title={`确认删除用户 ${record.username}？`}
+                  onConfirm={() => crud.deleteRecord(record.id)}
+                >
                   <ManagementIconButton
                     aria-label="删除用户"
+                    disabled={crud.deleteBlocked}
                     danger
                     icon={<DeleteOutlined />}
                     size="small"
@@ -385,15 +401,20 @@ export function AccessUsersPage() {
               <ApartmentOutlined />
               <Text strong>公司组织</Text>
             </Space>
-            <MetadataTag label={usersQuery.data?.length ?? 0} />
+            <MetadataTag label={readableQueryData(usersQuery)?.length ?? '—'} />
           </div>
-          <Tree
-            blockNode
-            defaultExpandedKeys={[ORG_ALL_KEY]}
-            selectedKeys={[selectedOrgId]}
-            treeData={organizationTreeData}
-            onSelect={(keys) => setSelectedOrgId(String(keys[0] ?? ORG_ALL_KEY))}
-          />
+          <ReadFeedback query={teamsQuery} label="组织目录" />
+          {readableQueryData(usersQuery) !== undefined ? (
+            <Tree
+              blockNode
+              defaultExpandedKeys={[ORG_ALL_KEY]}
+              selectedKeys={[selectedOrgId]}
+              treeData={organizationTreeData}
+              onSelect={(keys) => setSelectedOrgId(String(keys[0] ?? ORG_ALL_KEY))}
+            />
+          ) : (
+            <Text type="secondary">用户列表读取后展示组织人数</Text>
+          )}
         </section>
         <section className="soha-access-users-panel">
           <ManagementQueryPanel
@@ -439,7 +460,56 @@ export function AccessUsersPage() {
               </ManagementQueryField>
             ) : null}
           </ManagementQueryPanel>
+          <ReadFeedback query={rolesQuery} label="角色目录" />
+          <MutationFeedback
+            operations={[
+              {
+                mutation: createMutation,
+                label: '创建用户',
+                target: String(createMutation.variables?.username ?? ''),
+                receipt: { message: '用户已创建' },
+              },
+              {
+                mutation: updateMutation,
+                label: '更新用户',
+                target: updateMutation.variables?.id,
+                receipt: { message: '用户已更新' },
+              },
+              {
+                mutation: deleteMutation,
+                label: '删除用户',
+                target: deleteMutation.variables,
+                receipt: { message: '用户已删除' },
+              },
+            ]}
+          />
+          <OperationFeedback
+            label="重置 MFA"
+            target={resetMFAMutation.variables?.id}
+            pending={resetMFAMutation.isPending}
+            error={resetMFAMutation.error}
+            receipt={
+              resetMFAMutation.isSuccess
+                ? {
+                    message: `MFA 已重置，撤销 ${resetMFAMutation.data?.revokedCredentialCount ?? 0} 个凭据和 ${resetMFAMutation.data?.sessionsRevoked ?? 0} 个会话`,
+                  }
+                : undefined
+            }
+          />
+          {writeOutcomeUnknown(resetMFAMutation.error) ? (
+            <Text type="secondary">
+              用户列表不包含 MFA 重置结果。请使用请求 ID 核对审计记录，确认前暂停再次重置。
+            </Text>
+          ) : null}
+          {writeOutcomeUnknown(deleteMutation.error) ? (
+            <Button size="small" onClick={() => void usersQuery.refetch()}>
+              重读用户记录（不会重发删除）
+            </Button>
+          ) : null}
           <AdminTable
+            error={usersQuery.error}
+            hasReadData={usersQuery.data !== undefined}
+            onRetry={() => void usersQuery.refetch()}
             columnSettingIconOnly
             columnSettingPlacement="header"
             shellClassName="soha-management-table-shell"
@@ -448,15 +518,14 @@ export function AccessUsersPage() {
               <ManagementTableToolbar>
                 {canCreateUsers ? (
                   <Button
+                    aria-label={crud.saveBlocked ? '查看待核对草稿' : '添加用户'}
+                    disabled={readableQueryData(usersQuery) === undefined}
                     size="small"
                     icon={<PlusOutlined />}
                     type="primary"
-                    onClick={() => {
-                      setEditing(null)
-                      setModalVisible(true)
-                    }}
+                    onClick={crud.openCreate}
                   >
-                    添加用户
+                    {crud.saveBlocked ? '查看待核对草稿' : '添加用户'}
                   </Button>
                 ) : null}
                 <ManagementDensityButton
@@ -493,7 +562,7 @@ export function AccessUsersPage() {
       </div>
       <Modal
         title={editing ? `编辑用户: ${getUserLabel(editing)}` : '添加用户'}
-        open={modalVisible}
+        open={modalVisible && readableQueryData(usersQuery) !== undefined}
         onCancel={closeModal}
         onOk={async () => {
           try {
@@ -504,14 +573,40 @@ export function AccessUsersPage() {
         }}
         okText={editing ? '更新' : '创建'}
         cancelText="取消"
-        confirmLoading={createMutation.isPending || updateMutation.isPending}
+        confirmLoading={crud.isSaving}
+        okButtonProps={{
+          'aria-label': editing ? '更新' : '创建',
+          disabled:
+            crud.saveBlocked ||
+            usersQuery.isError ||
+            (canReplaceUserRoles && canViewRoles && (rolesQuery.isPending || rolesQuery.isError)) ||
+            (canReplaceUserTeams && canViewTeams && (teamsQuery.isPending || teamsQuery.isError)),
+        }}
+        cancelButtonProps={{ disabled: crud.isSaving, 'aria-label': '取消' }}
+        closable={{ disabled: crud.isSaving }}
+        keyboard={!crud.isSaving}
+        style={{ top: 32, marginTop: 0 }}
+        footer={(buttons) => (
+          <AccessMutationFooter
+            error={crud.saveError}
+            saving={crud.isSaving}
+            target={editing?.username ?? String(createMutation.variables?.username ?? '')}
+            onCheck={() => void usersQuery.refetch()}
+          >
+            {buttons}
+          </AccessMutationFooter>
+        )}
         width={860}
-        destroyOnHidden
+        destroyOnHidden={!crud.saveBlocked}
         mask={{ closable: false }}
-        styles={{ body: { maxHeight: '70vh', overflow: 'auto' } }}
+        styles={accessMutationModalStyles}
       >
+        <ReadFeedback query={rolesQuery} label="角色目录" />
+        <ReadFeedback query={teamsQuery} label="组织目录" />
+        <ReadFeedback query={usersQuery} label="用户列表" />
         <Form
           form={form}
+          disabled={crud.isSaving || crud.saveBlocked || usersQuery.isError}
           key={editing?.id ?? 'create-user'}
           layout="vertical"
           initialValues={
@@ -568,7 +663,7 @@ export function AccessUsersPage() {
             <Col span={12}>
               <Form.Item name="roleIds" label="角色">
                 <Select
-                  disabled={!canReplaceUserRoles}
+                  disabled={!canReplaceUserRoles || rolesQuery.isError || rolesQuery.isPending}
                   mode="multiple"
                   options={roleOptions}
                   placeholder="选择用户角色"
@@ -578,7 +673,7 @@ export function AccessUsersPage() {
             <Col span={12}>
               <Form.Item name="teamIds" label="所属组织">
                 <Select
-                  disabled={!canReplaceUserTeams}
+                  disabled={!canReplaceUserTeams || teamsQuery.isError || teamsQuery.isPending}
                   mode="multiple"
                   options={teamOptions}
                   placeholder="选择所属组织或部门"

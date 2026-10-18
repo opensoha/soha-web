@@ -80,6 +80,8 @@ export function ReleaseBundlesPage() {
         refreshing={bundlesQuery.isFetching}
         onRefresh={() => void bundlesQuery.refetch()}
         isError={bundlesQuery.isError}
+        error={bundlesQuery.error}
+        hasReadData={bundlesQuery.data !== undefined}
         errorDescription="暂时无法读取版本包记录。"
         onRetry={() => void bundlesQuery.refetch()}
         localSorting

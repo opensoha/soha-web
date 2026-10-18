@@ -1,3 +1,6 @@
+import { readableQueryData } from '@/utils/query-feedback'
+import { ReadFeedback } from '@/components/request-feedback'
+import { ComputeMutationFeedback } from '@/features/compute'
 import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -284,10 +287,39 @@ function WorkerPoolsContent({
             }
           />
         )}
+        <ReadFeedback query={pools} label={text('节点池', 'Worker pools')} />
+        <ComputeMutationFeedback
+          operations={[
+            {
+              label: text('保存节点池', 'Save worker pool'),
+              mutation: saved,
+              receipt: { message: text('节点池记录已保存', 'Worker pool record saved') },
+            },
+            {
+              label: text('删除节点池', 'Delete worker pool'),
+              mutation: removed,
+              receipt: { message: text('节点池记录已删除', 'Worker pool record deleted') },
+            },
+            {
+              label: text('创建节点', 'Create worker'),
+              mutation: created,
+              target: creation?.pool.spec.name,
+              receipt: {
+                message: text(
+                  '节点创建请求已受理，就绪状态以观测证据为准',
+                  'Worker request accepted; check readiness evidence',
+                ),
+                taskId: creation?.operationId,
+                domain: 'virtualization',
+                canViewTask: permissions.canViewTasks,
+              },
+            },
+          ]}
+        />
         <AdminTable
           rowKey="id"
           loading={pools.isLoading}
-          dataSource={pools.data ?? []}
+          dataSource={readableQueryData(pools) ?? []}
           pagination={false}
           enableColumnSelection={false}
           headerExtra={
@@ -432,7 +464,9 @@ function WorkerPoolsContent({
         width={720}
         destroyOnHidden
       >
-        {saved.error && <Alert type="error" title={saved.error.message} />}
+        <ComputeMutationFeedback
+          operations={[{ label: text('保存节点池', 'Save worker pool'), mutation: saved }]}
+        />
         {(clusters.error || images.error) && (
           <Alert type="error" title={(clusters.error ?? images.error)?.message} />
         )}

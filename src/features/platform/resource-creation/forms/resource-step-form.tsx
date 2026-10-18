@@ -6,6 +6,7 @@ import type { ResourceFormRendererProps } from './types'
 
 export function ResourceStepForm<Values extends object>({
   loading,
+  disabled,
   onChange,
   onSubmit,
   steps,
@@ -21,6 +22,7 @@ export function ResourceStepForm<Values extends object>({
 
   return (
     <StepForm
+      disabled={disabled}
       current={current}
       form={form}
       initialValues={value}

@@ -1,3 +1,4 @@
+import { MemoryRouter } from 'react-router-dom'
 /** @vitest-environment jsdom */
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -111,10 +112,12 @@ async function render() {
     root?.render(
       <QueryClientProvider client={client}>
         <App>
-          <WorkerPoolsDrawer
-            connection={{ id: 'pve-1', name: 'PVE', provider: 'pve' }}
-            onClose={() => {}}
-          />
+          <MemoryRouter>
+            <WorkerPoolsDrawer
+              connection={{ id: 'pve-1', name: 'PVE', provider: 'pve' }}
+              onClose={() => {}}
+            />
+          </MemoryRouter>
         </App>
       </QueryClientProvider>,
     ),

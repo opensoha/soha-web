@@ -1,10 +1,11 @@
-import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { ReadFeedback } from '@/components/request-feedback'
 import { TableCellLink } from '@/components/table-cell-content'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
 import { formatAgeSeconds } from '@/utils/time'
+import { useQuery } from '@tanstack/react-query'
 import type { TableColumnsType } from 'antd'
+import { useNavigate } from 'react-router-dom'
 import { NetworkResourceListPage } from '../shared/list-page'
 import { buildNetworkRoutePath } from '../shared/paths'
 import { renderNetworkTextList } from '../shared/renderers'
@@ -48,31 +49,34 @@ export function NetworkPoliciesPage() {
     },
   ]
   return (
-    <NetworkResourceListPage
-      buildAIPageContext={(items, searchKeyword) => ({
-        sourceWorkbench: 'platform',
-        sourceRoute: '/network/networkpolicies',
-        sourceTitle: 'NetworkPolicies',
-        entityKind: 'kubernetes.networkpolicy.list',
-        entityName: 'NetworkPolicies',
-        clusterId: clusterId ?? undefined,
-        namespace: namespace ?? undefined,
-        visibleFilters: { searchKeyword },
-        pinnedData: { total: items.length },
-      })}
-      columns={columns}
-      emptyDescription={{
-        zh_CN: '当前范围没有 NetworkPolicy',
-        en_US: 'No NetworkPolicies in the current scope',
-      }}
-      kind="networkpolicies"
-      noMatchDescription={{ zh_CN: '没有匹配的资源', en_US: 'No matching resources' }}
-      query={query}
-      searchPlaceholder={{
-        zh_CN: '搜索 NetworkPolicy / namespace / type',
-        en_US: 'Search NetworkPolicy / namespace / type',
-      }}
-      searchValues={(record) => [record.name, record.namespace, ...(record.policyTypes ?? [])]}
-    />
+    <>
+      <ReadFeedback canRead={query.isEnabled} query={query} label="资源记录" />
+      <NetworkResourceListPage
+        buildAIPageContext={(items, searchKeyword) => ({
+          sourceWorkbench: 'platform',
+          sourceRoute: '/network/networkpolicies',
+          sourceTitle: 'NetworkPolicies',
+          entityKind: 'kubernetes.networkpolicy.list',
+          entityName: 'NetworkPolicies',
+          clusterId: clusterId ?? undefined,
+          namespace: namespace ?? undefined,
+          visibleFilters: { searchKeyword },
+          pinnedData: { total: items.length },
+        })}
+        columns={columns}
+        emptyDescription={{
+          zh_CN: '当前范围没有 NetworkPolicy',
+          en_US: 'No NetworkPolicies in the current scope',
+        }}
+        kind="networkpolicies"
+        noMatchDescription={{ zh_CN: '没有匹配的资源', en_US: 'No matching resources' }}
+        query={query}
+        searchPlaceholder={{
+          zh_CN: '搜索 NetworkPolicy / namespace / type',
+          en_US: 'Search NetworkPolicy / namespace / type',
+        }}
+        searchValues={(record) => [record.name, record.namespace, ...(record.policyTypes ?? [])]}
+      />
+    </>
   )
 }

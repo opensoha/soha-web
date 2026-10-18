@@ -56,6 +56,8 @@ export function ReleasesPage() {
         refreshing={releasesQuery.isFetching}
         onRefresh={() => void releasesQuery.refetch()}
         isError={releasesQuery.isError}
+        error={releasesQuery.error}
+        hasReadData={releasesQuery.data !== undefined}
         errorDescription="暂时无法读取发布记录。"
         onRetry={() => void releasesQuery.refetch()}
         localSorting

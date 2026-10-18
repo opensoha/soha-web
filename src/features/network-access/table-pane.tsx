@@ -1,7 +1,3 @@
-import { useMemo, useState, type ReactNode } from 'react'
-import type { TableColumnsType } from 'antd'
-import { Button } from 'antd'
-import { ReloadOutlined } from '@ant-design/icons'
 import { AdminTable } from '@/components/admin-table'
 import {
   ManagementIconButton,
@@ -10,38 +6,46 @@ import {
   ManagementQueryPanel,
   ManagementState,
   ManagementTableToolbar,
-  ManagementToolbarSearch,
 } from '@/components/management-list'
 import { useI18n } from '@/i18n'
-
-interface TablePaneProps<T extends { id: string }> {
+import { ReloadOutlined } from '@ant-design/icons'
+import type { TableColumnsType } from 'antd'
+import { Button } from 'antd'
+import { useMemo, useState, type ReactNode } from 'react'
+interface TablePaneProps<
+  T extends {
+    id: string
+  },
+> {
   columns: TableColumnsType<T>
   createAction?: ReactNode
   getSearchValues: (item: T) => unknown[]
   items?: T[]
   loading: boolean
-  error: boolean
+  error: boolean | Error | null
   errorDescription?: string
   onRefresh: () => void
-  queryCard?: boolean
   refreshing: boolean
   searchPlaceholder: string
 }
-
-export function TablePane<T extends { id: string }>({
+export function TablePane<
+  T extends {
+    id: string
+  },
+>({
   columns,
   createAction,
   error,
   errorDescription,
   getSearchValues,
-  items = [],
+  items: sourceItems,
   loading,
   onRefresh,
-  queryCard = false,
   refreshing,
   searchPlaceholder,
 }: TablePaneProps<T>) {
   const { t } = useI18n()
+  const items = sourceItems ?? []
   const [search, setSearch] = useState('')
   const [draftSearch, setDraftSearch] = useState('')
   const filtered = useMemo(() => {
@@ -67,34 +71,34 @@ export function TablePane<T extends { id: string }>({
       />
     </ManagementTableToolbar>
   )
-
   return (
-    <>
-      {queryCard ? (
-        <ManagementQueryPanel
-          actions={
-            <ManagementQueryActions
-              disabledReset={!draftSearch && !search}
-              onReset={() => {
-                setDraftSearch('')
-                setSearch('')
-              }}
-            />
-          }
-          onFinish={() => setSearch(draftSearch.trim())}
-        >
-          <ManagementKeywordField
-            onChange={setDraftSearch}
-            placeholder={searchPlaceholder}
-            value={draftSearch}
+    <div className="soha-page">
+      <ManagementQueryPanel
+        actions={
+          <ManagementQueryActions
+            disabledReset={!draftSearch && !search}
+            onReset={() => {
+              setDraftSearch('')
+              setSearch('')
+            }}
           />
-        </ManagementQueryPanel>
-      ) : null}
+        }
+        onFinish={() => setSearch(draftSearch.trim())}
+      >
+        <ManagementKeywordField
+          onChange={setDraftSearch}
+          placeholder={searchPlaceholder}
+          value={draftSearch}
+        />
+      </ManagementQueryPanel>
       <AdminTable
+        error={error instanceof Error ? error : undefined}
+        hasReadData={sourceItems !== undefined}
+        onRetry={onRefresh}
         columns={columns}
         dataSource={filtered}
         empty={
-          error ? (
+          error === true ? (
             <ManagementState
               actions={
                 errorDescription ? (
@@ -113,23 +117,11 @@ export function TablePane<T extends { id: string }>({
         localSorting
         rowKey="id"
         shellClassName="soha-management-table-shell"
-        toolbar={
-          queryCard ? undefined : (
-            <ManagementTableToolbar>
-              <ManagementToolbarSearch
-                placeholder={searchPlaceholder}
-                value={search}
-                onChange={setSearch}
-              />
-            </ManagementTableToolbar>
-          )
-        }
-        headerExtra={queryCard ? tableActions : undefined}
-        toolbarExtra={queryCard ? undefined : tableActions}
-        columnSettingPlacement={queryCard ? 'header' : 'toolbar'}
+        headerExtra={tableActions}
+        columnSettingPlacement="header"
         columnSettingIconOnly
         viewportScroll
       />
-    </>
+    </div>
   )
 }

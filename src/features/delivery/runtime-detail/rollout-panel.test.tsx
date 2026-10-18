@@ -6,6 +6,7 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { ProgressiveRolloutStatus } from '@opensoha/contracts/gen/ts/sohaapi'
 import type { ExecutionTask } from '../types'
+import { ApiError } from '@/services/api-error'
 import { ExecutionRolloutPanel } from './rollout-panel'
 
 const mocks = vi.hoisted(() => ({ allowed: true, get: vi.fn(), post: vi.fn() }))
@@ -180,4 +181,27 @@ it('hides controls without trigger permission and blocks writes after an observa
   expect(button('暂停发布').disabled).toBe(true)
   expect(button('提升阶段').disabled).toBe(true)
   expect(mocks.post).not.toHaveBeenCalled()
+})
+
+it('keeps an uncertain native control visible and prevents repeat writes after a successful readback', async () => {
+  await render()
+  mocks.post.mockRejectedValueOnce(
+    new ApiError(503, 'control response lost', {
+      method: 'POST',
+      requestId: 'req-control-unknown',
+    }),
+  )
+  await act(async () => button('暂停发布').click())
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 20))
+  })
+  expect(container.textContent).toContain('请求结果不明')
+  expect(container.textContent).toContain('req-control-unknown')
+  await act(async () => button('刷新').click())
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 20))
+  })
+  expect(button('暂停发布').disabled).toBe(true)
+  expect(button('提升阶段').disabled).toBe(true)
+  expect(mocks.post).toHaveBeenCalledTimes(1)
 })

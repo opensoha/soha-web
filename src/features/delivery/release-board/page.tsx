@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { App, Button, Card, Form, Popconfirm, Progress, Space, Typography } from 'antd'
 import { ReloadOutlined, RightOutlined } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -10,6 +10,8 @@ import {
   ManagementKeywordField,
   ManagementQueryGrid,
 } from '@/components/management-list'
+import { MutationFeedback, ReadFeedback } from '@/components/request-feedback'
+import { readableQueryData, writeOutcomeUnknown } from '@/utils/query-feedback'
 import { MetadataTag, StatusTag } from '@/components/status-tag'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useI18n } from '@/i18n'
@@ -75,11 +77,13 @@ function workflowCurrentNode(run: WorkflowRun) {
 function WorkflowRunCard({
   run,
   pendingDecision,
+  decisionDisabled,
   onApprove,
   onReject,
 }: {
   run: WorkflowRun
   pendingDecision?: 'approve' | 'reject'
+  decisionDisabled?: boolean
   onApprove?: () => void
   onReject?: () => void
 }) {
@@ -158,7 +162,13 @@ function WorkflowRunCard({
           percent={progress.percent}
           showInfo={false}
           size="small"
-          status={isDeliveryFailureStatus(run.status) ? 'exception' : undefined}
+          status={
+            isDeliveryFailureStatus(run.status)
+              ? 'exception'
+              : isDeliveryReadyStatus(run.status)
+                ? 'success'
+                : 'normal'
+          }
         />
       </div>
 
@@ -176,7 +186,7 @@ function WorkflowRunCard({
             >
               <Button
                 aria-label={`${localeCode === 'zh_CN' ? '批准工作流' : 'Approve workflow'} ${run.workflowName}`}
-                disabled={Boolean(pendingDecision)}
+                disabled={decisionDisabled || Boolean(pendingDecision)}
                 loading={pendingDecision === 'approve'}
                 size="small"
                 type="primary"
@@ -196,7 +206,7 @@ function WorkflowRunCard({
               <Button
                 aria-label={`${localeCode === 'zh_CN' ? '拒绝工作流' : 'Reject workflow'} ${run.workflowName}`}
                 danger
-                disabled={Boolean(pendingDecision)}
+                disabled={decisionDisabled || Boolean(pendingDecision)}
                 loading={pendingDecision === 'reject'}
                 size="small"
               >
@@ -355,6 +365,14 @@ export function ExecutionHistoryPage() {
   const history = useQuery(deliveryQueries.executionHistory(params, canView))
   const approve = useMutation(deliveryMutations.workflows.approve(queryClient))
   const reject = useMutation(deliveryMutations.workflows.reject(queryClient))
+  const historyData = readableQueryData(history)
+  const submitting = useRef(false)
+  const [acknowledged, setAcknowledged] = useState<string[]>([])
+  const locked =
+    approve.isPending ||
+    reject.isPending ||
+    writeOutcomeUnknown(approve.error) ||
+    writeOutcomeUnknown(reject.error)
   const previousCursors: string[] = Array.isArray(location.state?.historyCursors)
     ? location.state.historyCursors
     : []
@@ -390,23 +408,29 @@ export function ExecutionHistoryPage() {
       },
       { state: { historyCursors: cursors } },
     )
-  const decide = (id: string, action: 'approve' | 'reject') =>
-    (action === 'approve' ? approve : reject).mutate(
-      {
+  const decide = async (id: string, action: 'approve' | 'reject') => {
+    if (submitting.current || locked || history.isError || !canReview || acknowledged.includes(id))
+      return
+    const run = historyData?.items.find((entry) => entry.id === id)?.application
+    if (!run || run.scope === 'delivery_batch' || run.status !== 'waiting_approval') return
+    submitting.current = true
+    try {
+      await (action === 'approve' ? approve : reject).mutateAsync({
         id,
         comment:
           action === 'approve'
             ? 'Approved from execution history'
             : 'Rejected from execution history',
-      },
-      {
-        onSuccess: () => {
-          void message.success(english ? 'Decision saved' : '审批结果已保存')
-          void history.refetch()
-        },
-        onError: (error) => void message.error(error.message),
-      },
-    )
+      })
+      setAcknowledged((current) => [...current, id])
+      void message.success(english ? 'Decision saved' : '审批结果已保存')
+      void history.refetch()
+    } catch {
+      /* Keep the original decision visible while its outcome is checked. */
+    } finally {
+      submitting.current = false
+    }
+  }
   if (permissionQuery.isLoading) return <ManagementState kind="loading" />
   if (permissionQuery.isError)
     return (
@@ -478,31 +502,40 @@ export function ExecutionHistoryPage() {
           </ManagementQueryGrid>
         </Form>
 
-        {history.isError ? (
-          <ManagementState
-            bordered={false}
-            kind="error"
-            title={english ? 'Failed to load execution history' : '执行记录加载失败'}
-            description={history.error.message}
-            actions={
-              <Button
-                aria-label={english ? 'Retry execution history' : '重试执行记录'}
-                onClick={() => void history.refetch()}
-              >
-                {english ? 'Retry' : '重试'}
-              </Button>
-            }
-          />
-        ) : null}
+        <ReadFeedback query={history} label={english ? 'Execution history' : '执行记录'} />
+        <MutationFeedback
+          operations={[
+            {
+              mutation: approve,
+              label: english ? 'Approve workflow' : '批准工作流',
+              target: approve.variables?.id,
+              receipt: {
+                message: english
+                  ? 'Decision accepted; check the execution record.'
+                  : '审批请求已受理，以执行记录的后续状态为准。',
+              },
+            },
+            {
+              mutation: reject,
+              label: english ? 'Reject workflow' : '拒绝工作流',
+              target: reject.variables?.id,
+              receipt: {
+                message: english
+                  ? 'Decision accepted; check the execution record.'
+                  : '审批请求已受理，以执行记录的后续状态为准。',
+              },
+            },
+          ]}
+        />
         {history.isPending ? (
           <ManagementState
             bordered={false}
             kind="loading"
             title={english ? 'Loading executions' : '正在加载执行记录'}
           />
-        ) : history.data?.items.length ? (
+        ) : historyData?.items.length ? (
           <div className="soha-release-board__list" role="list">
-            {history.data.items.map((entry) => {
+            {historyData.items.map((entry) => {
               if (entry.kind === 'batch' && entry.batch)
                 return <BatchRunCard key={`batch/${entry.id}`} batch={entry.batch} />
               if (entry.kind === 'build' && entry.build)
@@ -515,11 +548,12 @@ export function ExecutionHistoryPage() {
                 <WorkflowRunCard
                   key={`application/${entry.id}`}
                   run={run}
+                  decisionDisabled={locked || history.isError || acknowledged.includes(run.id)}
                   pendingDecision={
                     approve.isPending ? 'approve' : reject.isPending ? 'reject' : undefined
                   }
-                  onApprove={reviewable ? () => decide(run.id, 'approve') : undefined}
-                  onReject={reviewable ? () => decide(run.id, 'reject') : undefined}
+                  onApprove={reviewable ? () => void decide(run.id, 'approve') : undefined}
+                  onReject={reviewable ? () => void decide(run.id, 'reject') : undefined}
                 />
               )
             })}
@@ -531,7 +565,7 @@ export function ExecutionHistoryPage() {
             title={english ? 'No matching executions' : '暂无匹配的执行记录'}
           />
         ) : null}
-        {params.cursor || history.data?.nextCursor ? (
+        {params.cursor || historyData?.nextCursor ? (
           <nav
             className="soha-release-board__pagination"
             aria-label={english ? 'Execution pagination' : '执行记录分页'}
@@ -555,9 +589,9 @@ export function ExecutionHistoryPage() {
                 </Button>
               ) : null}
               <Button
-                disabled={!history.data?.nextCursor || history.isFetching || history.isError}
+                disabled={!historyData?.nextCursor || history.isFetching || history.isError}
                 onClick={() =>
-                  movePage(history.data?.nextCursor, [...previousCursors, params.cursor || ''])
+                  movePage(historyData?.nextCursor, [...previousCursors, params.cursor || ''])
                 }
               >
                 {english ? 'Next' : '下一页'}

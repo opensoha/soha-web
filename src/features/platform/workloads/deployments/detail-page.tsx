@@ -1,24 +1,26 @@
-import { lazy, Suspense, useState, useMemo } from 'react'
-import { Tag, Card, Pagination, Spin, Typography } from 'antd'
-import { useQuery } from '@tanstack/react-query'
-import { useParams } from 'react-router-dom'
 import { ManagementState } from '@/components/management-list'
-import { useAIPageContext } from '@/features/copilot'
-import { deliveryQueries, type ApplicationEnvironment } from '@/features/delivery'
-import { useI18n } from '@/i18n'
+import { ReadFeedback } from '@/components/request-feedback'
 import { ResourceEventsTimeline } from '@/components/resource-events-timeline'
 import { MetadataTag, StatusTag } from '@/components/status-tag'
-import { formatDateTime } from '@/utils/time'
+import { useAIPageContext } from '@/features/copilot'
+import { deliveryQueries, type ApplicationEnvironment } from '@/features/delivery'
 import {
   conditionToTimelineEvent,
   targetMatchesDeployment,
 } from '@/features/platform/workloads-model'
+import '@/features/platform/workloads/styles.css'
+import { useI18n } from '@/i18n'
+import { readableQueryData } from '@/utils/query-feedback'
+import { formatDateTime } from '@/utils/time'
+import { useQuery } from '@tanstack/react-query'
 import type { TabsProps } from 'antd'
+import { Card, Pagination, Spin, Tag, Typography } from 'antd'
+import { lazy, Suspense, useMemo, useState } from 'react'
+import { useParams } from 'react-router-dom'
+import { useWorkloadDetailScope } from '../shared/detail-scope'
 import { WorkloadDetailShell } from '../shared/detail-shell'
 import { WorkloadPodsCard, WorkloadRelationsCard } from '../shared/workload-relations'
-import { useWorkloadDetailScope } from '../shared/detail-scope'
 import { deploymentQueries } from './queries'
-import '@/features/platform/workloads/styles.css'
 
 const { Text } = Typography
 
@@ -35,49 +37,66 @@ export function DeploymentDetailPage() {
   const [activeTabKey, setActiveTabKey] = useState('overview')
   const detailScope = { clusterId, namespace: detailNamespace }
   const deploymentDetailQuery = useQuery(deploymentQueries.detail(detailScope, deploymentName))
+  const visibleDeploymentDetailQueryData = readableQueryData(deploymentDetailQuery)
 
   const bindingsQuery = useQuery(deliveryQueries.environments.list())
+  const visibleBindingsQueryData = readableQueryData(bindingsQuery)
   const applicationsQuery = useQuery(deliveryQueries.applications.list())
+  const visibleApplicationsQueryData = readableQueryData(applicationsQuery)
   const buildsQuery = useQuery(deliveryQueries.builds.list())
+  const visibleBuildsQueryData = readableQueryData(buildsQuery)
   const workflowsQuery = useQuery(deliveryQueries.workflows.list())
+  const visibleWorkflowsQueryData = readableQueryData(workflowsQuery)
   const releasesQuery = useQuery(deliveryQueries.releases.list())
+  const visibleReleasesQueryData = readableQueryData(releasesQuery)
   const metricsQueryOptions = deploymentQueries.metrics(detailScope, deploymentName)
   const metricsQuery = useQuery({
     ...metricsQueryOptions,
     enabled: Boolean(metricsQueryOptions.enabled) && activeTabKey === 'metrics',
   })
+  const visibleMetricsQueryData =
+    Boolean(metricsQueryOptions.enabled) && activeTabKey === 'metrics'
+      ? readableQueryData(metricsQuery)
+      : undefined
   const rolloutStatusQuery = useQuery(deploymentQueries.rolloutStatus(detailScope, deploymentName))
+  const visibleRolloutStatusQueryData = readableQueryData(rolloutStatusQuery)
   const rolloutHistoryQuery = useQuery(deploymentQueries.rollouts(detailScope, deploymentName))
+  const visibleRolloutHistoryQueryData = readableQueryData(rolloutHistoryQuery)
   const deploymentEventsQueryOptions = deploymentQueries.events(detailScope, deploymentName)
   const deploymentEventsQuery = useQuery({
     ...deploymentEventsQueryOptions,
     enabled: Boolean(deploymentEventsQueryOptions.enabled) && activeTabKey === 'events',
   })
+  const visibleDeploymentEventsQueryData =
+    Boolean(deploymentEventsQueryOptions.enabled) && activeTabKey === 'events'
+      ? readableQueryData(deploymentEventsQuery)
+      : undefined
   const matchedBindings = useMemo<ApplicationEnvironment[]>(() => {
     if (!clusterId || !detailNamespace) return []
-    return (bindingsQuery.data ?? []).filter((binding) =>
+    return (visibleBindingsQueryData ?? []).filter((binding) =>
       (binding.targets ?? []).some((target) =>
         targetMatchesDeployment(target, clusterId, detailNamespace, deploymentName),
       ),
     )
-  }, [bindingsQuery.data, clusterId, detailNamespace, deploymentName])
+  }, [visibleBindingsQueryData, clusterId, detailNamespace, deploymentName])
 
   const applicationMap = useMemo(
-    () => Object.fromEntries((applicationsQuery.data ?? []).map((item) => [item.id, item])),
-    [applicationsQuery.data],
+    () => Object.fromEntries((visibleApplicationsQueryData ?? []).map((item) => [item.id, item])),
+    [visibleApplicationsQueryData],
   )
   const latestBuildByApplication = useMemo(
-    () => Object.fromEntries((buildsQuery.data ?? []).map((item) => [item.applicationId, item])),
-    [buildsQuery.data],
+    () =>
+      Object.fromEntries((visibleBuildsQueryData ?? []).map((item) => [item.applicationId, item])),
+    [visibleBuildsQueryData],
   )
 
-  const rolloutStatus = rolloutStatusQuery.data
+  const rolloutStatus = visibleRolloutStatusQueryData
   const rolloutHistory = useMemo(
     () =>
-      [...(rolloutHistoryQuery.data ?? [])].sort((a, b) =>
+      [...(visibleRolloutHistoryQueryData ?? [])].sort((a, b) =>
         b.revision.localeCompare(a.revision, undefined, { numeric: true }),
       ),
-    [rolloutHistoryQuery.data],
+    [visibleRolloutHistoryQueryData],
   )
   const historyScope = JSON.stringify([clusterId, detailNamespace, deploymentName])
   const [historyPagination, setHistoryPagination] = useState({ scope: historyScope, page: 1 })
@@ -85,7 +104,7 @@ export function DeploymentDetailPage() {
     historyPagination.scope === historyScope ? historyPagination.page : 1,
     Math.max(1, Math.ceil(rolloutHistory.length / 3)),
   )
-  const deploymentPods = deploymentDetailQuery.data?.pods ?? []
+  const deploymentPods = visibleDeploymentDetailQueryData?.pods ?? []
   useAIPageContext({
     sourceWorkbench: 'platform',
     sourceTitle: `Deployment ${deploymentName}`,
@@ -94,7 +113,7 @@ export function DeploymentDetailPage() {
     clusterId: clusterId ?? undefined,
     namespace: detailNamespace ?? undefined,
     workload: deploymentName,
-    timeRangeMinutes: metricsQuery.data?.rangeMinutes ?? 60,
+    timeRangeMinutes: visibleMetricsQueryData?.rangeMinutes ?? 60,
     pinnedData: {
       pods: deploymentPods.length,
       rolloutStatus: rolloutStatus?.status,
@@ -107,16 +126,16 @@ export function DeploymentDetailPage() {
   })
   const deploymentTimelineEvents = useMemo(
     () =>
-      deploymentEventsQuery.data?.length
-        ? deploymentEventsQuery.data
+      visibleDeploymentEventsQueryData?.length
+        ? visibleDeploymentEventsQueryData
         : (rolloutStatus?.conditions ?? []).map(conditionToTimelineEvent),
-    [deploymentEventsQuery.data, rolloutStatus],
+    [visibleDeploymentEventsQueryData, rolloutStatus],
   )
   const linkageOverview = (
     <div className="soha-detail-stack">
       <WorkloadPodsCard pods={deploymentPods} namespace={detailNamespace ?? ''} />
       <WorkloadRelationsCard
-        resources={deploymentDetailQuery.data?.relatedResources}
+        resources={visibleDeploymentDetailQueryData?.relatedResources}
         namespace={detailNamespace ?? ''}
       />
       <Card
@@ -314,14 +333,14 @@ export function DeploymentDetailPage() {
             {matchedBindings.map((binding) => {
               const application = applicationMap[binding.applicationId]
               const latestBuild = latestBuildByApplication[binding.applicationId]
-              const latestWorkflow = (workflowsQuery.data ?? []).find(
+              const latestWorkflow = (visibleWorkflowsQueryData ?? []).find(
                 (item) =>
                   item.applicationId === binding.applicationId &&
                   item.clusterId === clusterId &&
                   item.namespace === detailNamespace &&
                   item.deploymentName === deploymentName,
               )
-              const latestRelease = (releasesQuery.data ?? []).find(
+              const latestRelease = (visibleReleasesQueryData ?? []).find(
                 (item) =>
                   item.applicationId === binding.applicationId &&
                   item.clusterId === clusterId &&
@@ -374,7 +393,7 @@ export function DeploymentDetailPage() {
           </Card>
         }
       >
-        <ResourceMetricsPanel data={metricsQuery.data} loading={metricsQuery.isLoading} />
+        <ResourceMetricsPanel data={visibleMetricsQueryData} loading={metricsQuery.isLoading} />
       </Suspense>
     ),
   }
@@ -396,15 +415,47 @@ export function DeploymentDetailPage() {
   }
 
   return (
-    <WorkloadDetailShell
-      title="Deployment"
-      resource="deployments"
-      paramKey="deploymentName"
-      activeTabKey={activeTabKey}
-      onTabChange={setActiveTabKey}
-      extraOverview={linkageOverview}
-      extraTabPanes={[metricsTab, eventsTab]}
-      yamlLast
-    />
+    <>
+      <ReadFeedback
+        canRead={deploymentDetailQuery.isEnabled}
+        query={deploymentDetailQuery}
+        label="Deployment 详情"
+      />
+      <ReadFeedback canRead={bindingsQuery.isEnabled} query={bindingsQuery} label="环境绑定" />
+      <ReadFeedback
+        canRead={applicationsQuery.isEnabled}
+        query={applicationsQuery}
+        label="应用目录"
+      />
+      <ReadFeedback canRead={buildsQuery.isEnabled} query={buildsQuery} label="构建记录" />
+      <ReadFeedback canRead={workflowsQuery.isEnabled} query={workflowsQuery} label="工作流目录" />
+      <ReadFeedback canRead={releasesQuery.isEnabled} query={releasesQuery} label="发布记录" />
+      <ReadFeedback canRead={metricsQuery.isEnabled} query={metricsQuery} label="资源指标" />
+      <ReadFeedback
+        canRead={rolloutStatusQuery.isEnabled}
+        query={rolloutStatusQuery}
+        label="发布状态"
+      />
+      <ReadFeedback
+        canRead={rolloutHistoryQuery.isEnabled}
+        query={rolloutHistoryQuery}
+        label="发布历史"
+      />
+      <ReadFeedback
+        canRead={deploymentEventsQuery.isEnabled}
+        query={deploymentEventsQuery}
+        label="Deployment 事件"
+      />
+      <WorkloadDetailShell
+        title="Deployment"
+        resource="deployments"
+        paramKey="deploymentName"
+        activeTabKey={activeTabKey}
+        onTabChange={setActiveTabKey}
+        extraOverview={linkageOverview}
+        extraTabPanes={[metricsTab, eventsTab]}
+        yamlLast
+      />
+    </>
   )
 }

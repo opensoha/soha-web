@@ -1,24 +1,9 @@
-import { useEffect, useRef, useState, type ChangeEvent } from 'react'
-import dayjs from 'dayjs'
-import {
-  Alert,
-  App,
-  Avatar,
-  Button,
-  Form,
-  Descriptions,
-  Steps,
-  Input,
-  InputNumber,
-  Modal,
-  Select,
-  Space,
-  Switch,
-  TimePicker,
-  Tooltip,
-  Typography,
-} from 'antd'
-import type { FormInstance } from 'antd'
+import { operationModalStyles } from '@/components/modal-styles'
+import { ReadFeedback } from '@/components/request-feedback'
+import { accessQueries } from '@/features/access'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { useI18n } from '@/i18n'
+import { readableQueryData } from '@/utils/query-feedback'
 import {
   AppstoreOutlined,
   DeleteOutlined,
@@ -27,23 +12,42 @@ import {
   QuestionCircleOutlined,
   UploadOutlined,
 } from '@ant-design/icons'
+import type { IdentityApplicationOnboardingInput } from '@opensoha/contracts/gen/ts/sohaapi'
 import { useQuery } from '@tanstack/react-query'
-import { accessQueries } from '@/features/access'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
-import { useI18n } from '@/i18n'
+import type { FormInstance } from 'antd'
 import {
-  defaultProviderValues,
-  providerInputFromValues,
+  Alert,
+  App,
+  Avatar,
+  Button,
+  Descriptions,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Select,
+  Space,
+  Steps,
+  Switch,
+  TimePicker,
+  Tooltip,
+  Typography,
+} from 'antd'
+import dayjs from 'dayjs'
+import type { ReactNode } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent } from 'react'
+import { identityOutpostQueries } from '../../outposts'
+import {
   defaultOIDCClientValues,
+  defaultProviderValues,
+  OIDCClientFields,
   oidcClientInputFromValues,
   ProviderConfigFields,
-  OIDCClientFields,
+  providerInputFromValues,
   type IdentityProvider,
-  type ProviderFormValues,
   type OIDCClientFormValues,
+  type ProviderFormValues,
 } from '../../providers'
-import { identityOutpostQueries } from '../../outposts'
-import type { IdentityApplicationOnboardingInput } from '@opensoha/contracts/gen/ts/sohaapi'
 import type { IdentityApplication, IdentityApplicationInput } from '../../shared/types'
 import {
   buildIdentityApplicationInput,
@@ -54,30 +58,25 @@ import {
   identityApplicationFormValuesFor,
   identityApplicationProviderTypeOptions,
   readIdentityApplicationIconFile,
-  type IdentityApplicationTagOption,
   type IdentityApplicationFormValues,
+  type IdentityApplicationTagOption,
 } from '../application-form-model'
-
 const { Text } = Typography
-
 interface ApplicationIconInputProps {
   id?: string
   value?: string
   onChange?: (value: string) => void
 }
-
 function ApplicationIconInput({ id, value = '', onChange }: ApplicationIconInputProps) {
   const { message } = App.useApp()
   const { t } = useI18n()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [reading, setReading] = useState(false)
   const uploadedFileValue = value.startsWith('data:image/')
-
   const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0]
     event.currentTarget.value = ''
     if (!file) return
-
     setReading(true)
     try {
       onChange?.(await readIdentityApplicationIconFile(file))
@@ -87,9 +86,7 @@ function ApplicationIconInput({ id, value = '', onChange }: ApplicationIconInput
       setReading(false)
     }
   }
-
   const clearLabel = t('identity.applications.clearIcon', '清除图标')
-
   return (
     <div className="soha-identity-app-icon-field">
       <Avatar
@@ -137,15 +134,19 @@ function ApplicationIconInput({ id, value = '', onChange }: ApplicationIconInput
     </div>
   )
 }
-
 interface AssignmentSubjectSelectProps {
   fieldName: number
   form: FormInstance<IdentityApplicationFormValues>
   onChange?: (value: string[]) => void
-  options: Record<string, Array<{ label: string; value: string }>>
+  options: Record<
+    string,
+    Array<{
+      label: string
+      value: string
+    }>
+  >
   value?: string[]
 }
-
 function AssignmentSubjectSelect({
   fieldName,
   form,
@@ -174,8 +175,9 @@ function AssignmentSubjectSelect({
     />
   )
 }
-
 interface ApplicationFormModalProps {
+  feedback?: ReactNode
+  blocked?: boolean
   application: IdentityApplication | null
   tagOptions: IdentityApplicationTagOption[]
   providerOptions: IdentityProvider[]
@@ -190,8 +192,9 @@ interface ApplicationFormModalProps {
   canConfigureProvider?: boolean
   samlAvailable?: boolean
 }
-
 export function ApplicationFormModal({
+  feedback,
+  blocked = false,
   application,
   tagOptions,
   providerOptions,
@@ -235,12 +238,20 @@ export function ApplicationFormModal({
     ...identityOutpostQueries.list({}),
     enabled: open && wizard && providerType === 'proxy' && canConfigureProvider && canViewOutposts,
   })
+  const visibleOutpostsQueryData =
+    outpostsQuery.isEnabled === false ? undefined : readableQueryData(outpostsQuery)
   const canViewUsers = hasPermission(permissionSnapshot, 'access.users.view')
   const canViewRoles = hasPermission(permissionSnapshot, 'access.roles.view')
   const canViewTeams = hasPermission(permissionSnapshot, 'access.groups.view')
   const usersQuery = useQuery({ ...accessQueries.users(open && canViewUsers), retry: false })
+  const visibleUsersQueryData =
+    usersQuery.isEnabled === false ? undefined : readableQueryData(usersQuery)
   const rolesQuery = useQuery({ ...accessQueries.roles(open && canViewRoles), retry: false })
+  const visibleRolesQueryData =
+    rolesQuery.isEnabled === false ? undefined : readableQueryData(rolesQuery)
   const teamsQuery = useQuery({ ...accessQueries.teams(open && canViewTeams), retry: false })
+  const visibleTeamsQueryData =
+    teamsQuery.isEnabled === false ? undefined : readableQueryData(teamsQuery)
   const providerSelectOptions = providerOptions
     .filter((provider) => provider.type === providerType)
     .map((provider) => ({
@@ -253,21 +264,20 @@ export function ApplicationFormModal({
     providerType === 'link' ||
     (!providerOptionsLoading && providerSelectOptions.length === 0)
   const subjectOptions = {
-    user: (canViewUsers ? (usersQuery.data ?? []) : []).map((user) => ({
+    user: (canViewUsers ? (visibleUsersQueryData ?? []) : []).map((user) => ({
       label: `${user.displayName || user.username} (${user.email || user.username})`,
       value: user.id,
     })),
-    role: (canViewRoles ? (rolesQuery.data ?? []) : []).map((role) => ({
+    role: (canViewRoles ? (visibleRolesQueryData ?? []) : []).map((role) => ({
       label: role.name,
       value: role.id,
     })),
-    team: (canViewTeams ? (teamsQuery.data ?? []) : []).map((team) => ({
+    team: (canViewTeams ? (visibleTeamsQueryData ?? []) : []).map((team) => ({
       label: team.path || `${team.name} (${team.slug})`,
       value: team.id,
     })),
     tag: [],
   }
-
   useEffect(() => {
     if (!open) {
       providerForm.resetFields()
@@ -285,7 +295,6 @@ export function ApplicationFormModal({
         : defaultIdentityApplicationFormValues(),
     )
   }, [application, form, open, providerForm, clientForm])
-
   const submit = (values: IdentityApplicationFormValues) => {
     if (Boolean(values.startTimeUtc?.trim()) !== Boolean(values.endTimeUtc?.trim())) {
       void message.error(
@@ -302,7 +311,6 @@ export function ApplicationFormModal({
     if (!wizard) onSubmit(buildIdentityApplicationInput(values, application))
     else void advanceWizard()
   }
-
   const protocolInput = async () => {
     if (!configureProtocol) return {}
     if (providerType === 'saml' && !samlAvailable)
@@ -359,7 +367,6 @@ export function ApplicationFormModal({
       if (error instanceof Error) void message.error(error.message)
     }
   }
-
   return (
     <Modal
       destroyOnHidden
@@ -374,7 +381,19 @@ export function ApplicationFormModal({
       }
       width={900}
       onCancel={onCancel}
+      style={{ top: 32 }}
+      styles={operationModalStyles}
+      closable={!blocked}
+      okButtonProps={{ disabled: blocked }}
+      cancelButtonProps={{ disabled: blocked }}
     >
+      {feedback}
+
+      <ReadFeedback canRead={outpostsQuery.isEnabled} query={outpostsQuery} label="Outpost" />
+      <ReadFeedback canRead={usersQuery.isEnabled} query={usersQuery} label="身份数据" />
+      <ReadFeedback canRead={rolesQuery.isEnabled} query={rolesQuery} label="身份数据" />
+      <ReadFeedback canRead={teamsQuery.isEnabled} query={teamsQuery} label="身份数据" />
+
       {wizard && (
         <Steps
           current={steps.indexOf(step)}
@@ -391,6 +410,7 @@ export function ApplicationFormModal({
         initialValues={defaultIdentityApplicationFormValues()}
         layout="vertical"
         onFinish={submit}
+        disabled={blocked}
       >
         <div hidden={wizard && step !== 0}>
           <div className="soha-identity-form-grid">
@@ -428,7 +448,7 @@ export function ApplicationFormModal({
               name="providerType"
             >
               <Select
-                disabled={Boolean(application)}
+                disabled={blocked || Boolean(application)}
                 onChange={() => {
                   form.setFieldValue('providerId', '')
                   providerForm.resetFields()
@@ -450,7 +470,7 @@ export function ApplicationFormModal({
             >
               <Select
                 allowClear
-                disabled={providerSelectDisabled}
+                disabled={blocked || providerSelectDisabled}
                 loading={providerOptionsLoading}
                 options={providerSelectOptions}
                 placeholder={
@@ -582,6 +602,7 @@ export function ApplicationFormModal({
                       icon={<PlusOutlined />}
                       size="small"
                       onClick={() => add({ effect: 'allow', subjectIds: [], subjectType: 'role' })}
+                      disabled={blocked}
                     >
                       {t('common.add', '添加')}
                     </Button>
@@ -595,9 +616,12 @@ export function ApplicationFormModal({
                         <Form.Item name={[field.name, 'subjectType']} rules={[{ required: true }]}>
                           <Select
                             aria-label={t('identity.applications.subjectType', '主体类型')}
-                            disabled={Boolean(
-                              assignmentValues[field.name]?.subjectIds?.some((id) => id.trim()),
-                            )}
+                            disabled={
+                              blocked ||
+                              Boolean(
+                                assignmentValues[field.name]?.subjectIds?.some((id) => id.trim()),
+                              )
+                            }
                             options={identityApplicationAssignmentSubjectOptions}
                             onChange={() =>
                               form.setFieldValue(['assignments', field.name, 'subjectIds'], [])
@@ -630,6 +654,7 @@ export function ApplicationFormModal({
                           danger
                           icon={<DeleteOutlined />}
                           onClick={() => remove(field.name)}
+                          disabled={blocked}
                         />
                       </div>
                     ))}
@@ -664,7 +689,7 @@ export function ApplicationFormModal({
                   name="requireMfa"
                   valuePropName="checked"
                 >
-                  <Switch disabled={!stepUpAvailable} />
+                  <Switch disabled={blocked || !stepUpAvailable} />
                 </Form.Item>
                 <Form.Item
                   label={t('identity.applications.allowedCidrs', '允许的 CIDR')}
@@ -710,8 +735,10 @@ export function ApplicationFormModal({
         </div>
         {!wizard && (
           <div className="soha-identity-form-actions">
-            <Button onClick={onCancel}>{t('common.cancel', '取消')}</Button>
-            <Button htmlType="submit" loading={saving} type="primary">
+            <Button onClick={onCancel} disabled={blocked}>
+              {t('common.cancel', '取消')}
+            </Button>
+            <Button htmlType="submit" loading={saving} type="primary" disabled={blocked}>
               {t('common.save', '保存')}
             </Button>
           </div>
@@ -740,16 +767,18 @@ export function ApplicationFormModal({
                       form={providerForm}
                       layout="vertical"
                       initialValues={defaultProviderValues()}
+                      disabled={blocked}
                     >
                       <ProviderConfigFields
                         providerType={providerType}
                         outpostLoading={outpostsQuery.isPending}
-                        outpostOptions={(canViewOutposts ? (outpostsQuery.data ?? []) : []).map(
-                          (item) => ({
-                            label: item.name,
-                            value: item.id,
-                          }),
-                        )}
+                        outpostOptions={(canViewOutposts
+                          ? (visibleOutpostsQueryData ?? [])
+                          : []
+                        ).map((item) => ({
+                          label: item.name,
+                          value: item.id,
+                        }))}
                         samlAvailable={samlAvailable}
                       />
                     </Form>
@@ -758,6 +787,7 @@ export function ApplicationFormModal({
                         form={clientForm}
                         layout="vertical"
                         initialValues={defaultOIDCClientValues()}
+                        disabled={blocked}
                       >
                         <OIDCClientFields form={clientForm} />
                       </Form>
@@ -802,18 +832,23 @@ export function ApplicationFormModal({
             </>
           )}
           <div className="soha-identity-form-actions">
-            <Button disabled={saving} onClick={onCancel}>
+            <Button disabled={blocked || saving} onClick={onCancel}>
               取消
             </Button>
             {step > 0 && (
               <Button
-                disabled={saving}
+                disabled={blocked || saving}
                 onClick={() => setStep(steps[steps.indexOf(step) - 1] ?? 0)}
               >
                 上一步
               </Button>
             )}
-            <Button type="primary" loading={saving} onClick={() => void advanceWizard()}>
+            <Button
+              type="primary"
+              loading={saving}
+              onClick={() => void advanceWizard()}
+              disabled={blocked}
+            >
               {step === 3 ? '保存并查看接入说明' : '下一步'}
             </Button>
           </div>

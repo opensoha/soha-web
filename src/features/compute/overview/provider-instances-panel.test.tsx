@@ -7,6 +7,7 @@ import { App } from 'antd'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { ProviderInstancesPanel } from './provider-instances-panel'
+import { ApiError } from '@/services/api-error'
 
 vi.mock('@tanstack/react-query', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@tanstack/react-query')>()),
@@ -71,6 +72,31 @@ afterEach(() => {
 })
 
 describe('provider instances panel', () => {
+  it.each(['health', 'discover'])(
+    'shows a persistent %s failure beside its original instance',
+    (action) => {
+      vi.mocked(useQuery).mockReturnValue(providerQuery() as never)
+      vi.mocked(useMutation).mockImplementation((options) => {
+        const active = options.mutationKey?.includes(action)
+        return {
+          isPending: false,
+          isSuccess: false,
+          submittedAt: active ? 20 : 0,
+          error: active ? new ApiError(503, 'provider request failed', { method: 'POST' }) : null,
+          variables: active ? { instanceRef: 'connection-1' } : undefined,
+          mutate: vi.fn(),
+        } as never
+      })
+      const container = render(
+        <ProviderInstancesPanel canViewTask canDiscover canTest enabled localeCode="zh_CN" />,
+      )
+      const feedback = container.querySelector('.soha-operation-feedback')
+      expect(feedback?.textContent).toContain('provider request failed')
+      expect(feedback?.textContent).toContain('connection-1')
+      expect(feedback?.textContent).toContain(action === 'health' ? '操作请求失败' : '请求结果不明')
+    },
+  )
+
   it.each([
     { canTest: true, canDiscover: false, visible: '检查连接健康', hidden: '发现并同步资源' },
     { canTest: false, canDiscover: true, visible: '发现并同步资源', hidden: '检查连接健康' },
@@ -105,7 +131,7 @@ describe('provider instances panel', () => {
       <ProviderInstancesPanel canDiscover={false} canTest={false} enabled localeCode="zh_CN" />,
     )
     const retry = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="重试加载提供方实例"]',
+      'button[aria-label="重试读取提供方实例"]',
     )
 
     expect(retry).toBeDefined()
@@ -158,7 +184,7 @@ describe('provider instances panel', () => {
       )
       const container = render(
         <>
-          <ProviderInstancesPanel canDiscover canTest enabled localeCode="zh_CN" />
+          <ProviderInstancesPanel canViewTask canDiscover canTest enabled localeCode="zh_CN" />
           <LocationProbe />
         </>,
       )
@@ -175,9 +201,10 @@ describe('provider instances panel', () => {
           instanceRef: 'connection-1',
           input,
         },
-        expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
+        expect.objectContaining({ onSuccess: expect.any(Function) }),
       )
       expect(action === 'health' ? discover : health).not.toHaveBeenCalled()
+      expect(mutation.mock.calls[0][1].onError).toBeUndefined()
       act(() =>
         mutation.mock.calls[0][1].onSuccess({
           data:

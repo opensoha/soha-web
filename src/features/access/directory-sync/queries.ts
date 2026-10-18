@@ -24,6 +24,7 @@ export const directorySyncQueries = {
       queryFn: () => directorySyncApi.listRuns(connectionId),
       enabled: Boolean(connectionId),
       refetchInterval: (query) =>
+        query.state.status !== 'error' &&
         query.state.data?.some((run) => run.status === 'queued' || run.status === 'running')
           ? 3000
           : false,
@@ -33,14 +34,14 @@ export const directorySyncQueries = {
       queryKey: directorySyncKeys.runtimeStatus(connectionId),
       queryFn: () => directorySyncApi.getRuntimeStatus(connectionId),
       enabled: Boolean(connectionId),
-      refetchInterval: 5000,
+      refetchInterval: (query) => (query.state.status === 'error' ? false : 5000),
     }),
   events: (connectionId: string) =>
     queryOptions({
       queryKey: directorySyncKeys.events(connectionId),
       queryFn: () => directorySyncApi.listEvents(connectionId),
       enabled: Boolean(connectionId),
-      refetchInterval: 5000,
+      refetchInterval: (query) => (query.state.status === 'error' ? false : 5000),
     }),
   conflicts: (enabled = true) =>
     queryOptions({

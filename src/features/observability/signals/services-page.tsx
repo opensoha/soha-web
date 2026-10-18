@@ -1,15 +1,17 @@
+import { AdminTable } from '@/components/admin-table'
+import { ManagementIconButton, ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
+import { useAIPageContext } from '@/features/copilot'
+import { usePlatformScopeStore } from '@/stores/platform-scope-store'
+import { readableQueryData } from '@/utils/query-feedback'
+import { EyeOutlined, LineChartOutlined, ReloadOutlined, ShareAltOutlined } from '@ant-design/icons'
 import type { ObservabilityService } from '@opensoha/contracts/gen/ts/sohaapi'
-import { EyeOutlined, LineChartOutlined, ShareAltOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import type { TableColumnsType } from 'antd'
 import { Alert, Descriptions, Drawer, Form, Space, Typography } from 'antd'
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { AdminTable } from '@/components/admin-table'
-import { ManagementIconButton, ManagementState } from '@/components/management-list'
-import { MetadataTag, StatusTag } from '@/components/status-tag'
-import { useAIPageContext } from '@/features/copilot'
-import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import type { ObservabilityServiceQuery } from './api'
 import { signalSearchParams } from './model'
 import { observabilitySignalQueries } from './queries'
@@ -64,26 +66,29 @@ export function ObservabilityServicesPage() {
   const topology = useQuery(
     observabilitySignalQueries.topology(selectedServiceId, selectedServiceId ? request : undefined),
   )
+  const serviceData = readableQueryData(service)
+  const servicesData = readableQueryData(services)
+  const topologyData = readableQueryData(topology)
   useAIPageContext({
     sourceWorkbench: 'monitoring',
     sourceTitle: '服务调查',
     entityKind: 'monitoring.signal.services',
     entityName:
-      service.data?.data.displayName || service.data?.data.name || request.service || '服务',
+      serviceData?.data.displayName || serviceData?.data.name || request.service || '服务',
     clusterId: request.clusterId,
     namespace: request.namespace,
-    service: service.data?.data.name || request.service,
+    service: serviceData?.data.name || request.service,
     visibleFilters: {
       dataSourceId: request.dataSourceId,
       service: request.service,
       timeFrom: searchParams.get('from') || request.timeFrom,
       timeTo: searchParams.get('to') || request.timeTo,
     },
-    pinnedData: services.data
+    pinnedData: servicesData
       ? {
-          serviceCount: services.data.items.length,
+          serviceCount: servicesData.items.length,
           selectedServiceId: selectedServiceId || undefined,
-          topologyEdgeCount: topology.data?.data.edges.length,
+          topologyEdgeCount: topologyData?.data.edges.length,
         }
       : undefined,
     promptHint: '分析当前服务范围的 RED 指标、依赖关系、异常影响面，并给出关联证据。',
@@ -204,77 +209,72 @@ export function ObservabilityServicesPage() {
           )
         }}
       />
-      {services.data?.meta.warnings?.map((warning) => (
+      {servicesData?.meta.warnings?.map((warning) => (
         <Alert key={warning} title={warning} showIcon type="warning" />
       ))}
-      {services.isLoading ? (
-        <ManagementState bordered={false} compact kind="loading" title="正在查询服务" />
-      ) : services.error ? (
-        <ManagementState
-          bordered={false}
-          compact
-          kind="error"
-          title="服务查询失败"
-          description={services.error.message}
-        />
-      ) : (
-        <AdminTable
-          enableDensity
-          refreshing={services.isFetching}
-          onRefresh={() => void services.refetch()}
-          columnSettingIconOnly
-          columnSettingPlacement="header"
-          columns={columns}
-          dataSource={services.data?.items ?? []}
-          empty={<ManagementState bordered={false} compact description="当前范围没有发现服务" />}
-          pagination={false}
-          rowKey="id"
-          shellClassName="soha-management-table-shell"
-          scroll={{ x: 'max-content' }}
-        />
-      )}
+      <AdminTable
+        enableDensity
+        error={services.error}
+        hasReadData={services.data !== undefined}
+        refreshing={services.isFetching}
+        onRefresh={() => void services.refetch()}
+        loading={services.isLoading}
+        columnSettingIconOnly
+        columnSettingPlacement="header"
+        columns={columns}
+        dataSource={servicesData?.items ?? []}
+        empty={<ManagementState bordered={false} compact description="当前范围没有发现服务" />}
+        pagination={false}
+        rowKey="id"
+        shellClassName="soha-management-table-shell"
+        scroll={{ x: 'max-content' }}
+      />
 
       <Drawer
         destroyOnHidden
         open={Boolean(selectedServiceId)}
         size="large"
-        title={service.data?.data.displayName || service.data?.data.name || '服务详情'}
+        extra={
+          <ManagementIconButton
+            aria-label="刷新服务详情"
+            tooltip="刷新服务详情"
+            icon={<ReloadOutlined spin={service.isFetching || topology.isFetching} />}
+            onClick={() => {
+              void service.refetch()
+              void topology.refetch()
+            }}
+          />
+        }
+        title={serviceData?.data.displayName || serviceData?.data.name || '服务详情'}
         onClose={() => setSelectedServiceId('')}
       >
+        <ReadFeedback label="服务详情" query={service} />
         {service.isLoading ? (
           <ManagementState bordered={false} compact kind="loading" title="正在加载服务" />
-        ) : service.error ? (
-          <ManagementState
-            bordered={false}
-            compact
-            kind="error"
-            title="服务详情加载失败"
-            description={service.error.message}
-          />
-        ) : service.data ? (
+        ) : serviceData ? (
           <>
             <Descriptions column={2} size="small">
               <Descriptions.Item label="状态">
                 <StatusTag
-                  label={statusLabel(service.data.data.status)}
-                  value={service.data.data.status}
+                  label={statusLabel(serviceData.data.status)}
+                  value={serviceData.data.status}
                 />
               </Descriptions.Item>
               <Descriptions.Item label="命名空间">
-                {service.data.data.namespace || '-'}
+                {serviceData.data.namespace || '-'}
               </Descriptions.Item>
               <Descriptions.Item label="实例">
-                {service.data.data.instances.length}
+                {serviceData.data.instances.length}
               </Descriptions.Item>
               <Descriptions.Item label="端点">
-                {service.data.data.endpoints.length}
+                {serviceData.data.endpoints.length}
               </Descriptions.Item>
             </Descriptions>
             <div className="soha-service-drawer-section">
               <Title level={5}>端点</Title>
-              {service.data.data.endpoints.length ? (
+              {serviceData.data.endpoints.length ? (
                 <ul className="soha-list-panel">
-                  {service.data.data.endpoints.map((endpoint) => (
+                  {serviceData.data.endpoints.map((endpoint) => (
                     <li key={endpoint.name} className="soha-list-row">
                       <Text>{endpoint.name}</Text>
                       <div className="soha-list-row-extra">
@@ -292,17 +292,10 @@ export function ObservabilityServicesPage() {
                 <Title level={5}>依赖拓扑</Title>
                 <MetadataTag label="Beta" tone="gold" />
               </Space>
+              <ReadFeedback label="服务依赖" query={topology} />
               {topology.isLoading ? (
                 <ManagementState bordered={false} compact kind="loading" title="正在加载拓扑" />
-              ) : topology.error ? (
-                <ManagementState
-                  bordered={false}
-                  compact
-                  kind="error"
-                  title="拓扑加载失败"
-                  description={topology.error.message}
-                />
-              ) : (topology.data?.data.edges ?? []).length ? (
+              ) : !topologyData ? null : topologyData.data.edges.length ? (
                 <div className="soha-signal-data-table-wrap">
                   <table aria-label="服务依赖数据表">
                     <thead>
@@ -316,7 +309,7 @@ export function ObservabilityServicesPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {(topology.data?.data.edges ?? []).map((edge) => (
+                      {(topologyData?.data.edges ?? []).map((edge) => (
                         <tr key={`${edge.sourceServiceId}:${edge.targetServiceId}`}>
                           <td>
                             <Text code>{edge.sourceServiceId}</Text>

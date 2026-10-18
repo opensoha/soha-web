@@ -1,4 +1,7 @@
-import { lazy, Suspense, useCallback, useState } from 'react'
+import { MutationFeedback, ReadFeedback } from '@/components/request-feedback'
+import { isApiError } from '@/services/api-error'
+import { writeOutcomeUnknown } from '@/utils/query-feedback'
+import { lazy, Suspense, useCallback, useRef, useState } from 'react'
 import {
   Alert,
   App,
@@ -57,16 +60,19 @@ export function WorkflowTemplateDraftEditor({
   copiedFrom,
   onClose,
   onSaved,
+  onReload,
 }: {
   template?: WorkflowTemplate
   copiedFrom?: { id: string; revision: number; version?: number }
   onClose: () => void
   onSaved: (template: WorkflowTemplate) => void
+  onReload: (template: WorkflowTemplate) => void
 }) {
   const { message } = App.useApp()
   const client = useQueryClient()
   const source = useQuery(deliveryQueries.documents.source('WorkflowTemplate', template?.id ?? ''))
   const readOnly = Boolean(template?.id && (!source.isSuccess || source.data.association))
+  const reload = useQuery(deliveryQueries.workflowTemplates.detail(template?.id || '', false))
   const create = useMutation(deliveryMutations.workflowTemplates.create(client))
   const update = useMutation(deliveryMutations.workflowTemplates.update(client))
   const [form] = Form.useForm()
@@ -122,9 +128,12 @@ export function WorkflowTemplateDraftEditor({
     [initialDag],
   )
   const recipe = definition.mode === 'delivery_batch'
+  const submitting = useRef(false)
+  const unknown = writeOutcomeUnknown(create.error) || writeOutcomeUnknown(update.error)
   const busy = create.isPending || update.isPending
   const save = async () => {
-    if (sourceDirty || !compatible || readOnly) return
+    if (submitting.current || busy || unknown || sourceDirty || !compatible || readOnly) return
+    submitting.current = true
     try {
       const values = await form.validateFields()
       if (!recipe) {
@@ -145,8 +154,10 @@ export function WorkflowTemplateDraftEditor({
         : await create.mutateAsync({ ...payload, copiedFrom })
       message.success('草稿已保存')
       onSaved(result)
-    } catch (error) {
-      if (error instanceof Error) message.error(error.message)
+    } catch {
+      /* Field and mutation feedback retain the draft. */
+    } finally {
+      submitting.current = false
     }
   }
   const patch = (value: Record<string, unknown>) => {
@@ -160,7 +171,10 @@ export function WorkflowTemplateDraftEditor({
       width={recipe ? 760 : 1180}
       okText="保存草稿"
       confirmLoading={busy}
-      okButtonProps={{ disabled: sourceDirty || !compatible || readOnly }}
+      okButtonProps={{
+        'aria-label': '保存草稿',
+        disabled: unknown || sourceDirty || !compatible || readOnly,
+      }}
       cancelButtonProps={{ disabled: busy }}
       onOk={() => void save()}
       onCancel={() => {
@@ -168,6 +182,44 @@ export function WorkflowTemplateDraftEditor({
           onClose()
       }}
     >
+      <ReadFeedback query={reload} label="当前模板草稿" />
+      {template?.id &&
+      (writeOutcomeUnknown(update.error) ||
+        (isApiError(update.error) && update.error.status === 409)) ? (
+        <Alert
+          type="warning"
+          showIcon
+          title="草稿已保留，请核对当前模板"
+          description="重新加载会放弃本次修改，载入服务器上的当前草稿和版本。"
+          action={
+            <Button
+              loading={reload.isFetching}
+              onClick={async () => {
+                if (!window.confirm('放弃本次修改，重新加载当前模板草稿？')) return
+                const result = await reload.refetch()
+                if (!result.error && result.data) onReload(result.data)
+              }}
+            >
+              重新加载草稿
+            </Button>
+          }
+        />
+      ) : null}
+      {writeOutcomeUnknown(create.error) ? (
+        <Button onClick={onClose}>返回模板列表核对</Button>
+      ) : null}
+      <ReadFeedback query={source} label="模板来源" />
+      <ReadFeedback query={compatibility} label="兼容性检查" />
+      <MutationFeedback
+        operations={[
+          {
+            mutation: create,
+            label: '新建模板草稿',
+            target: create.variables?.name ? String(create.variables.name) : undefined,
+          },
+          { mutation: update, label: '保存模板草稿', target: update.variables?.id },
+        ]}
+      />
       {template?.id && readOnly ? (
         <DocumentSourcePanel kind="WorkflowTemplate" id={template.id} />
       ) : null}

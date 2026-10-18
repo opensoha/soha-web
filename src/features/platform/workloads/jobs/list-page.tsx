@@ -1,23 +1,15 @@
-import { useMemo, useState } from 'react'
-import { DeleteOutlined } from '@ant-design/icons'
-import { App, Popconfirm } from 'antd'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
-import type { TableColumnsType } from 'antd'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementIconButton, ManagementTableToolbar } from '@/components/management-list'
-import { WorkloadCreateEntry } from '../shared/create-entry'
 import { hasAllowedAction } from '@/features/auth'
-import { useI18n } from '@/i18n'
 import {
   capabilityActionTooltip,
   useClusterCapability,
 } from '@/features/platform/cluster-capabilities'
 import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
-import { usePlatformScopeStore } from '@/stores/platform-scope-store'
-import { toScopeKey } from '@/types'
-import { formatAgeSeconds } from '@/utils/time'
-import { tableColumnPresets } from '@/utils/table-columns'
+import {
+  platformResourceTarget,
+  usePlatformMutation,
+} from '@/features/platform/shared/use-platform-mutation'
 import {
   buildWorkloadDetailPath,
   includesSearch,
@@ -27,30 +19,47 @@ import {
   renderWorkloadNameLink,
   useWorkloadListAIContext,
   useWorkloadTableDensity,
-  workloadRowAIContext,
   WorkloadQueryPanel,
   WorkloadRefreshButton,
+  workloadRowAIContext,
   WorkloadSearchInput,
   WorkloadTableEmpty,
 } from '@/features/platform/workloads/shared/list-controls'
+import '@/features/platform/workloads/styles.css'
+import { useI18n } from '@/i18n'
+import { usePlatformScopeStore } from '@/stores/platform-scope-store'
+import { toScopeKey } from '@/types'
+import { readableQueryData } from '@/utils/query-feedback'
+import { tableColumnPresets } from '@/utils/table-columns'
+import { formatAgeSeconds } from '@/utils/time'
+import { DeleteOutlined } from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TableColumnsType } from 'antd'
+import { Popconfirm } from 'antd'
+import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { WorkloadCreateEntry } from '../shared/create-entry'
 import { jobMutations } from './mutations'
 import { jobQueries } from './queries'
 import type { Job, JobTarget } from './types'
-import '@/features/platform/workloads/styles.css'
 
 export function WorkloadsJobsPage() {
   const { t, localeCode } = useI18n()
-  const { message } = App.useApp()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { clusterId, namespace } = usePlatformScopeStore()
   const jobsQuery = useQuery(jobQueries.list(toScopeKey(clusterId, namespace)))
-  const removeMutation = useMutation(jobMutations.remove(queryClient))
+  const visibleJobsQueryData = readableQueryData(jobsQuery)
+  const removeMutation = usePlatformMutation(jobMutations.remove(queryClient), {
+    label: ['删除资源', 'Delete resource'],
+    target: platformResourceTarget,
+  })
+  const platformWriteBlocked = removeMutation.blocked
   const [searchKeyword, setSearchKeyword] = useState('')
   const { densityButton, tableSize } = useWorkloadTableDensity(localeCode)
   const workloadMutationCapability = useClusterCapability('workload.mutations', localeCode)
 
-  const jobs = jobsQuery.data ?? []
+  const jobs = visibleJobsQueryData ?? []
   const canShowActions =
     !workloadMutationCapability.disabled &&
     jobs.some((item) => hasAllowedAction(item.allowedActions, 'delete'))
@@ -74,11 +83,7 @@ export function WorkloadsJobsPage() {
     searchKeyword,
   })
 
-  const remove = (target: JobTarget) =>
-    removeMutation.mutate(target, {
-      onSuccess: () => void message.success(localeCode === 'zh_CN' ? '已删除' : 'Deleted'),
-      onError: (error) => void message.error(error.message),
-    })
+  const remove = (target: JobTarget) => removeMutation.mutate(target, {})
 
   const columns: TableColumnsType<Job> = [
     {
@@ -153,11 +158,12 @@ export function WorkloadsJobsPage() {
             }
             okText={label}
             cancelText={localeCode === 'zh_CN' ? '取消' : 'Cancel'}
-            okButtonProps={{ danger: true, loading: pending }}
+            okButtonProps={{ disabled: platformWriteBlocked, danger: true, loading: pending }}
             placement="topRight"
             onConfirm={() => remove(target)}
           >
             <ManagementIconButton
+              disabled={platformWriteBlocked}
               danger
               icon={<DeleteOutlined />}
               aria-label={label}
@@ -172,6 +178,8 @@ export function WorkloadsJobsPage() {
 
   return (
     <div className="soha-page">
+      {removeMutation.feedback}
+
       <WorkloadQueryPanel
         hasActiveFilters={Boolean(searchKeyword.trim())}
         localeCode={localeCode}
@@ -187,6 +195,9 @@ export function WorkloadsJobsPage() {
         />
       </WorkloadQueryPanel>
       <AdminTable
+        error={jobsQuery.isEnabled === false ? null : jobsQuery.error}
+        hasReadData={jobsQuery.data !== undefined}
+        onRetry={jobsQuery.isEnabled === false ? undefined : () => jobsQuery.refetch()}
         className="soha-jobs-table soha-platform-table"
         columnSettingIconOnly
         columnSettingPlacement="header"

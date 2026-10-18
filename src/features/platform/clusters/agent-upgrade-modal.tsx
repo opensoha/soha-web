@@ -1,12 +1,18 @@
-import { useEffect, useState } from 'react'
-import { Alert, Button, Descriptions, Form, Input, Modal, Space, Spin } from 'antd'
-import { ReloadOutlined } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { ReadFeedback } from '@/components/request-feedback'
+import {
+  platformResourceTarget,
+  usePlatformMutation,
+} from '@/features/platform/shared/use-platform-mutation'
 import { useI18n } from '@/i18n'
 import { toScopeKey } from '@/types'
-import { clusterQueries } from './queries'
-import { clusterMutations } from './mutations'
+import { readableQueryData } from '@/utils/query-feedback'
+import { ReloadOutlined } from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Alert, Button, Descriptions, Form, Input, Modal, Space, Spin } from 'antd'
+import { useEffect, useState } from 'react'
 import { clusterKeys } from './keys'
+import { clusterMutations } from './mutations'
+import { clusterQueries } from './queries'
 import type { Cluster } from './types'
 
 export function AgentUpgradeModal({ cluster, onClose }: { cluster: Cluster; onClose: () => void }) {
@@ -19,10 +25,15 @@ export function AgentUpgradeModal({ cluster, onClose }: { cluster: Cluster; onCl
   const [timedOut, setTimedOut] = useState(false)
   const statusQuery = useQuery({
     ...clusterQueries.agentUpgrade(scope),
-    refetchInterval: waiting ? 3_000 : false,
+    refetchInterval: (query) => (waiting && query.state.status !== 'error' ? 3_000 : false),
   })
-  const mutation = useMutation(clusterMutations.upgradeAgent(queryClient))
-  const status = statusQuery.data
+  const visibleStatusQueryData = readableQueryData(statusQuery)
+  const mutation = usePlatformMutation(clusterMutations.upgradeAgent(queryClient), {
+    label: ['升级 Agent', 'Upgrade Agent'],
+    target: platformResourceTarget,
+  })
+  const platformWriteBlocked = mutation.blocked
+  const status = visibleStatusQueryData
   const runningVersion = status?.version.replace(/^v/, '') ?? ''
   const recommendedVersion = status?.recommendedVersion.replace(/^v/, '') ?? ''
   const runningIsNewer =
@@ -61,12 +72,15 @@ export function AgentUpgradeModal({ cluster, onClose }: { cluster: Cluster; onCl
     <Modal
       open
       title={`${zh ? '更新 Agent' : 'Update Agent'} · ${cluster.name}`}
-      onCancel={onClose}
+      onCancel={() => {
+        if (!platformWriteBlocked) onClose?.()
+      }}
       cancelText={zh ? '关闭' : 'Close'}
       okText={zh ? '更新 Agent' : 'Update Agent'}
       confirmLoading={mutation.isPending}
       okButtonProps={{
         disabled:
+          platformWriteBlocked ||
           !status?.canUpgrade ||
           statusQuery.isError ||
           waiting ||
@@ -85,6 +99,10 @@ export function AgentUpgradeModal({ cluster, onClose }: { cluster: Cluster; onCl
         )
       }}
     >
+      <ReadFeedback canRead={statusQuery.isEnabled} query={statusQuery} label="Agent 状态" />
+
+      {mutation.feedback}
+
       <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
         <Alert
           type="info"

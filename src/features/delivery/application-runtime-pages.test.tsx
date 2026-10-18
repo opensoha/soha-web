@@ -11,6 +11,7 @@ import { ApplicationDetailPage } from './applications/detail-page'
 import { WorkflowCatalog } from './release-board/workflow-catalog'
 import { ApplicationNavigation, ApplicationIdentity, ApplicationBreadcrumb } from './navigation'
 import { ApplicationWorkflowDesignerPage } from './applications/workflow-designer-page'
+import { deliveryQueries } from './queries'
 import { I18nProvider } from '@/i18n'
 import { api } from '@/services/api-client'
 import { ApiError } from '@/services/api-error'
@@ -82,7 +83,9 @@ const testState = vi.hoisted(() => ({
   gitProjectsEmpty: false,
   createdRepository: undefined as Record<string, unknown> | undefined,
   lastDeliveryPlan: undefined as undefined | Record<string, unknown>,
+  readErrors: new Map<string, Error>(),
   apiGet: vi.fn(async (path: string) => {
+    if (testState.readErrors.has(path)) throw testState.readErrors.get(path)
     if (path === '/delivery/execution-tasks/preflight-1')
       return {
         data: {
@@ -1278,19 +1281,17 @@ function LocationProbe() {
   return <output data-testid="location">{`${location.pathname}${location.search}`}</output>
 }
 
-async function renderWithProviders(node: ReactNode, route = '/applications/app-1') {
+async function renderWithProviders(
+  node: ReactNode,
+  route = '/applications/app-1',
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+) {
   const container = document.createElement('div')
   document.body.appendChild(container)
   containers.push(container)
 
   const root = createRoot(container)
   roots.push(root)
-
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false },
-    },
-  })
 
   await act(async () => {
     root.render(
@@ -1341,6 +1342,19 @@ async function renderWithProviders(node: ReactNode, route = '/applications/app-1
     await new Promise((resolve) => setTimeout(resolve, 0))
     await new Promise((resolve) => setTimeout(resolve, 0))
   })
+
+  if (route.includes('/workflows/design')) {
+    await vi.waitFor(async () => {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      })
+      expect(
+        container.querySelector(
+          '[data-testid="release-flow-dag-editor"], .soha-read-feedback, .soha-management-state.is-not-found',
+        ),
+      ).not.toBeNull()
+    })
+  }
 
   return container
 }
@@ -1396,6 +1410,7 @@ describe('ApplicationDetailPage workbench', () => {
   beforeEach(() => {
     usePreferencesStore.setState({ localeCode: 'zh_CN' })
     testState.apiGet.mockClear()
+    testState.readErrors.clear()
     testState.permissionSnapshot.permissionKeys = [...defaultPermissionKeys]
     testState.manifestTarget = false
     testState.manifestDeployments = []
@@ -1675,6 +1690,219 @@ describe('ApplicationDetailPage workbench', () => {
     expect(container.textContent).toContain('Based on Release DAG')
     expect(findButton(container, 'Save workflow')).not.toBeNull()
     expect(container.textContent).not.toContain('项目工作流设计')
+  })
+
+  it('retries a failed environment read before opening the workflow canvas', async () => {
+    testState.readErrors.set(
+      '/application-environments',
+      new ApiError(503, 'environment unavailable'),
+    )
+    const container = await renderWithProviders(
+      <ApplicationWorkflowDesignerPage />,
+      '/applications/app-1/workflows/design?bindingId=binding-test&source=template&templateId=wf-template-1',
+    )
+    expect(container.textContent).toContain('应用环境读取失败')
+    expect(container.querySelector('[data-testid="release-flow-dag-editor"]')).toBeNull()
+    testState.readErrors.clear()
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[aria-label="重试读取应用环境"]')!.click()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(container.querySelector('[data-testid="release-flow-dag-editor"]')?.textContent).toBe(
+      '2 个节点',
+    )
+    expect(container.textContent).toContain('未保存')
+  })
+
+  it.each([401, 403])(
+    'retains a workflow draft after 503, then hides it after %s',
+    async (status) => {
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+      const container = await renderWithProviders(
+        <ApplicationWorkflowDesignerPage />,
+        '/applications/app-1/workflows/design?bindingId=binding-test&source=template&templateId=wf-template-1',
+        client,
+      )
+      const editor = container.querySelector('[data-testid="release-flow-dag-editor"]')
+      const input = container.querySelector<HTMLInputElement>('[aria-label="工作流名称"]')!
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+          input,
+          '保留的草稿',
+        )
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+      testState.readErrors.set('/application-environments', new ApiError(503, 'temporary failure'))
+      await act(async () => {
+        await client.refetchQueries({ queryKey: deliveryQueries.environments.list(true).queryKey })
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      })
+      expect(container.textContent).toContain('应用环境未更新，正在展示上次读取结果')
+      expect(container.querySelector('[data-testid="release-flow-dag-editor"]')).toBe(editor)
+      expect(input.value).toBe('保留的草稿')
+      testState.readErrors.set('/application-environments', new ApiError(status, 'access lost'))
+      await act(async () => {
+        await client.refetchQueries({ queryKey: deliveryQueries.environments.list(true).queryKey })
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      })
+      expect(client.getQueryData(deliveryQueries.environments.list(true).queryKey)).toBeDefined()
+      expect(container.querySelector('[data-testid="release-flow-dag-editor"]')).toBeNull()
+      expect(container.querySelector('[aria-label="工作流名称"]')).toBeNull()
+      expect(container.textContent).toContain(
+        status === 401 ? '应用环境登录状态失效' : '应用环境无访问权限',
+      )
+    },
+  )
+
+  it('keeps the submitted workflow identity and draft on a rejected save', async () => {
+    const container = await renderWithProviders(
+      <ApplicationWorkflowDesignerPage />,
+      '/applications/app-1/workflows/design?bindingId=binding-test&source=template&templateId=wf-template-1&name=原始工作流',
+    )
+    vi.mocked(api.put).mockRejectedValueOnce(
+      new ApiError(409, 'revision changed', { requestId: 'workflow-conflict' }),
+    )
+    await act(async () => {
+      findButton(container, '保存工作流').click()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    const input = container.querySelector<HTMLInputElement>('[aria-label="工作流名称"]')!
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+        input,
+        '下一次草稿',
+      )
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    const feedback = container.querySelector('.soha-operation-feedback')!
+    expect(feedback.textContent).toContain('操作请求失败')
+    expect(feedback.textContent).toContain('集成测试 · 原始工作流')
+    expect(feedback.textContent).toContain('workflow-conflict')
+    expect(feedback.textContent).not.toContain('下一次草稿')
+    expect(input.value).toBe('下一次草稿')
+    expect(findButton(container, '保存工作流').disabled).toBe(false)
+    expect(container.querySelector('[data-testid="release-flow-dag-editor"]')).not.toBeNull()
+  })
+
+  it('fences a pending save and checks an unknown outcome with reads only', async () => {
+    let rejectSave!: (error: Error) => void
+    vi.mocked(api.put).mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectSave = reject
+        }),
+    )
+    const container = await renderWithProviders(
+      <ApplicationWorkflowDesignerPage />,
+      '/applications/app-1/workflows/design?bindingId=binding-test&source=template&templateId=wf-template-1',
+    )
+    const editor = container.querySelector('[data-testid="release-flow-dag-editor"]')!
+    await act(async () => {
+      const button = findButton(container, '保存工作流')
+      button.click()
+      button.click()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    await vi.waitFor(async () => {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      })
+      expect(api.put).toHaveBeenCalledTimes(1)
+      expect((editor.parentElement as HTMLElement).inert).toBe(true)
+    })
+    expect(container.querySelector<HTMLInputElement>('[aria-label="工作流名称"]')!.disabled).toBe(
+      true,
+    )
+    await act(async () => {
+      rejectSave(
+        new ApiError(503, 'response lost', { method: 'PUT', requestId: 'workflow-unknown' }),
+      )
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(container.textContent).toContain('请求结果不明')
+    expect(container.textContent).toContain('workflow-unknown')
+    expect(findButton(container, '保存工作流').disabled).toBe(true)
+    expect((editor.parentElement as HTMLElement).inert).toBe(false)
+    const reads = testState.apiGet.mock.calls.filter(
+      ([path]) => path === '/application-environments',
+    ).length
+    await act(async () => {
+      findButton(container, '核对环境记录').click()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(
+      testState.apiGet.mock.calls.filter(([path]) => path === '/application-environments'),
+    ).toHaveLength(reads + 1)
+    expect(api.put).toHaveBeenCalledTimes(1)
+    expect(api.post).not.toHaveBeenCalled()
+    expect(findButton(container, '保存工作流').disabled).toBe(true)
+    expect(container.querySelector('[data-testid="release-flow-dag-editor"]')).toBe(editor)
+  })
+
+  it('keeps the original template version and canvas when its catalog changes', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const container = await renderWithProviders(
+      <ApplicationWorkflowDesignerPage />,
+      '/applications/app-1/workflows/design?bindingId=binding-test&source=template&templateId=wf-template-1',
+      client,
+    )
+    const editor = container.querySelector('[data-testid="release-flow-dag-editor"]')
+    const key = deliveryQueries.workflowTemplates.list(true).queryKey
+    await act(async () => {
+      client.setQueryData(key, (previous) =>
+        previous?.map((template) => ({ ...template, publishedVersion: 2 })),
+      )
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(container.querySelector('[data-testid="release-flow-dag-editor"]')).toBe(editor)
+    expect(testState.apiGet).not.toHaveBeenCalledWith(
+      '/workflow-templates/wf-template-1/versions/2',
+    )
+  })
+
+  it('does not mark an open draft as saved when a workflow appears in a background read', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const container = await renderWithProviders(
+      <ApplicationWorkflowDesignerPage />,
+      '/applications/app-1/workflows/design?bindingId=binding-test',
+      client,
+    )
+    const editor = container.querySelector('[data-testid="release-flow-dag-editor"]')
+    await act(async () => {
+      client.setQueryData(deliveryQueries.environments.list(true).queryKey, (previous) =>
+        previous?.map((binding) => ({
+          ...binding,
+          workflowTemplate: {
+            id: 'external-workflow',
+            key: 'external',
+            name: '其他操作者的工作流',
+            revision: 2,
+            enabled: true,
+            createdAt: '2026-10-16T00:00:00Z',
+            updatedAt: '2026-10-16T00:00:00Z',
+            definition: workflowDefinition,
+          },
+        })),
+      )
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(container.querySelector('[data-testid="release-flow-dag-editor"]')).toBe(editor)
+    expect(container.textContent).toContain('未保存')
+    expect(container.textContent).not.toContain('已同步')
+    expect(container.textContent).not.toContain('基于 其他操作者的工作流')
+  })
+
+  it('shows a not-found state for an invalid template version instead of a blank page', async () => {
+    const container = await renderWithProviders(
+      <ApplicationWorkflowDesignerPage />,
+      '/applications/app-1/workflows/design?bindingId=binding-test&source=template&templateId=wf-template-1&templateVersion=-1',
+    )
+    expect(container.textContent).toContain('未找到所选工作流模板版本')
+    expect(container.querySelector('[data-testid="release-flow-dag-editor"]')).toBeNull()
   })
 
   it('renders service configuration while runtime query is pending', async () => {
@@ -2050,14 +2278,19 @@ describe('ApplicationDetailPage workbench', () => {
       expect(source.config.repositoryBindings).toEqual([
         expect.objectContaining({ repositoryId: 'repository-imported' }),
       ])
-      expect(api.post).toHaveBeenCalledWith(
-        '/applications/app-1/services',
-        expect.objectContaining({
-          buildSourceId: source.id,
-          repositoryId: 'repository-imported',
-          name: 'Source API',
-        }),
-      )
+      await vi.waitFor(async () => {
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 0))
+        })
+        expect(api.post).toHaveBeenCalledWith(
+          '/applications/app-1/services',
+          expect.objectContaining({
+            buildSourceId: source.id,
+            repositoryId: 'repository-imported',
+            name: 'Source API',
+          }),
+        )
+      })
     },
   )
 

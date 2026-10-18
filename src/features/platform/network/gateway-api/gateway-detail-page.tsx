@@ -1,11 +1,13 @@
-import { useState } from 'react'
-import { Card } from 'antd'
-import { useQuery } from '@tanstack/react-query'
-import { useParams, useSearchParams } from 'react-router-dom'
 import { ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
+import { readableQueryData } from '@/utils/query-feedback'
+import { useQuery } from '@tanstack/react-query'
+import { Card } from 'antd'
+import { useState } from 'react'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { NetworkDetailShell } from '../shared/detail-shell'
 import { renderNetworkTextList } from '../shared/renderers'
 import { resolveNetworkNamespace } from '../shared/scope'
@@ -22,7 +24,8 @@ export function GatewayDetailPage() {
   const scope = toScopeKey(clusterId, detailNamespace)
   const [activeTabKey, setActiveTabKey] = useState('overview')
   const query = useQuery(gatewayAPIQueries.detail<GatewayDetail>('gateways', scope, name))
-  const detail = query.data
+  const visibleQueryData = readableQueryData(query)
+  const detail = visibleQueryData
 
   if (!clusterId || !detailNamespace)
     return (
@@ -47,25 +50,28 @@ export function GatewayDetailPage() {
     )
 
   return (
-    <NetworkDetailShell
-      activeTabKey={activeTabKey}
-      detail={detail}
-      kind="gateways"
-      label="Gateway"
-      onTabChange={setActiveTabKey}
-      overviewExtra={[
-        { key: 'GatewayClass', value: detail.gatewayClass || '-' },
-        { key: 'Addresses', value: renderNetworkTextList(detail.addresses) },
-        { key: 'Listeners', value: detail.listenerCount },
-      ]}
-      overviewContent={
-        <>
-          <GatewayListenersSection listeners={detail.listeners} />
-          <GatewayRoutesSection routes={detail.routes} />
-          <ConditionsSection conditions={detail.conditions} />
-        </>
-      }
-      target={{ scope, name }}
-    />
+    <>
+      <ReadFeedback canRead={query.isEnabled} query={query} label="资源记录" />
+      <NetworkDetailShell
+        activeTabKey={activeTabKey}
+        detail={detail}
+        kind="gateways"
+        label="Gateway"
+        onTabChange={setActiveTabKey}
+        overviewExtra={[
+          { key: 'GatewayClass', value: detail.gatewayClass || '-' },
+          { key: 'Addresses', value: renderNetworkTextList(detail.addresses) },
+          { key: 'Listeners', value: detail.listenerCount },
+        ]}
+        overviewContent={
+          <>
+            <GatewayListenersSection listeners={detail.listeners} />
+            <GatewayRoutesSection routes={detail.routes} />
+            <ConditionsSection conditions={detail.conditions} />
+          </>
+        }
+        target={{ scope, name }}
+      />
+    </>
   )
 }

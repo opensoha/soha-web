@@ -1,8 +1,3 @@
-import { useMemo, useState } from 'react'
-import { ReloadOutlined } from '@ant-design/icons'
-import { useQuery } from '@tanstack/react-query'
-import { Space } from 'antd'
-import type { TableColumnsType } from 'antd'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
   ManagementIconButton,
@@ -11,13 +6,19 @@ import {
   ManagementToolbarSearch,
 } from '@/components/management-list'
 import { MetadataTag, StatusTag } from '@/components/status-tag'
+import { readableQueryData } from '@/utils/query-feedback'
+import { ReloadOutlined } from '@ant-design/icons'
+import { useQuery } from '@tanstack/react-query'
+import type { TableColumnsType } from 'antd'
+import { Space } from 'antd'
+import { useMemo, useState } from 'react'
 import { workbenchQueries } from '../workbench/queries'
 import type { WorkbenchAgentRun } from '../workbench/types'
 
 export function AgentRunsPage() {
   const [keyword, setKeyword] = useState('')
   const runsQuery = useQuery(workbenchQueries.agentRuns.all())
-  const runs = runsQuery.data?.data ?? []
+  const runs = readableQueryData(runsQuery)?.data ?? []
   const filteredRuns = useMemo(() => {
     const normalized = keyword.trim().toLowerCase()
     if (!normalized) return runs
@@ -91,6 +92,9 @@ export function AgentRunsPage() {
         columns,
         dataSource: filteredRuns,
         loading: runsQuery.isLoading,
+        error: runsQuery.error,
+        hasReadData: runsQuery.data !== undefined,
+        onRetry: () => void runsQuery.refetch(),
         rowKey: 'id',
         empty: runsQuery.isError ? (
           <ManagementState kind="error" title="Agent Runs 加载失败" />

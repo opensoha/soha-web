@@ -1,18 +1,19 @@
-import { useNavigate } from 'react-router-dom'
-import { AppstoreAddOutlined, ReloadOutlined } from '@ant-design/icons'
-import { useQuery } from '@tanstack/react-query'
-import { Button, Space } from 'antd'
-import type { TableColumnsType } from 'antd'
 import { ManagementDataPage } from '@/components/management-data-page'
 import { ManagementState, ManagementTableToolbar } from '@/components/management-list'
 import { MetadataTag, StatusTag } from '@/components/status-tag'
+import { readableQueryData } from '@/utils/query-feedback'
+import { AppstoreAddOutlined, ReloadOutlined } from '@ant-design/icons'
+import { useQuery } from '@tanstack/react-query'
+import type { TableColumnsType } from 'antd'
+import { Button, Space } from 'antd'
+import { useNavigate } from 'react-router-dom'
 import { workbenchQueries } from '../workbench/queries'
 import type { WorkbenchAgentProvider } from '../workbench/types'
 
 export function AgentProvidersPage() {
   const navigate = useNavigate()
   const catalogQuery = useQuery(workbenchQueries.catalog())
-  const providers = catalogQuery.data?.data.agentProviders ?? []
+  const providers = readableQueryData(catalogQuery)?.data.agentProviders ?? []
 
   const columns: TableColumnsType<WorkbenchAgentProvider> = [
     { title: 'Provider', dataIndex: 'name', key: 'name' },
@@ -47,7 +48,9 @@ export function AgentProvidersPage() {
       key: 'runs',
       width: 150,
       render: (_, record) =>
-        `${record.runtimeStatus?.runningRuns ?? 0} 运行 / ${record.runtimeStatus?.queuedRuns ?? 0} 排队`,
+        record.runtimeStatus
+          ? `${record.runtimeStatus.runningRuns ?? 0} 运行 / ${record.runtimeStatus.queuedRuns ?? 0} 排队`
+          : '运行状态未读取',
     },
   ]
 
@@ -78,6 +81,9 @@ export function AgentProvidersPage() {
         columns,
         dataSource: providers,
         loading: catalogQuery.isLoading,
+        error: catalogQuery.error,
+        hasReadData: catalogQuery.data !== undefined,
+        onRetry: () => void catalogQuery.refetch(),
         rowKey: 'id',
         empty: catalogQuery.isError ? (
           <ManagementState kind="error" title="Provider Catalog 加载失败" />

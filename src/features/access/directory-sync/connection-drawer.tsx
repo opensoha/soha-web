@@ -1,4 +1,6 @@
 import { Alert, Form, Input, Modal, Select, Switch } from 'antd'
+import type { ReactNode } from 'react'
+import { accessMutationModalStyles } from '../shared/mutation-footer'
 import type { LoginProviderSettings } from '@/features/settings'
 import type { DirectoryConnection, DirectoryConnectionInput } from './types'
 import { DirectoryPolicyForm } from './policy-form'
@@ -28,6 +30,10 @@ export function DirectoryConnectionModal({
   onCancel,
   onSubmit,
   open,
+  feedback,
+  blocked = false,
+  preserveDraft = false,
+  loginProvidersUnavailable = false,
 }: {
   canManagePeople: boolean
   confirm: (onConfirmed: () => void) => void
@@ -38,10 +44,17 @@ export function DirectoryConnectionModal({
   onCancel: () => void
   onSubmit: (input: DirectoryConnectionInput) => void
   open: boolean
+  feedback?: ReactNode
+  blocked?: boolean
+  preserveDraft?: boolean
+  loginProvidersUnavailable?: boolean
 }) {
   const [form] = Form.useForm<DirectoryConnectionInput>()
   const providerType = Form.useWatch('providerType', form)
   const loginProviderId = Form.useWatch('loginProviderId', form)
+  const usesLoginProvider = ['feishu', 'wecom', 'dingtalk'].includes(providerType ?? '')
+  const dependenciesBlocked =
+    usesLoginProvider && (loginProvidersLoading || loginProvidersUnavailable)
   const mode = Form.useWatch(['policy', 'mode'], form)
   const loginProviderOptions = loginProviders
     .filter((provider) => provider.enabled && provider.type === providerType)
@@ -51,6 +64,7 @@ export function DirectoryConnectionModal({
     }))
   const loginProviderInvalid =
     !loginProvidersLoading &&
+    !loginProvidersUnavailable &&
     Boolean(loginProviderId) &&
     !loginProviderOptions.some((option) => option.value === loginProviderId)
   const initialValues: DirectoryConnectionInput = connection
@@ -71,15 +85,35 @@ export function DirectoryConnectionModal({
       open={open}
       width={720}
       confirmLoading={loading}
-      destroyOnHidden
+      destroyOnHidden={!preserveDraft}
+      style={{ top: 32, marginTop: 0 }}
+      styles={accessMutationModalStyles}
+      okButtonProps={{ disabled: blocked || dependenciesBlocked, 'aria-label': '保存' }}
+      cancelButtonProps={{ disabled: loading, 'aria-label': '取消' }}
+      closable={{ disabled: loading }}
+      keyboard={!loading}
       mask={{ closable: false }}
       okText="保存"
       cancelText="取消"
       onCancel={onCancel}
-      onOk={() => void form.validateFields().then(onSubmit)}
+      onOk={async () => {
+        if (loading || blocked || dependenciesBlocked) return
+        try {
+          onSubmit(await form.validateFields())
+        } catch {
+          /* Antd owns field validation. */
+        }
+      }}
+      footer={(buttons) => (
+        <>
+          {feedback}
+          {buttons}
+        </>
+      )}
     >
       <Form
         form={form}
+        disabled={loading || blocked}
         key={connection?.id ?? 'new-directory-connection'}
         layout="vertical"
         initialValues={initialValues}
@@ -119,14 +153,14 @@ export function DirectoryConnectionModal({
             extra="选择登录设置中的登录源，复用应用凭据且不复制 Client Secret。"
             validateStatus={loginProviderInvalid ? 'error' : undefined}
             help={
-              loginProviderInvalid
-                ? '当前登录源不存在、已禁用或类型不匹配，请重新选择'
-                : undefined
+              loginProviderInvalid ? '当前登录源不存在、已禁用或类型不匹配，请重新选择' : undefined
             }
             rules={[
               { required: true, message: '请选择登录源' },
               {
                 validator: async (_rule, value?: string) => {
+                  if (loginProvidersUnavailable)
+                    throw new Error('请先核对登录源目录的读取权限与状态')
                   if (!value || loginProviderOptions.some((option) => option.value === value)) {
                     return
                   }

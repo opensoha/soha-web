@@ -19,6 +19,8 @@ interface AccessManagementTablePageProps<T extends object> {
   onRefresh: () => void
   placeholder: string
   refreshing?: boolean
+  error?: Error | null
+  hasReadData?: boolean
   rowKey: string | ((record: T) => string)
   searchKeyword: string
   setSearchKeyword: (value: string) => void
@@ -38,6 +40,8 @@ export function AccessManagementTablePage<T extends object>({
   searchKeyword,
   setSearchKeyword,
   resourceName,
+  error,
+  hasReadData,
 }: AccessManagementTablePageProps<T>) {
   const { localeCode } = useI18n()
   const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
@@ -108,6 +112,9 @@ export function AccessManagementTablePage<T extends object>({
         dataSource,
         rowKey,
         loading,
+        error,
+        hasReadData,
+        onRetry: onRefresh,
         scroll: { x: 'max-content' },
         tableSize,
       }}

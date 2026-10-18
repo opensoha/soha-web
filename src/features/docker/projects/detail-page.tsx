@@ -1,3 +1,7 @@
+import { readableQueryData } from '@/utils/query-feedback'
+import { ReadFeedback } from '@/components/request-feedback'
+import { ComputeRelationsPanel } from '@/features/compute'
+import { ManagementRefreshButton, ManagementState } from '@/components/management-list'
 import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Card, Descriptions, Input, Space, Tabs, Tag } from 'antd'
 import { useQuery } from '@tanstack/react-query'
@@ -11,6 +15,7 @@ import { PortsTable } from '../ports/table'
 import { ServicesTable } from '../services/table'
 import {
   architectureTag,
+  DockerTableHeader,
   configArrayCount,
   configTextValue,
   normalizePage,
@@ -54,10 +59,14 @@ function ProjectDetailWorkspace() {
   const detailServicesQuery = useQuery(
     dockerQueries.projectServices(resolvedProjectId, dockerModuleEnabled && canViewServices),
   )
-  const project = projectQuery.data
+  const project = readableQueryData(projectQuery)
   const isSingleContainerProject = project?.sourceKind === 'single_container'
   const projectConfig = project?.config
-  const runtimeServicePage = normalizePage(detailServicesQuery.data, 1, 100)
+  const runtimeServicePage = normalizePage(
+    canViewServices ? readableQueryData(detailServicesQuery) : undefined,
+    1,
+    100,
+  )
   const runtimeServices = runtimeServicePage.items
   const runningServiceCount = runtimeServices.filter(
     (service) => service.status?.toLowerCase() === 'running',
@@ -99,6 +108,7 @@ function ProjectDetailWorkspace() {
   })
   useEffect(() => {
     if (!defaultRuntimeServiceName) {
+      setRuntimeServiceName('')
       return
     }
     if (
@@ -268,29 +278,31 @@ function ProjectDetailWorkspace() {
               loading={detailServicesQuery.isLoading}
               title={localeText(localeCode, '容器状态', 'Container status')}
               extra={
-                <Space size={6} wrap>
-                  <Tag color="blue">
-                    {localeText(
-                      localeCode,
-                      `容器 ${runtimeServicePage.total}`,
-                      `Containers ${runtimeServicePage.total}`,
-                    )}
-                  </Tag>
-                  <Tag color="green">
-                    {localeText(
-                      localeCode,
-                      `运行 ${runningServiceCount}`,
-                      `Running ${runningServiceCount}`,
-                    )}
-                  </Tag>
-                  <Tag color="orange">
-                    {localeText(
-                      localeCode,
-                      `重启 ${serviceRestartCount}`,
-                      `Restarts ${serviceRestartCount}`,
-                    )}
-                  </Tag>
-                </Space>
+                readableQueryData(detailServicesQuery) ? (
+                  <Space size={6} wrap>
+                    <Tag color="blue">
+                      {localeText(
+                        localeCode,
+                        `容器 ${runtimeServicePage.total}`,
+                        `Containers ${runtimeServicePage.total}`,
+                      )}
+                    </Tag>
+                    <Tag color="green">
+                      {localeText(
+                        localeCode,
+                        `运行 ${runningServiceCount}`,
+                        `Running ${runningServiceCount}`,
+                      )}
+                    </Tag>
+                    <Tag color="orange">
+                      {localeText(
+                        localeCode,
+                        `重启 ${serviceRestartCount}`,
+                        `Restarts ${serviceRestartCount}`,
+                      )}
+                    </Tag>
+                  </Space>
+                ) : undefined
               }
             >
               <ServicesTable embedded fixedProjectId={resolvedProjectId} />
@@ -313,6 +325,7 @@ function ProjectDetailWorkspace() {
                   serviceName={runtimeServiceName}
                   serviceOptions={runtimeServiceOptions}
                   servicesLoading={detailServicesQuery.isFetching}
+                  servicesError={detailServicesQuery.isError}
                   onServiceChange={setRuntimeServiceName}
                 />
               </RuntimeBoundary>
@@ -334,6 +347,7 @@ function ProjectDetailWorkspace() {
                   serviceName={runtimeServiceName}
                   serviceOptions={runtimeServiceOptions}
                   servicesLoading={detailServicesQuery.isFetching}
+                  servicesError={detailServicesQuery.isError}
                   onServiceChange={setRuntimeServiceName}
                 />
               </RuntimeBoundary>
@@ -355,6 +369,7 @@ function ProjectDetailWorkspace() {
                   serviceName={runtimeServiceName}
                   serviceOptions={runtimeServiceOptions}
                   servicesLoading={detailServicesQuery.isFetching}
+                  servicesError={detailServicesQuery.isError}
                   onServiceChange={setRuntimeServiceName}
                 />
               </RuntimeBoundary>
@@ -375,11 +390,54 @@ function ProjectDetailWorkspace() {
           },
         ]
       : []),
+    {
+      key: 'relations',
+      label: localeText(localeCode, '资源关系', 'Relations'),
+      children: (
+        <Card size="small">
+          <ComputeRelationsPanel
+            domain="container_runtime"
+            kind="project"
+            resourceId={resolvedProjectId}
+          />
+        </Card>
+      ),
+    },
     runtimeConfigTab,
   ]
   return (
     <div className="soha-page soha-docker-page">
-      <Tabs className="soha-resource-tabs soha-workload-detail-tabs" items={detailTabItems} />
+      <ReadFeedback query={projectQuery} label={localeText(localeCode, '项目', 'Project')} />
+      <DockerTableHeader
+        title={project?.name || localeText(localeCode, '项目详情', 'Project details')}
+        status={project?.status}
+        meta={[resolvedProjectId, formatDateTime(project?.updatedAt)]}
+        actions={
+          <ManagementRefreshButton
+            tooltip={localeText(localeCode, '刷新', 'Refresh')}
+            aria-label={localeText(localeCode, '刷新项目', 'Refresh project')}
+            loading={projectQuery.isFetching}
+            onClick={() => {
+              void projectQuery.refetch()
+              if (canViewServices) void detailServicesQuery.refetch()
+            }}
+          />
+        }
+      />
+      {canViewServices ? (
+        <ReadFeedback
+          query={detailServicesQuery}
+          label={localeText(localeCode, '项目服务', 'Project services')}
+        />
+      ) : null}
+      {!project && projectQuery.isError ? null : !project && !projectQuery.isLoading ? (
+        <ManagementState
+          kind="not-found"
+          title={localeText(localeCode, '未找到项目', 'Project not found')}
+        />
+      ) : (
+        <Tabs className="soha-resource-tabs soha-workload-detail-tabs" items={detailTabItems} />
+      )}
     </div>
   )
 }

@@ -1,18 +1,20 @@
-import { lazy, Suspense, useState } from 'react'
-import { Card, Descriptions, Spin } from 'antd'
-import { useQuery } from '@tanstack/react-query'
-import { useParams } from 'react-router-dom'
+import { ReadFeedback } from '@/components/request-feedback'
 import { ResourceEventsTimeline } from '@/components/resource-events-timeline'
-import { WorkloadDetailShell } from '@/features/platform/workloads/shared/detail-shell'
 import { useWorkloadDetailScope } from '@/features/platform/workloads/shared/detail-scope'
+import { WorkloadDetailShell } from '@/features/platform/workloads/shared/detail-shell'
 import {
   WorkloadPodsCard,
   WorkloadRelationsCard,
 } from '@/features/platform/workloads/shared/workload-relations'
+import '@/features/platform/workloads/styles.css'
 import { useI18n } from '@/i18n'
+import { readableQueryData } from '@/utils/query-feedback'
+import { useQuery } from '@tanstack/react-query'
+import { Card, Descriptions, Spin } from 'antd'
+import { lazy, Suspense, useState } from 'react'
+import { useParams } from 'react-router-dom'
 import { daemonSetQueries } from './queries'
 import type { DaemonSetDetail } from './types'
-import '@/features/platform/workloads/styles.css'
 
 const ResourceMetricsPanel = lazy(async () => {
   const mod = await import('@/components/resource-metrics-panel')
@@ -82,54 +84,66 @@ export function DaemonSetDetailPage() {
     ...metricsOptions,
     enabled: Boolean(metricsOptions.enabled) && activeTabKey === 'metrics',
   })
+  const visibleMetricsQueryData =
+    Boolean(metricsOptions.enabled) && activeTabKey === 'metrics'
+      ? readableQueryData(metricsQuery)
+      : undefined
   const eventsOptions = daemonSetQueries.events(detailScope, daemonSetName)
   const eventsQuery = useQuery({
     ...eventsOptions,
     enabled: Boolean(eventsOptions.enabled) && activeTabKey === 'events',
   })
+  const visibleEventsQueryData =
+    Boolean(eventsOptions.enabled) && activeTabKey === 'events'
+      ? readableQueryData(eventsQuery)
+      : undefined
 
   return (
-    <WorkloadDetailShell
-      title="DaemonSet"
-      resource="daemonsets"
-      paramKey="daemonSetName"
-      activeTabKey={activeTabKey}
-      onTabChange={setActiveTabKey}
-      extraOverview={(detail) => <DaemonSetOverview detail={detail as DaemonSetDetail} />}
-      extraTabPanes={[
-        {
-          key: 'metrics',
-          label: localeCode === 'zh_CN' ? '指标' : 'Metrics',
-          children: (
-            <Suspense
-              fallback={
-                <Card className="soha-detail-card">
-                  <Spin size="large" />
-                </Card>
-              }
-            >
-              <ResourceMetricsPanel
-                data={metricsQuery.data}
-                loading={metricsQuery.isLoading}
+    <>
+      <ReadFeedback canRead={metricsQuery.isEnabled} query={metricsQuery} label="资源指标" />
+      <ReadFeedback canRead={eventsQuery.isEnabled} query={eventsQuery} label="资源事件" />
+      <WorkloadDetailShell
+        title="DaemonSet"
+        resource="daemonsets"
+        paramKey="daemonSetName"
+        activeTabKey={activeTabKey}
+        onTabChange={setActiveTabKey}
+        extraOverview={(detail) => <DaemonSetOverview detail={detail as DaemonSetDetail} />}
+        extraTabPanes={[
+          {
+            key: 'metrics',
+            label: localeCode === 'zh_CN' ? '指标' : 'Metrics',
+            children: (
+              <Suspense
+                fallback={
+                  <Card className="soha-detail-card">
+                    <Spin size="large" />
+                  </Card>
+                }
+              >
+                <ResourceMetricsPanel
+                  data={visibleMetricsQueryData}
+                  loading={metricsQuery.isLoading}
+                />
+              </Suspense>
+            ),
+          },
+          {
+            key: 'events',
+            label: localeCode === 'zh_CN' ? '事件' : 'Events',
+            children: (
+              <ResourceEventsTimeline
+                events={visibleEventsQueryData ?? []}
+                loading={eventsQuery.isLoading}
+                emptyDescription={
+                  localeCode === 'zh_CN' ? '当前 DaemonSet 暂无事件' : 'No DaemonSet events'
+                }
               />
-            </Suspense>
-          ),
-        },
-        {
-          key: 'events',
-          label: localeCode === 'zh_CN' ? '事件' : 'Events',
-          children: (
-            <ResourceEventsTimeline
-              events={eventsQuery.data ?? []}
-              loading={eventsQuery.isLoading}
-              emptyDescription={
-                localeCode === 'zh_CN' ? '当前 DaemonSet 暂无事件' : 'No DaemonSet events'
-              }
-            />
-          ),
-        },
-      ]}
-      yamlLast
-    />
+            ),
+          },
+        ]}
+        yamlLast
+      />
+    </>
   )
 }

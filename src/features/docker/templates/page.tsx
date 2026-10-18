@@ -1,3 +1,6 @@
+import { readableQueryData, writeOutcomeUnknown } from '@/utils/query-feedback'
+import { ReadFeedback } from '@/components/request-feedback'
+import { ComputeOperationFeedback, ComputeMutationFeedback } from '@/features/compute'
 import { useState } from 'react'
 import {
   App,
@@ -88,7 +91,11 @@ function TemplatesTable() {
       refreshDocker(queryClient)
     },
   })
-  const page = normalizePage(templatesQuery.data, filters.page ?? 1, filters.pageSize ?? 15)
+  const page = normalizePage(
+    readableQueryData(templatesQuery),
+    filters.page ?? 1,
+    filters.pageSize ?? 15,
+  )
   const columns: ColumnsType<DockerTemplate> = [
     {
       title: localeText(localeCode, '模板', 'Template'),
@@ -142,6 +149,9 @@ function TemplatesTable() {
                 tooltip={localeText(localeCode, '编辑', 'Edit')}
                 icon={<EditOutlined />}
                 onClick={() => {
+                  if (saveMutation.isPending) return
+                  if (!writeOutcomeUnknown(saveMutation.error)) saveMutation.reset()
+                  form.resetFields()
                   setEditing(record)
                   form.setFieldsValue(record)
                   setDrawerOpen(true)
@@ -214,7 +224,44 @@ function TemplatesTable() {
           </ManagementQueryField>
         </ManagementQueryPanel>
       </div>
+      <ReadFeedback
+        query={templatesQuery}
+        label={localeText(localeCode, '部署模板', 'Deployment templates')}
+      />
+      <ComputeMutationFeedback
+        operations={[
+          {
+            label: localeText(localeCode, '保存模板', 'Save template'),
+            mutation: saveMutation,
+            target: saveMutation.variables?.name,
+            receipt: {
+              message: localeText(
+                localeCode,
+                '部署模板记录已保存',
+                'Deployment template record saved',
+              ),
+            },
+          },
+          {
+            label: localeText(localeCode, '删除模板', 'Delete template'),
+            mutation: deleteMutation,
+            target: deleteMutation.variables,
+            receipt: {
+              message: localeText(
+                localeCode,
+                '部署模板记录已删除',
+                'Deployment template record deleted',
+              ),
+            },
+          },
+        ]}
+      />
       <DockerAdminTable
+        empty={
+          templatesQuery.isError
+            ? localeText(localeCode, '数据读取失败，请先重试', 'Read failed; retry first')
+            : undefined
+        }
         rowKey="id"
         loading={templatesQuery.isLoading}
         dataSource={page.items}
@@ -228,6 +275,9 @@ function TemplatesTable() {
                 type="primary"
                 icon={<PlusOutlined />}
                 onClick={() => {
+                  if (saveMutation.isPending) return
+                  if (!writeOutcomeUnknown(saveMutation.error)) saveMutation.reset()
+                  form.resetFields()
                   setEditing(null)
                   form.setFieldsValue({
                     templateKind: 'compose',
@@ -252,7 +302,9 @@ function TemplatesTable() {
             : localeText(localeCode, '新增模板', 'Add template')
         }
         open={drawerOpen}
-        onCancel={() => setDrawerOpen(false)}
+        onCancel={() => {
+          if (!saveMutation.isPending) setDrawerOpen(false)
+        }}
         onOk={() => form.submit()}
         confirmLoading={saveMutation.isPending}
         okText={localeText(localeCode, '保存', 'Save')}
@@ -263,6 +315,12 @@ function TemplatesTable() {
         style={{ top: 32 }}
         styles={{ body: { ...scrollableModalBodyStyle, maxHeight: 'calc(100dvh - 180px)' } }}
       >
+        <ComputeOperationFeedback
+          label={localeText(localeCode, '保存模板', 'Save record')}
+          pending={saveMutation.isPending}
+          error={saveMutation.error}
+          target={saveMutation.variables?.name}
+        />
         <Form<DockerTemplateInput>
           form={form}
           layout="vertical"

@@ -1,14 +1,18 @@
-import '../observability-pages.css'
+import { operationModalStyles } from '@/components/modal-styles'
+import { ReadFeedback } from '@/components/request-feedback'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import { UploadOutlined } from '@ant-design/icons'
 import type {
   ObservabilityDashboardImportResult,
   ObservabilityGrafanaDashboardImportInput,
 } from '@opensoha/contracts/gen/ts/sohaapi'
-import { UploadOutlined } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, App, Button, Modal, Segmented, Select, Space, Typography, Upload } from 'antd'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { UploadFile } from 'antd'
-import { useEffect, useState } from 'react'
+import { Alert, App, Button, Modal, Segmented, Select, Space, Typography, Upload } from 'antd'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import '../observability-pages.css'
 import { observabilityDashboardMutations } from './mutations'
 import { observabilityDashboardQueries } from './queries'
 import { dashboardTemplateJSON, dashboardTemplates } from './templates'
@@ -24,7 +28,7 @@ export function ImportDashboardModal({
   onOpenChange: (open: boolean) => void
   open: boolean
 }) {
-  const { message, notification } = App.useApp()
+  const { message } = App.useApp()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [fileList, setFileList] = useState<UploadFile[]>([])
@@ -35,7 +39,7 @@ export function ImportDashboardModal({
     ...observabilityDashboardQueries.metricDataSources(),
     enabled: open,
   })
-  const dataSources = dataSourcesQuery.data ?? []
+  const dataSources = readableQueryData(dataSourcesQuery) ?? []
 
   useEffect(() => {
     if (open && !dataSourceId && dataSources.length === 1) {
@@ -49,44 +53,61 @@ export function ImportDashboardModal({
     setSourceMode('template')
     setTemplateKey('kubernetes-workloads')
   }
-  const importMutation = useMutation({
-    ...observabilityDashboardMutations.import(queryClient),
-    onError: (error) => message.error(error.message),
-    onSuccess: (result) => {
-      message.success(`已导入 ${result.importedPanelCount} 个面板`)
-      if (result.warnings.length > 0) {
-        notification.warning({
-          title: '部分内容未导入',
-          description: result.warnings
-            .slice(0, 4)
-            .map((warning) => warning.message)
-            .join('；'),
-        })
-      }
-      reset()
-      onOpenChange(false)
-      onImported(result)
-    },
+  const preparingRef = useRef(false)
+  const [preparing, setPreparing] = useState(false)
+  const importMutation = useOperationMutation(observabilityDashboardMutations.import(queryClient), {
+    label: ['导入仪表盘', 'Import dashboard'],
+    target: (input) => input.dataSourceId,
+    receipt: (result) => ({
+      message: `已导入 ${result.importedPanelCount} 个面板`,
+      evidence: result.dashboard.id,
+    }),
   })
-
+  const blocked = preparing || importMutation.blocked
+  function close() {
+    if (preparingRef.current || importMutation.blocked) return
+    reset()
+    onOpenChange(false)
+  }
   async function submit() {
-    if (!dataSourceId) return
-    let json = dashboardTemplateJSON(templateKey)
-    if (sourceMode === 'json') {
-      const file = fileList[0]?.originFileObj
-      if (!file) return
-      if (file.size > maxDashboardBytes) {
-        message.error('JSON 文件不能超过 2 MiB')
-        return
+    if (
+      preparingRef.current ||
+      importMutation.blocked ||
+      !dataSourceId ||
+      !dataSources.some((item) => item.id === dataSourceId)
+    )
+      return
+    preparingRef.current = true
+    setPreparing(true)
+    try {
+      let json = dashboardTemplateJSON(templateKey)
+      if (sourceMode === 'json') {
+        const file = fileList[0]?.originFileObj
+        if (!file) return
+        if (file.size > maxDashboardBytes) {
+          message.error('JSON 文件不能超过 2 MiB')
+          return
+        }
+        try {
+          json = await file.text()
+        } catch {
+          message.error('无法读取 JSON 文件')
+          return
+        }
       }
-      json = await file.text()
+      if (!json) return
+      const input: ObservabilityGrafanaDashboardImportInput = { json, dataSourceId }
+      importMutation.mutate(input, {
+        onSuccess: (result) => {
+          reset()
+          onOpenChange(false)
+          onImported(result)
+        },
+      })
+    } finally {
+      preparingRef.current = false
+      setPreparing(false)
     }
-    if (!json) return
-    const input: ObservabilityGrafanaDashboardImportInput = {
-      json,
-      dataSourceId,
-    }
-    importMutation.mutate(input)
   }
 
   return (
@@ -97,25 +118,33 @@ export function ImportDashboardModal({
         body: 'soha-observability-modal-body',
         header: 'soha-observability-modal-header',
       }}
+      styles={operationModalStyles}
+      closable={!blocked}
+      keyboard={!blocked}
+      mask={{ closable: false }}
+      cancelButtonProps={{ disabled: blocked }}
       destroyOnHidden
       open={open}
       title="添加仪表盘"
       okText="添加"
       cancelText="取消"
-      confirmLoading={importMutation.isPending}
+      confirmLoading={preparing || importMutation.isPending}
       okButtonProps={{
+        'aria-label': '添加仪表盘',
         disabled:
+          blocked ||
+          queryAccessDenied(dataSourcesQuery) ||
           !dataSourceId ||
           (sourceMode === 'template' ? !dashboardTemplateJSON(templateKey) : fileList.length === 0),
       }}
-      onCancel={() => {
-        reset()
-        onOpenChange(false)
-      }}
+      onCancel={close}
       onOk={submit}
     >
+      <ReadFeedback label="指标数据源" query={dataSourcesQuery} />
+      {importMutation.feedback}
       <Space className="soha-dashboard-import-fields" orientation="vertical" size={16}>
         <Segmented
+          disabled={blocked}
           block
           options={[
             { label: 'Soha 模板', value: 'template' },
@@ -149,6 +178,7 @@ export function ImportDashboardModal({
           <Select
             allowClear
             className="soha-dashboard-import-control"
+            disabled={blocked}
             loading={dataSourcesQuery.isLoading}
             options={dataSources.map((item) => ({ label: item.name, value: item.id }))}
             placeholder="选择数据源"
@@ -160,6 +190,7 @@ export function ImportDashboardModal({
           <Space className="soha-dashboard-import-field" orientation="vertical" size={6}>
             <Typography.Text strong>模板</Typography.Text>
             <Select
+              disabled={blocked}
               className="soha-dashboard-import-control"
               options={dashboardTemplates.map((item) => ({
                 disabled: !item.available,
@@ -178,6 +209,7 @@ export function ImportDashboardModal({
           <Space className="soha-dashboard-import-field" orientation="vertical" size={6}>
             <Typography.Text strong>Grafana JSON</Typography.Text>
             <Upload
+              disabled={blocked}
               accept="application/json,.json"
               beforeUpload={() => false}
               fileList={fileList}

@@ -1,8 +1,10 @@
-import { DeleteOutlined, PlusOutlined, SendOutlined } from '@ant-design/icons'
-import { useMutation } from '@tanstack/react-query'
-import { Alert, App, Button, Descriptions, Drawer, Form, Input, Space, Typography } from 'antd'
 import { ManagementIconButton } from '@/components/management-list'
+import { useOperationMutation } from '@/components/use-operation-mutation'
 import { SecretRefSelect } from '@/features/secrets'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import { DeleteOutlined, PlusOutlined, SendOutlined } from '@ant-design/icons'
+import { Alert, App, Button, Descriptions, Drawer, Form, Input, Space, Typography } from 'antd'
+import { useEffect } from 'react'
 import { invokeGatewayTool, type GatewayToolInvocationValues } from './mutations'
 import { stringifyPayload, type GatewayTool } from './types'
 
@@ -19,28 +21,38 @@ export function GatewayToolInvokeDrawer({
   skillId?: string
   tool?: GatewayTool
 }) {
-  const { message, modal } = App.useApp()
+  const { modal } = App.useApp()
   const [form] = Form.useForm<GatewayToolInvocationValues>()
-  const mutation = useMutation({
-    mutationFn: (values: GatewayToolInvocationValues) =>
-      invokeGatewayTool({
-        toolName: tool?.name ?? '',
-        capabilityVersion: tool?.version,
-        values,
-        aiClientId,
-        skillId,
-      }),
-    onSuccess: (response) => message.success(response.data.result),
-    onError: (error: Error) => message.error(error.message),
-  })
+  const mutation = useOperationMutation(
+    {
+      mutationFn: (values: GatewayToolInvocationValues) =>
+        invokeGatewayTool({
+          toolName: tool?.name ?? '',
+          capabilityVersion: tool?.version,
+          values,
+          aiClientId,
+          skillId,
+        }),
+    },
+    {
+      label: ['调用 Gateway 工具', 'Invoke Gateway tool'],
+      target: () => tool?.name || '当前工具',
+      receipt: (result) => ({ message: '工具调用请求已返回', evidence: result.data.result }),
+    },
+  )
+  useEffect(() => {
+    if (queryAccessDenied(mutation)) form.resetFields()
+  }, [mutation.error, form])
 
   const close = () => {
+    if (mutation.blocked) return
     mutation.reset()
     form.resetFields()
     onClose()
   }
 
   const submit = async () => {
+    if (mutation.blocked) return
     let values: GatewayToolInvocationValues
     try {
       values = await form.validateFields()
@@ -57,7 +69,7 @@ export function GatewayToolInvokeDrawer({
         title: `提交 ${tool.name}？`,
         content: `Risk: ${tool.riskLevel}`,
         okText: '提交',
-        onOk: () => mutation.mutateAsync(values),
+        onOk: () => mutation.mutateAsync(values).catch(() => undefined),
       })
       return
     }
@@ -69,13 +81,19 @@ export function GatewayToolInvokeDrawer({
       destroyOnHidden
       size={640}
       open={Boolean(tool)}
+      closable={!mutation.blocked}
+      keyboard={!mutation.blocked}
+      mask={{ closable: !mutation.blocked }}
       title={tool?.name}
       onClose={close}
       extra={
         <Space>
-          <Button onClick={close}>取消</Button>
+          <Button disabled={mutation.blocked} onClick={close}>
+            取消
+          </Button>
           <Button
             type="primary"
+            disabled={mutation.blocked}
             icon={<SendOutlined />}
             loading={mutation.isPending}
             onClick={() => void submit()}
@@ -85,6 +103,7 @@ export function GatewayToolInvokeDrawer({
         </Space>
       }
     >
+      {mutation.feedback}
       {tool ? (
         <Space orientation="vertical" size={16} style={{ width: '100%' }}>
           <Descriptions
@@ -102,6 +121,7 @@ export function GatewayToolInvokeDrawer({
             ]}
           />
           <Form
+            disabled={mutation.blocked}
             form={form}
             layout="vertical"
             preserve={false}
@@ -135,6 +155,7 @@ export function GatewayToolInvokeDrawer({
                       </Form.Item>
                       <ManagementIconButton
                         danger
+                        disabled={mutation.blocked}
                         aria-label="删除 Secret reference"
                         tooltip="删除"
                         icon={<DeleteOutlined />}
@@ -142,7 +163,12 @@ export function GatewayToolInvokeDrawer({
                       />
                     </Space>
                   ))}
-                  <Button type="dashed" icon={<PlusOutlined />} onClick={() => add()}>
+                  <Button
+                    disabled={mutation.blocked}
+                    type="dashed"
+                    icon={<PlusOutlined />}
+                    onClick={() => add()}
+                  >
                     添加 Secret reference
                   </Button>
                 </Space>
@@ -155,11 +181,13 @@ export function GatewayToolInvokeDrawer({
               <pre className="soha-system-json-block">{stringifyPayload(tool.inputSchema)}</pre>
             </details>
           ) : null}
-          {mutation.data ? (
+          {!queryAccessDenied(mutation) && readableQueryData(mutation) ? (
             <Space orientation="vertical" size={8} style={{ width: '100%' }}>
-              <Alert type="success" showIcon title={mutation.data.data.result} />
-              <Text code>{mutation.data.data.toolName}</Text>
-              <pre className="soha-system-json-block">{stringifyPayload(mutation.data.data)}</pre>
+              <Alert type="success" showIcon title={readableQueryData(mutation)?.data.result} />
+              <Text code>{readableQueryData(mutation)?.data.toolName}</Text>
+              <pre className="soha-system-json-block">
+                {stringifyPayload(readableQueryData(mutation)?.data)}
+              </pre>
             </Space>
           ) : null}
         </Space>

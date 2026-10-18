@@ -1,10 +1,13 @@
+import type { FormInstance } from 'antd'
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { FormInstance } from 'antd'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { StepFormModal } from './step-form-modal'
 
 const lifecycle = vi.hoisted(() => ({
+  cancel: undefined as (() => void) | undefined,
+  closable: undefined as boolean | undefined,
+  keyboard: undefined as boolean | undefined,
   bodyClassName: undefined as string | undefined,
   bodyStyle: undefined as Record<string, unknown> | undefined,
   centered: undefined as boolean | undefined,
@@ -20,6 +23,9 @@ const lifecycle = vi.hoisted(() => ({
 vi.mock('antd', () => ({
   Modal: ({
     children,
+    closable,
+    keyboard,
+    onCancel,
     centered,
     classNames,
     destroyOnHidden,
@@ -27,6 +33,9 @@ vi.mock('antd', () => ({
     styles,
     title,
   }: {
+    closable?: boolean
+    keyboard?: boolean
+    onCancel?: () => void
     children?: ReactNode
     centered?: boolean
     classNames?: { body?: string }
@@ -35,6 +44,9 @@ vi.mock('antd', () => ({
     styles?: { body?: Record<string, unknown>; title?: Record<string, unknown> }
     title?: ReactNode
   }) => {
+    lifecycle.cancel = onCancel
+    lifecycle.closable = closable
+    lifecycle.keyboard = keyboard
     lifecycle.bodyClassName = classNames?.body
     lifecycle.bodyStyle = styles?.body
     lifecycle.centered = centered
@@ -109,9 +121,32 @@ describe('StepFormModal lifecycle', () => {
     expect(lifecycle.titleStyle).toBeUndefined()
   })
 
+  it('blocks every modal close path only when explicitly requested', () => {
+    const onClose = vi.fn()
+    renderToStaticMarkup(
+      <StepFormModal closeDisabled onClose={onClose} open title="Pending">
+        <span>Review</span>
+      </StepFormModal>,
+    )
+    expect(lifecycle.closable).toBe(false)
+    expect(lifecycle.keyboard).toBe(false)
+    lifecycle.cancel?.()
+    expect(onClose).not.toHaveBeenCalled()
+    renderToStaticMarkup(
+      <StepFormModal onClose={onClose} open title="Read only">
+        <span>View</span>
+      </StepFormModal>,
+    )
+    expect(lifecycle.closable).toBe(true)
+    expect(lifecycle.keyboard).toBe(true)
+    lifecycle.cancel?.()
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+
   it('hosts an existing StepForm without rendering a second form', () => {
     const html = renderToStaticMarkup(
       <StepFormModal
+        feedback={<span>request failure persists here</span>}
         bodyClassName="feature-step-form"
         onClose={() => undefined}
         open
@@ -122,6 +157,7 @@ describe('StepFormModal lifecycle', () => {
     )
 
     expect(html).toContain('existing step form')
+    expect(html).toContain('request failure persists here')
     expect(lifecycle.contentMaxWidth).toBeUndefined()
     expect(lifecycle.bodyClassName).toBe('soha-step-form-modal__body feature-step-form')
     expect(lifecycle.title).toBe('Composed form')

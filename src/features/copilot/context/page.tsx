@@ -1,7 +1,11 @@
-import { BugOutlined } from '@ant-design/icons'
-import { useMutation, useQuery } from '@tanstack/react-query'
-import { Alert, Button, Card, Form, Input, InputNumber, Select, Space, Typography } from 'antd'
 import { ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import { BugOutlined } from '@ant-design/icons'
+import { useQuery } from '@tanstack/react-query'
+import { Button, Card, Form, Input, InputNumber, Select, Space, Typography } from 'antd'
+import { useEffect } from 'react'
 import { knowledgeQueries } from '../knowledge/queries'
 import { contextMutations } from './mutations'
 import type { ContextInspectInput, ContextInspectorFormValues } from './types'
@@ -11,9 +15,17 @@ const { Text } = Typography
 export function ContextInspectorPage() {
   const [form] = Form.useForm<ContextInspectorFormValues>()
   const basesQuery = useQuery(knowledgeQueries.bases())
-  const inspectMutation = useMutation(contextMutations.inspect())
-  const bases = basesQuery.data?.data ?? []
+  const inspectMutation = useOperationMutation(contextMutations.inspect(), {
+    label: ['上下文预览', 'Inspect context'],
+    target: () => '当前检查输入',
+    readOnly: true,
+    receipt: () => ({ message: '上下文预览已返回', evidence: '未提交执行任务。' }),
+  })
+  const bases = readableQueryData(basesQuery)?.data ?? []
 
+  useEffect(() => {
+    if (queryAccessDenied(inspectMutation)) form.resetFields()
+  }, [inspectMutation.error, form])
   const inspect = (values: ContextInspectorFormValues) => {
     const knowledgeBaseIds = values.knowledgeBaseIds ?? []
     const input: ContextInspectInput = {
@@ -35,10 +47,13 @@ export function ContextInspectorPage() {
 
   return (
     <div className="soha-page soha-ai-context-inspector">
+      <ReadFeedback label="知识库选项" query={basesQuery} />
       <div className="grid gap-3 xl:grid-cols-[minmax(320px,0.8fr)_minmax(0,1.2fr)]">
         <Card size="small" variant="outlined" title="检查输入">
           <Form
             form={form}
+            disabled={inspectMutation.isPending}
+            onValuesChange={() => inspectMutation.reset()}
             layout="vertical"
             initialValues={{
               mode: 'analysis',
@@ -103,20 +118,15 @@ export function ContextInspectorPage() {
           </Form>
         </Card>
         <Card size="small" variant="outlined" title="Context Envelope">
-          {inspectMutation.isError ? (
-            <Alert
-              type="error"
-              showIcon
-              title="上下文生成失败"
-              description="知识服务不可用、输入无效，或当前身份缺少 Context Inspector 权限。"
-            />
-          ) : inspectMutation.data?.data ? (
+          {inspectMutation.feedback}
+          {inspectMutation.isError ? null : readableQueryData(inspectMutation)?.data ? (
             <Space orientation="vertical" size={12} style={{ width: '100%' }}>
               <Text type="secondary">
-                requestId: {String(inspectMutation.data.data.envelope.requestId || '-')}
+                requestId:{' '}
+                {String(readableQueryData(inspectMutation)?.data.envelope.requestId || '-')}
               </Text>
               <pre className="soha-code-block">
-                {JSON.stringify(inspectMutation.data.data, null, 2)}
+                {JSON.stringify(readableQueryData(inspectMutation)?.data, null, 2)}
               </pre>
             </Space>
           ) : (

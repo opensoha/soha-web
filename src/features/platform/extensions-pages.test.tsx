@@ -8,6 +8,7 @@ import { createRoot } from 'react-dom/client'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { I18nProvider } from '@/i18n'
+import { ApiError } from '@/services/api-error'
 import { CRDApiGroupDetailPage } from './extensions/crds/api-group-detail-page'
 import { CRDPage } from './extensions/crds/list-page'
 import { CRDKindWorkspace } from './extensions/crds/kind-workspace'
@@ -129,6 +130,7 @@ vi.mock('@/components/admin-table', () => ({
     title,
     toolbar,
     toolbarExtra,
+    onRefresh,
   }: {
     columns: Array<Record<string, any>>
     dataSource: Array<Record<string, any>>
@@ -142,8 +144,14 @@ vi.mock('@/components/admin-table', () => ({
     title?: ReactNode
     toolbar?: ReactNode
     toolbarExtra?: ReactNode
+    onRefresh?: () => void
   }) => (
     <div data-testid="admin-table">
+      {onRefresh ? (
+        <button data-testid="refresh-table" onClick={onRefresh}>
+          Refresh table
+        </button>
+      ) : null}
       {error ? <div data-testid="table-error">{error.message}</div> : null}
       {title ? <div data-testid="table-title">{title}</div> : null}
       {headerExtra ? <div data-testid="header-extra">{headerExtra}</div> : null}
@@ -230,7 +238,11 @@ function setNativeInputValue(element: HTMLInputElement | HTMLTextAreaElement, va
   descriptor?.set?.call(element, value)
 }
 
-async function renderWithProviders(node: ReactNode, route = '/extensions') {
+async function renderWithProviders(
+  node: ReactNode,
+  route = '/extensions',
+  suppliedClient?: QueryClient,
+) {
   const container = document.createElement('div')
   document.body.appendChild(container)
   containers.push(container)
@@ -238,13 +250,15 @@ async function renderWithProviders(node: ReactNode, route = '/extensions') {
   const root = createRoot(container)
   roots.push(root)
 
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: false,
+  const queryClient =
+    suppliedClient ??
+    new QueryClient({
+      defaultOptions: {
+        queries: {
+          retry: false,
+        },
       },
-    },
-  })
+    })
 
   await act(async () => {
     root.render(
@@ -705,6 +719,70 @@ describe('CRD catalog page', () => {
       }
     },
   )
+
+  it('hides the selected CRD identity and editor when the resource read is denied', async () => {
+    widgetResponses()
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const container = await renderWithProviders(
+      <CRDKindWorkspace crd={widgetCRD} kinds={[widgetCRD]} onKindSelect={vi.fn()} />,
+      '/extensions',
+      client,
+    )
+    await openInstance(container, 'widget-a')
+    await waitForEditor(container)
+    testState.responses[
+      '/clusters/cluster-a/extensions/crds/widgets.example.io/resources?namespace=team-a&version=v1'
+    ] = new ApiError(403, 'denied')
+    await act(async () => {
+      await client.invalidateQueries({ predicate: (query) => query.queryKey.includes('resources') })
+    })
+    await vi.waitFor(() => {
+      expect(container.textContent).toContain('自定义资源无访问权限')
+      expect(container.querySelector('[data-testid="crd-yaml-editor"]')).toBeNull()
+      expect(container.textContent).not.toContain('complete summary')
+    })
+  })
+
+  it('stops CRD instance refresh and hides old errors when capability disables its query', async () => {
+    widgetResponses()
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const container = await renderWithProviders(
+      <CRDKindWorkspace crd={widgetCRD} kinds={[widgetCRD]} onKindSelect={vi.fn()} />,
+      '/extensions',
+      client,
+    )
+    await vi.waitFor(() => expect(container.textContent).toContain('widget-a'))
+    testState.responses[
+      '/clusters/cluster-a/extensions/crds/widgets.example.io/resources?namespace=team-a&version=v1'
+    ] = new Error('temporary instance read error')
+    await act(async () => {
+      await client.invalidateQueries({ predicate: (query) => query.queryKey.includes('resources') })
+    })
+    await vi.waitFor(() => expect(container.textContent).toContain('temporary instance read error'))
+    testState.responses['/clusters/capabilities'] = [
+      {
+        key: 'custom.resources',
+        direct: { status: 'unsupported' },
+        agent: { status: 'unsupported' },
+      },
+    ]
+    await act(async () => {
+      await client.invalidateQueries({
+        predicate: (query) => query.queryKey.includes('capabilities'),
+      })
+    })
+    await vi.waitFor(() =>
+      expect(container.textContent).not.toContain('temporary instance read error'),
+    )
+    const reads = () =>
+      apiGetMock.mock.calls.filter(([path]) => path.includes('/resources?')).length
+    const before = reads()
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-testid="refresh-table"]')!.click(),
+    )
+    expect(reads()).toBe(before)
+    expect(container.textContent).not.toContain('widget-a')
+  })
 
   it('preserves CRD drafts and the diff baseline, confirms switching, and retries failed updates', async () => {
     window.localStorage.clear()

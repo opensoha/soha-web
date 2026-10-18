@@ -184,6 +184,11 @@ for (const theme of ['light', 'dark'])
       )
       const evidence = await installMocks(context, page, (url, method, request) => {
         const path = url.pathname
+        if (method === 'GET' && /^\/api\/v1\/copilot\/sessions\/[^/]+\/native-request$/.test(path))
+          return {
+            status: 404,
+            body: { error: { code: 'not_found', message: 'No native request receipt' } },
+          }
         if (path === '/api/v1/copilot/assistant/access')
           return { body: { data: { userId: 'user-1', status: 'approved', version: 1 } } }
         if (path === '/api/v1/copilot/assistant/feed')
@@ -563,6 +568,7 @@ for (const theme of ['light', 'dark'])
         await expect(composer).toBeFocused()
         await expect(page.getByRole('textbox', { name: '助手名称', exact: true })).toHaveCount(0)
         expect(assistantName).toBe('Soha')
+        await expect(page.getByRole('button', { name: '返回原草稿', exact: true })).toBeVisible()
         await page.getByRole('button', { name: '返回原草稿', exact: true }).click()
         await expect(composer).toHaveValue('主聊天的独立草稿')
         if (width < 992) await page.getByRole('button', { name: '任务', exact: true }).click()
@@ -784,9 +790,13 @@ for (const theme of ['light', 'dark'])
         })
         expect(drawing).toEqual({ start: 1, end: 0 })
         await page.emulateMedia({ reducedMotion: 'reduce' })
+        await expect(page.locator('html')).toHaveCSS('--soha-motion-duration-mid', '0s')
+        await expect(composer).toHaveValue('主聊天的独立草稿')
         await expect(check).toHaveCSS('animation-name', 'none')
         await expect(check).toHaveCSS('opacity', '1')
         await page.emulateMedia({ reducedMotion: 'no-preference' })
+        await expect(page.locator('html')).not.toHaveCSS('--soha-motion-duration-mid', '0s')
+        await expect(composer).toHaveValue('主聊天的独立草稿')
         await page
           .locator('.soha-ai-rail-actions')
           .getByRole('button', { name: '返回对话', exact: true })

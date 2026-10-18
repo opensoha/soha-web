@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
-import { act, type ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -35,7 +35,10 @@ vi.mock('@/services/api-client', () => ({
 vi.mock('@/stores/platform-scope-store', () => ({
   usePlatformScopeStore: () => testState.scope,
 }))
-vi.mock('@/i18n', () => ({ useI18n: () => ({ localeCode: 'zh_CN' as const }) }))
+vi.mock('@/i18n', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/i18n')>()),
+  useI18n: () => ({ localeCode: 'zh_CN' as const }),
+}))
 vi.mock('@/features/auth', () => ({
   hasAllowedAction: (actions: string[] | undefined, action: string) =>
     actions?.includes(action) ?? false,

@@ -1,3 +1,5 @@
+import { MutationFeedback, ReadFeedback } from '@/components/request-feedback'
+import { readableQueryData, writeOutcomeUnknown } from '@/utils/query-feedback'
 import { useMemo, useState } from 'react'
 import { Button, Col, Form, Input, Modal, Popconfirm, Row, Select, Space, Typography } from 'antd'
 import { MetadataTag } from '@/components/status-tag'
@@ -53,7 +55,7 @@ export function AccessTeamsPage() {
   const canViewLoginSettings = hasPermission(snapshot, 'settings.identity.view')
   const [form] = Form.useForm<Record<string, unknown>>()
   const crud = useAccessResourceCrud({
-    query: accessQueries.teams(),
+    query: accessQueries.teams(canViewGroups),
     create: accessMutations.teams.create(),
     update: accessMutations.teams.update(),
     delete: accessMutations.teams.delete(),
@@ -64,7 +66,8 @@ export function AccessTeamsPage() {
   const loginProvidersQuery = useQuery(
     accessQueries.loginProviders((canCreateGroups || canUpdateGroups) && canViewLoginSettings),
   )
-  const loginProviders = loginProvidersQuery.data ?? []
+  const loginProviders =
+    (canViewLoginSettings ? readableQueryData(loginProvidersQuery) : undefined) ?? []
   const organizationSourceOptions = useMemo(
     () => buildOrganizationSourceOptions(loginProviders),
     [loginProviders],
@@ -147,6 +150,7 @@ export function AccessTeamsPage() {
               {canUpdateGroups ? (
                 <ManagementIconButton
                   aria-label="编辑组织"
+                  disabled={crud.saveBlocked && crud.editing?.id !== record.id}
                   icon={<EditOutlined />}
                   size="small"
                   tooltip="编辑"
@@ -155,11 +159,12 @@ export function AccessTeamsPage() {
               ) : null}
               {canDeleteGroups ? (
                 <Popconfirm
-                  title="确认删除？"
-                  onConfirm={() => crud.deleteMutation.mutate(record.id)}
+                  title={`确认删除 ${record.name}？`}
+                  onConfirm={() => crud.deleteRecord(record.id)}
                 >
                   <ManagementIconButton
                     aria-label="删除组织"
+                    disabled={crud.deleteBlocked}
                     danger
                     icon={<DeleteOutlined />}
                     size="small"
@@ -198,11 +203,20 @@ export function AccessTeamsPage() {
       columns={columns}
       createAction={
         canCreateGroups ? (
-          <Button size="small" icon={<PlusOutlined />} type="primary" onClick={crud.openCreate}>
-            添加组织
+          <Button
+            aria-label={crud.saveBlocked ? '查看待核对草稿' : '添加组织'}
+            disabled={readableQueryData(crud.query) === undefined}
+            size="small"
+            icon={<PlusOutlined />}
+            type="primary"
+            onClick={crud.openCreate}
+          >
+            {crud.saveBlocked ? '查看待核对草稿' : '添加组织'}
           </Button>
         ) : null
       }
+      error={crud.query.error}
+      hasReadData={crud.query.data !== undefined}
       dataSource={filteredTeams}
       rowKey="id"
       loading={crud.isLoading}
@@ -212,9 +226,39 @@ export function AccessTeamsPage() {
       searchKeyword={searchKeyword}
       setSearchKeyword={setSearchKeyword}
     >
+      <ReadFeedback query={loginProvidersQuery} label="组织映射来源" />
+      <MutationFeedback
+        operations={[
+          {
+            mutation: crud.createMutation,
+            label: '创建组织',
+            target: String(crud.createMutation.variables?.name ?? ''),
+            receipt: { message: '组织已创建' },
+          },
+          {
+            mutation: crud.updateMutation,
+            label: '更新组织',
+            target: String(
+              crud.updateMutation.variables?.values.name ?? crud.updateMutation.variables?.id ?? '',
+            ),
+            receipt: { message: '组织已更新' },
+          },
+          {
+            mutation: crud.deleteMutation,
+            label: '删除组织',
+            target: crud.deleteMutation.variables,
+            receipt: { message: '组织已删除' },
+          },
+        ]}
+      />
+      {writeOutcomeUnknown(crud.deleteMutation.error) ? (
+        <Button size="small" onClick={() => void crud.refetch()}>
+          重读组织记录（不会重发删除）
+        </Button>
+      ) : null}
       <Modal
         title={crud.editing ? `编辑组织: ${crud.editing.name}` : '添加组织'}
-        open={crud.modalVisible}
+        open={crud.modalVisible && readableQueryData(crud.query) !== undefined}
         onCancel={crud.closeModal}
         onOk={async () => {
           try {
@@ -237,23 +281,31 @@ export function AccessTeamsPage() {
         okText={crud.editing ? '更新' : '创建'}
         cancelText="取消"
         confirmLoading={crud.isSaving}
-        cancelButtonProps={{ disabled: crud.isSaving }}
+        okButtonProps={{ disabled: crud.saveBlocked || crud.query.isError }}
+        cancelButtonProps={{ disabled: crud.isSaving, 'aria-label': '取消' }}
         closable={{ disabled: crud.isSaving }}
         keyboard={!crud.isSaving}
         styles={accessMutationModalStyles}
         style={{ top: 32, marginTop: 0 }}
         footer={(buttons) => (
-          <AccessMutationFooter error={crud.saveError} saving={crud.isSaving}>
+          <AccessMutationFooter
+            error={crud.saveError}
+            saving={crud.isSaving}
+            target={crud.editing?.name ?? String(crud.createMutation.variables?.name ?? '')}
+            onCheck={() => void crud.refetch()}
+          >
             {buttons}
           </AccessMutationFooter>
         )}
         width={720}
-        destroyOnHidden
+        destroyOnHidden={!crud.saveBlocked}
         mask={{ closable: false }}
       >
+        <ReadFeedback query={crud.query} label="组织目录" />
+        <ReadFeedback query={loginProvidersQuery} label="组织映射来源" />
         <Form
           form={form}
-          disabled={crud.isSaving}
+          disabled={crud.isSaving || crud.saveBlocked || crud.query.isError}
           key={crud.editing?.id ?? 'create-group'}
           layout="vertical"
           initialValues={

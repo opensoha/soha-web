@@ -1,11 +1,13 @@
-import type { ReactNode } from 'react'
-import { Modal } from 'antd'
 import type { FormInstance, FormProps, ModalProps } from 'antd'
+import { Modal } from 'antd'
+import type { ReactNode } from 'react'
 import { scrollableModalBodyStyle } from './modal-styles'
-import { StepForm } from './step-form'
 import type { StepFormStep } from './step-form'
+import { StepForm } from './step-form'
 
 interface StepFormModalBaseProps {
+  closeDisabled?: boolean
+  feedback?: ReactNode
   bodyClassName?: string
   onClose: () => void
   open: boolean
@@ -35,13 +37,18 @@ interface ComposedStepFormModalProps extends StepFormModalBaseProps {
 type StepFormModalProps<Values> = ManagedStepFormModalProps<Values> | ComposedStepFormModalProps
 
 export function StepFormModal<Values>(props: StepFormModalProps<Values>) {
-  const { bodyClassName, onClose, open, title, width = 720 } = props
+  const { bodyClassName, closeDisabled = false, onClose, open, title, width = 720 } = props
+  const close = () => {
+    if (!closeDisabled) onClose()
+  }
   return (
     <Modal
       style={{ top: 32, marginTop: 0 }}
       classNames={{
         body: ['soha-step-form-modal__body', bodyClassName].filter(Boolean).join(' '),
       }}
+      closable={!closeDisabled}
+      keyboard={!closeDisabled}
       destroyOnHidden
       footer={null}
       mask={{ closable: false }}
@@ -59,8 +66,9 @@ export function StepFormModal<Values>(props: StepFormModalProps<Values>) {
       }}
       title={title}
       width={width}
-      onCancel={onClose}
+      onCancel={close}
     >
+      {props.feedback}
       {'children' in props ? (
         props.children
       ) : (
@@ -72,7 +80,7 @@ export function StepFormModal<Values>(props: StepFormModalProps<Values>) {
           initialValues={props.initialValues}
           loading={props.loading}
           name={props.name}
-          onCancel={onClose}
+          onCancel={close}
           onCurrentChange={props.onCurrentChange}
           onFinish={props.onFinish}
           preserve={false}

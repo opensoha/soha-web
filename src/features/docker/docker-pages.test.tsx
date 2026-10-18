@@ -357,7 +357,8 @@ vi.mock('@/features/auth', () => ({
   }),
 }))
 
-vi.mock('@/services/api-client', () => ({
+vi.mock('@/services/api-client', async () => ({
+  ApiError: (await import('@/services/api-error')).ApiError,
   api: {
     get: (path: string) => testState.apiGet(path),
     post: (path: string, body?: unknown) => testState.apiPost(path, body),
@@ -869,6 +870,35 @@ describe('docker pages', () => {
     },
   )
 
+  it('does not carry a rejected template save into a fresh editor', async () => {
+    testState.permissionSnapshot.permissionKeys = [
+      'docker.templates.view',
+      'docker.templates.create',
+    ]
+    testState.apiPost.mockRejectedValueOnce(new Error('template save rejected'))
+    await renderWithProviders(<DockerTemplatesPage />, '/compute/runtimes/templates')
+    await clickButton('新增模板')
+    await changeInput(
+      document.querySelector<HTMLInputElement>('.ant-modal #name'),
+      'template-first',
+    )
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('.ant-modal-footer .ant-btn-primary')?.click()
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    expect(testState.apiPost).toHaveBeenCalledWith(
+      '/docker/templates',
+      expect.objectContaining({ name: 'template-first' }),
+    )
+    expect(document.querySelector('.ant-modal')?.textContent).toContain('template save rejected')
+    await act(async () => document.querySelector<HTMLButtonElement>('.ant-modal-close')?.click())
+    await clickButton('新增模板')
+    expect(document.querySelector('.ant-modal')?.textContent).not.toContain(
+      'template save rejected',
+    )
+    expect(document.querySelector<HTMLInputElement>('.ant-modal #name')?.value).toBe('')
+  })
+
   it('removes the new host when Agent installation command generation fails', async () => {
     testState.apiPost.mockImplementation(async (path: string) => {
       if (path === '/docker/hosts') return { data: { id: 'host-created', name: 'runtime-a' } }
@@ -1241,7 +1271,8 @@ describe('docker pages', () => {
     const tabTexts = Array.from(container.querySelectorAll('.ant-tabs-tab-btn'))
       .map((node) => node.textContent?.trim())
       .filter(Boolean)
-    expect(container.querySelector('.soha-management-detail-header')).toBeNull()
+    expect(container.querySelector('.soha-management-detail-header')).not.toBeNull()
+    expect(tabTexts).toContain('资源关系')
     expect(container.querySelector('.soha-resource-tabs')).not.toBeNull()
     expect(container.querySelector('.soha-workload-detail-tabs')).not.toBeNull()
     expect(tabTexts).toContain('概览')

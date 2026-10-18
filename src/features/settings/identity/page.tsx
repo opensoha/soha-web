@@ -1,4 +1,22 @@
-import { useState } from 'react'
+import {
+  ManagementDensityButton,
+  ManagementIconButton,
+  ManagementRefreshButton,
+  ManagementState,
+  ManagementTableToolbar,
+} from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
+import type { StepFormStep } from '@/components/step-form'
+import { StepFormModal } from '@/components/step-form-modal'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { accessQueries } from '@/features/access/shared/queries'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { identityRuntimeQueries } from '@/features/identity'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import { tableColumnPresets } from '@/utils/table-columns'
+import { DeleteOutlined, EditOutlined, PlusOutlined, StarOutlined } from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TableColumnsType } from 'antd'
 import {
   Alert,
   App,
@@ -16,22 +34,12 @@ import {
   Tag,
   Typography,
 } from 'antd'
-import type { TableColumnsType } from 'antd'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { StepFormStep } from '@/components/step-form'
-import { StepFormModal } from '@/components/step-form-modal'
-import {
-  ManagementDensityButton,
-  ManagementIconButton,
-  ManagementRefreshButton,
-  ManagementState,
-  ManagementTableToolbar,
-} from '@/components/management-list'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
-import { identityRuntimeQueries } from '@/features/identity'
-import { accessQueries } from '@/features/access/shared/queries'
-import { tableColumnPresets } from '@/utils/table-columns'
-import { DeleteOutlined, EditOutlined, PlusOutlined, StarOutlined } from '@ant-design/icons'
+import { useEffect, useState } from 'react'
+import { settingsMutations } from '../mutations'
+import { settingsQueries } from '../queries'
+import { SettingsAdminTable, TagSelect } from '../shared/components'
+import '../shared/styles.css'
+import type { LoginProviderSettings, SaveIdentitySettingsInput, SettingsPageProps } from '../types'
 import {
   applyProviderPreset,
   defaultFrontendRedirectPath,
@@ -40,11 +48,6 @@ import {
   LOGIN_SYNC_MODE_OPTIONS,
   newLoginProviderID,
 } from './model'
-import { settingsMutations } from '../mutations'
-import { settingsQueries } from '../queries'
-import { SettingsAdminTable, TagSelect } from '../shared/components'
-import type { LoginProviderSettings, SaveIdentitySettingsInput, SettingsPageProps } from '../types'
-import '../shared/styles.css'
 
 const { Text } = Typography
 
@@ -57,32 +60,49 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
   const syncOrgsOnLogin = Form.useWatch('syncOrgsOnLogin', providerForm)
   const [providerModalVisible, setProviderModalVisible] = useState(false)
   const [editingProvider, setEditingProvider] = useState<LoginProviderSettings | null>(null)
+  const [newProviderId, setNewProviderId] = useState(newLoginProviderID)
   const [providerStep, setProviderStep] = useState(0)
   const [tableSize, setTableSize] = useState<'small' | 'middle'>('small')
   const canViewLoginSettings = hasPermission(
-    permissionSnapshotQuery.data?.data,
+    readableQueryData(permissionSnapshotQuery)?.data,
     'settings.identity.view',
   )
   const canManageLoginSettings = hasPermission(
-    permissionSnapshotQuery.data?.data,
+    readableQueryData(permissionSnapshotQuery)?.data,
     'settings.identity.update',
   )
-  const canViewRoles = hasPermission(permissionSnapshotQuery.data?.data, 'access.roles.view')
+  const canViewRoles = hasPermission(
+    readableQueryData(permissionSnapshotQuery)?.data,
+    'access.roles.view',
+  )
 
   const identityQuery = useQuery(settingsQueries.identity(canViewLoginSettings))
   const runtimeQuery = useQuery({
     ...identityRuntimeQueries.capabilities(),
     enabled: canViewLoginSettings,
   })
-  const { data, isLoading } = identityQuery
+  const { isLoading } = identityQuery
   const rolesQuery = useQuery(accessQueries.roles(canViewLoginSettings && canViewRoles))
-  const hasQueryError =
-    permissionSnapshotQuery.isError ||
-    identityQuery.isError ||
-    runtimeQuery.isError ||
-    (canViewRoles && rolesQuery.isError)
-  const saveMutation = useMutation(settingsMutations.identity.save(queryClient))
-  const saveIdentity = (input: SaveIdentitySettingsInput) =>
+  const saveMutation = useOperationMutation(settingsMutations.identity.save(queryClient), {
+    label: ['保存登录设置', 'Save login settings'],
+    target: () => '登录设置',
+    receipt: (_, input) => ({
+      message: input.successMessage || '登录设置已保存',
+      evidence: '以实际登录和运行能力为准。',
+    }),
+  })
+  const settings = canViewLoginSettings ? readableQueryData(identityQuery) : undefined
+  const blocked = saveMutation.blocked || queryAccessDenied(saveMutation) || !settings
+  const denied =
+    !canViewLoginSettings || queryAccessDenied(identityQuery) || queryAccessDenied(saveMutation)
+  useEffect(() => {
+    if (!denied) return
+    providerForm.resetFields()
+    setProviderModalVisible(false)
+    setEditingProvider(null)
+  }, [denied, providerForm])
+  const saveIdentity = (input: SaveIdentitySettingsInput, onSuccess?: () => void) => {
+    if (blocked || !canManageLoginSettings) return
     saveMutation.mutate(
       {
         ...input,
@@ -91,24 +111,21 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
           ...input.values,
         },
       },
-      {
-        onSuccess: () => void message.success(input.successMessage || '登录设置已保存'),
-        onError: (err) => void message.error(err.message),
-      },
+      { onSuccess },
     )
+  }
 
-  const settings = data
   const providers = settings?.providers ?? []
-  const samlAvailable = runtimeQuery.data?.samlLoginSource?.available === true
+  const samlAvailable = readableQueryData(runtimeQuery)?.samlLoginSource?.available === true
   const providerTypeOptions = LOGIN_PROVIDER_TYPE_OPTIONS.filter(
     (item) => item.value !== 'saml' || samlAvailable || editingProvider?.type === 'saml',
   ).map((item) => (item.value === 'saml' && !samlAvailable ? { ...item, disabled: true } : item))
-  const roleOptions = (canViewRoles ? (rolesQuery.data ?? []) : []).map((role) => ({
+  const roleOptions = (canViewRoles ? (readableQueryData(rolesQuery) ?? []) : []).map((role) => ({
     value: role.id,
     label: role.name || role.id,
   }))
   const providerInitialType = editingProvider?.type || 'oidc'
-  const providerInitialID = editingProvider?.id || newLoginProviderID()
+  const providerInitialID = editingProvider?.id || newProviderId
   const providerInitialValues = applyProviderPreset(providerInitialType, {
     ...editingProvider,
     id: providerInitialID,
@@ -124,29 +141,12 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
     )
   }
 
-  if (hasQueryError) {
+  if (!settings && canViewLoginSettings)
     return (
       <div className="soha-page">
-        <ManagementState
-          kind="error"
-          actions={
-            <Button
-              onClick={() => {
-                void permissionSnapshotQuery.refetch()
-                if (canViewLoginSettings) {
-                  void identityQuery.refetch()
-                  void runtimeQuery.refetch()
-                  if (canViewRoles) void rolesQuery.refetch()
-                }
-              }}
-            >
-              重试
-            </Button>
-          }
-        />
+        <ReadFeedback query={identityQuery} label="登录设置" />
       </div>
     )
-  }
 
   if (!canViewLoginSettings) {
     return (
@@ -210,9 +210,7 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
           checked={value}
           aria-label={`启用 ${record.name}`}
           disabled={
-            !canManageLoginSettings ||
-            saveMutation.isPending ||
-            (record.type === 'saml' && !samlAvailable)
+            !canManageLoginSettings || blocked || (record.type === 'saml' && !samlAvailable)
           }
           loading={saveMutation.isPending}
           size="small"
@@ -248,7 +246,10 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
               tooltip="编辑"
               icon={<EditOutlined />}
               size="small"
+              disabled={blocked}
               onClick={() => {
+                providerForm.resetFields()
+                saveMutation.reset()
                 setEditingProvider(record)
                 setProviderStep(0)
                 setProviderModalVisible(true)
@@ -257,7 +258,8 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
             <Popconfirm
               title="确认删除登录源？"
               description="删除后会立即保存；已有账号不会被禁用，关联记录保留，但该入口不可再登录。"
-              okButtonProps={{ danger: true, loading: saveMutation.isPending }}
+              disabled={blocked}
+              okButtonProps={{ danger: true, loading: saveMutation.isPending, disabled: blocked }}
               onConfirm={() => {
                 const nextProviders = providers.filter((item) => item.id !== record.id)
                 saveIdentity({
@@ -275,6 +277,7 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
               <ManagementIconButton
                 aria-label="删除登录源"
                 tooltip="删除"
+                disabled={blocked}
                 danger
                 icon={<DeleteOutlined />}
                 loading={saveMutation.isPending}
@@ -295,7 +298,7 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
                     },
                   })
                 }
-                disabled={record.type === 'saml' && !samlAvailable}
+                disabled={blocked || (record.type === 'saml' && !samlAvailable)}
               />
             ) : null}
           </Space>
@@ -395,7 +398,7 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
                       description={
                         samlAvailable
                           ? '此登录源将使用服务端 SAML SP runtime。'
-                          : runtimeQuery.data?.samlLoginSource?.reason ||
+                          : readableQueryData(runtimeQuery)?.samlLoginSource?.reason ||
                             '服务端尚未提供 SAML 登录运行时，历史配置仅可查看。'
                       }
                     />
@@ -557,6 +560,15 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
   ]
   const content = (
     <div className="soha-settings-table-section">
+      <ReadFeedback query={permissionSnapshotQuery} label="权限" />
+      <ReadFeedback query={identityQuery} label="登录设置" canRead={canViewLoginSettings} />
+      <ReadFeedback query={runtimeQuery} label="登录运行能力" canRead={canViewLoginSettings} />
+      <ReadFeedback
+        query={rolesQuery}
+        label="可选角色"
+        canRead={canViewLoginSettings && canViewRoles}
+      />
+      {!providerModalVisible ? saveMutation.feedback : null}
       <SettingsAdminTable
         columnSettingPlacement="toolbar"
         toolbarExtra={
@@ -566,7 +578,7 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
                 size="small"
                 checked={settings?.localPasswordLoginEnabled ?? true}
                 aria-label="本地账号密码登录"
-                disabled={!canManageLoginSettings || saveMutation.isPending}
+                disabled={!canManageLoginSettings || blocked}
                 loading={saveMutation.isPending}
                 onChange={(checked) =>
                   saveIdentity({
@@ -586,7 +598,11 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
                 icon={<PlusOutlined />}
                 size="small"
                 type="primary"
+                disabled={blocked}
                 onClick={() => {
+                  providerForm.resetFields()
+                  saveMutation.reset()
+                  setNewProviderId(newLoginProviderID())
                   setEditingProvider(null)
                   setProviderStep(0)
                   setProviderModalVisible(true)
@@ -627,13 +643,16 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
         }
       />
       <StepFormModal
+        closeDisabled={blocked}
         key={editingProvider?.id || 'new-login-provider'}
         contentMaxWidth={680}
         current={providerStep}
         form={providerForm}
         initialValues={providerInitialValues}
         loading={saveMutation.isPending}
-        open={providerModalVisible}
+        disabled={blocked}
+        feedback={saveMutation.feedback}
+        open={providerModalVisible && !denied}
         onClose={() => {
           setProviderModalVisible(false)
           setEditingProvider(null)
@@ -641,13 +660,13 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
         }}
         onCurrentChange={setProviderStep}
         onFinish={(values) => {
-          if (!canManageLoginSettings) return
+          if (!canManageLoginSettings || blocked) return
           const sourceType = String(values.type || 'oidc')
           if (sourceType === 'saml' && !samlAvailable) {
             void message.error('SAML Runtime 不可用，无法启用或保存该登录源')
             return
           }
-          const sourceID = String(values.id || editingProvider?.id || newLoginProviderID()).trim()
+          const sourceID = String(values.id || editingProvider?.id || newProviderId).trim()
           const nextProvider = applyProviderPreset(sourceType, {
             ...values,
             id: sourceID,
@@ -663,16 +682,21 @@ export function LoginSettingsPage({ embedded = false }: SettingsPageProps = {}) 
           } else {
             nextProviders.push(nextProvider)
           }
-          saveIdentity({
-            values: {
-              providers: nextProviders,
-              defaultProviderId: settings?.defaultProviderId || nextProvider.id,
+          saveIdentity(
+            {
+              values: {
+                providers: nextProviders,
+                defaultProviderId: settings?.defaultProviderId || nextProvider.id,
+              },
+              successMessage: editingProvider ? '登录源已保存' : '登录源已新增',
             },
-            successMessage: editingProvider ? '登录源已保存' : '登录源已新增',
-          })
-          setProviderModalVisible(false)
-          setEditingProvider(null)
-          setProviderStep(0)
+            () => {
+              providerForm.resetFields()
+              setProviderModalVisible(false)
+              setEditingProvider(null)
+              setProviderStep(0)
+            },
+          )
         }}
         steps={providerSteps}
         title={editingProvider ? '编辑登录源' : '新增登录源'}

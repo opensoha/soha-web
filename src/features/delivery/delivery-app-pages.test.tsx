@@ -17,6 +17,7 @@ import { useAuthStore } from '@/stores/auth-store'
 import { usePreferencesStore } from '@/stores/preferences-store'
 import { ApplicationsPage } from './applications/list-page'
 import { ExecutionTasksPage } from './execution-tasks/list-page'
+import { ApiError } from '@/services/api-error'
 import { ReleaseBundlesPage } from './release-bundles/list-page'
 import { ReleasesPage } from './releases/list-page'
 import { runtimeEvidencePath } from './template-usage-runtime-links'
@@ -2147,6 +2148,56 @@ describe('ApplicationsPage workspace layout', () => {
     expect(testState.apiGet).not.toHaveBeenCalledWith('/builds?limit=200')
   })
 
+  it.each([401, 403, 503])(
+    'keeps history evidence only for transient read failures (HTTP %s)',
+    async (status) => {
+      const view = await renderWithProviders(<ExecutionHistoryPage />, '/execution-history')
+      expect(view.textContent).toContain('build-release-main')
+      testState.apiGet.mockRejectedValueOnce(
+        new ApiError(status, 'history read rejected', {
+          method: 'GET',
+          requestId: 'req-history-read',
+        }),
+      )
+      await clickButton(findButton(view, '刷新执行记录'))
+      await waitForText(view, 'req-history-read')
+      if (status === 503) {
+        expect(view.textContent).toContain('build-release-main')
+        expect(view.textContent).toContain('上次读取结果')
+      } else expect(view.textContent).not.toContain('build-release-main')
+    },
+  )
+
+  it('keeps an unknown history approval on its original workflow and blocks a second decision', async () => {
+    testState.permissionSnapshot.permissionKeys = [
+      ...defaultPermissionKeys,
+      'delivery.application-environments.approve',
+    ]
+    const view = await renderWithProviders(<ExecutionHistoryPage />, '/execution-history')
+    testState.apiPost.mockRejectedValueOnce(
+      new ApiError(503, 'history approval response lost', {
+        method: 'POST',
+        requestId: 'req-history-approval',
+      }),
+    )
+    await clickButton(
+      view.querySelector<HTMLButtonElement>('[aria-label="批准工作流 deploy-prod"]')!,
+    )
+    await clickButton(
+      document.querySelector<HTMLButtonElement>('.ant-popconfirm-buttons .ant-btn-primary')!,
+    )
+    await waitForText(view, '请求结果不明')
+    expect(view.querySelector('.soha-operation-feedback')?.textContent).toContain('workflow-1')
+    expect(view.textContent).toContain('req-history-approval')
+    await clickButton(findButton(view, '刷新执行记录'))
+    expect(
+      view.querySelector<HTMLButtonElement>('[aria-label="批准工作流 deploy-prod"]')?.disabled,
+    ).toBe(true)
+    expect(testState.apiPost.mock.calls.filter(([path]) => path.endsWith('/approve'))).toHaveLength(
+      1,
+    )
+  })
+
   it('renders permission-scoped workflow runs as a release card board', async () => {
     testState.permissionSnapshot.permissionKeys = [
       ...defaultPermissionKeys,
@@ -2273,11 +2324,11 @@ describe('ApplicationsPage workspace layout', () => {
     testState.workflowsError = true
     const failed = await renderWithProviders(<ExecutionHistoryPage />, '/execution-history')
 
-    expect(failed.textContent).toContain('执行记录加载失败')
+    expect(failed.textContent).toContain('执行记录读取失败')
     expect(failed.textContent).not.toContain('暂无匹配的执行记录')
 
     testState.workflowsError = false
-    await clickButton(failed.querySelector('[aria-label="重试执行记录"]') as HTMLButtonElement)
+    await clickButton(failed.querySelector('[aria-label="重试读取执行记录"]') as HTMLButtonElement)
     expect(failed.textContent).toContain('build-release-main')
 
     testState.workflowsEmpty = true
@@ -2319,6 +2370,80 @@ describe('ApplicationsPage workspace layout', () => {
     expect(container.querySelectorAll('.soha-overview-metric-card')).toHaveLength(4)
     expect(container.querySelector('.soha-application-signal-card')).toBeNull()
   })
+
+  it.each([
+    { error: new ApiError(409, 'retry rejected', { method: 'POST' }), unknown: false },
+    { error: new ApiError(503, 'retry response lost', { method: 'POST' }), unknown: true },
+  ])(
+    'keeps retry feedback on its submitted task (unknown=$unknown)',
+    async ({ error, unknown }) => {
+      testState.permissionSnapshot.permissionKeys.push('delivery.execution-tasks.retry')
+      testState.apiPost.mockRejectedValueOnce(error)
+      const container = await renderWithProviders(
+        <ExecutionTasksPage />,
+        '/delivery/execution-tasks',
+      )
+      await clickButton(container.querySelector<HTMLButtonElement>('[aria-label="重试执行任务"]')!)
+      await waitForText(container, error.message)
+      const feedback = container.querySelector('.soha-operation-feedback')
+      expect(feedback?.textContent).toContain('task-failed')
+      expect(feedback?.textContent).not.toContain('task-running')
+      expect(feedback?.textContent).toContain(unknown ? '请求结果不明' : '操作请求失败')
+      expect(
+        container.querySelector<HTMLButtonElement>('[aria-label="重试执行任务"]')?.disabled,
+      ).toBe(unknown)
+      expect(testState.apiPost).toHaveBeenCalledWith(
+        '/delivery/execution-tasks/task-failed/retry',
+        expect.objectContaining({ reason: 'Retried from execution tasks console' }),
+      )
+    },
+  )
+
+  it.each([
+    {
+      action: 'cancel',
+      label: '取消执行任务',
+      target: 'task-running',
+      receipt: '取消请求已提交，请核对任务状态',
+    },
+    {
+      action: 'retry',
+      label: '重试执行任务',
+      target: 'task-failed',
+      receipt: '任务已重新入队，请查看执行记录',
+    },
+  ])(
+    'shows one persistent acknowledgement and refreshes task evidence after $action',
+    async ({ action, label, target, receipt }) => {
+      testState.permissionSnapshot.permissionKeys.push(`delivery.execution-tasks.${action}`)
+      testState.apiPost.mockResolvedValueOnce({ data: {} })
+      const container = await renderWithProviders(
+        <ExecutionTasksPage />,
+        '/delivery/execution-tasks',
+      )
+      const reads = testState.apiGet.mock.calls.filter(
+        ([path]) => path === '/delivery/execution-tasks',
+      ).length
+      await clickButton(container.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)!)
+      if (action === 'cancel') {
+        expect(testState.apiPost).not.toHaveBeenCalled()
+        await clickButton(
+          document.querySelector<HTMLButtonElement>('.ant-popconfirm-buttons .ant-btn-primary')!,
+        )
+      }
+      await waitForText(container, receipt)
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      })
+      expect(container.querySelector('.soha-operation-feedback')?.textContent).toContain(receipt)
+      expect(container.querySelector('.soha-operation-feedback')?.textContent).toContain(target)
+      expect(document.querySelector('.ant-message-notice')).toBeNull()
+      expect(testState.apiPost).toHaveBeenCalledTimes(1)
+      expect(
+        testState.apiGet.mock.calls.filter(([path]) => path === '/delivery/execution-tasks').length,
+      ).toBeGreaterThan(reads)
+    },
+  )
 
   it('keeps legacy execution focus without opening a duplicate log modal', async () => {
     const container = await renderWithProviders(

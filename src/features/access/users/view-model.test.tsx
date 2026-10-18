@@ -26,12 +26,25 @@ const user = (id: string, teams: string[]): AccessUser => ({
 
 describe('buildOrganizationUserCounts', () => {
   it('rolls members up through every ancestor', () => {
-    const items = [team('information'), team('foundation', 'information'), team('ops', 'foundation')]
+    const items = [
+      team('information'),
+      team('foundation', 'information'),
+      team('ops', 'foundation'),
+    ]
     const counts = buildOrganizationUserCounts(items, [user('u1', ['ops'])])
     expect(counts.get('information')).toBe(1)
     expect(counts.get('foundation')).toBe(1)
     expect(counts.get('ops')).toBe(1)
     expect(counts.get(ORG_ALL_KEY)).toBe(1)
+  })
+
+  it('counts unassigned users and users with unavailable organizations in the unfiltered scope', () => {
+    const counts = buildOrganizationUserCounts(
+      [team('known')],
+      [user('unassigned', []), user('unknown', ['missing']), user('known', ['known'])],
+    )
+    expect(counts.get(ORG_ALL_KEY)).toBe(3)
+    expect(counts.get('known')).toBe(1)
   })
 
   it('deduplicates a user assigned to multiple descendants of the same parent', () => {

@@ -1,12 +1,13 @@
 /** @vitest-environment jsdom */
 
-import { act, type ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { App as AntdApp } from 'antd'
+import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PluginMarketplacePage } from './marketplace/list-page'
+import { PluginManifestSections } from './shared/manifest-sections'
 
 const apiGetMock = vi.hoisted(() => vi.fn())
 
@@ -144,6 +145,40 @@ async function renderPage(node: ReactNode, route: string) {
 }
 
 describe('plugin list page data boundaries', () => {
+  it('shows complete permission requirements and retains non-property configuration schemas', async () => {
+    const container = await renderPage(
+      <PluginManifestSections
+        manifest={{
+          id: 'qa-plugin',
+          name: 'QA',
+          publisher: 'Soha',
+          version: '1.0.0',
+          type: 'skill',
+          permissions: { required: Array.from({ length: 8 }, (_, i) => `qa.permission.${i}`) },
+          configSchema: { type: 'string', enum: ['one', 'two'] },
+          secrets: {
+            required: [
+              { name: 'optional-token', required: false, description: 'Optional service token' },
+            ],
+          },
+        }}
+      />,
+      '/plugins/marketplace/qa-plugin',
+    )
+    expect(container.textContent).toContain('qa.permission.7')
+    expect(container.textContent).toContain('Optional service token')
+    expect(container.textContent).toContain('可选')
+    const schema = Array.from(container.querySelectorAll('[role="button"]')).find((button) =>
+      button.textContent?.includes('配置 Schema'),
+    )
+    expect(schema).toBeDefined()
+    await act(async () => {
+      ;(schema as HTMLElement).click()
+    })
+    expect(container.querySelector('.soha-plugin-json')?.textContent).toContain('"enum"')
+    expect(container.textContent).not.toContain('未声明配置 Schema')
+  })
+
   it('loads marketplace data through the feature API', async () => {
     apiGetMock.mockImplementation((path: string) => {
       if (path === '/plugins/installed') return Promise.resolve({ data: [] })
@@ -175,6 +210,8 @@ describe('plugin list page data boundaries', () => {
     expect(apiGetMock).toHaveBeenCalledWith('/plugins/marketplace')
     expect(apiGetMock).toHaveBeenCalledWith('/plugins/installed')
     expect(container.textContent).toContain('Marketplace Plugin')
+    expect(container.querySelector('h1')?.textContent).toBe('插件市场')
+    expect(container.querySelector('h2')?.textContent).toBe('Marketplace Plugin')
     expect(container.textContent).not.toContain('alerts.notificationChannels')
     expect(
       container.querySelector('.soha-plugin-market-card-link')?.getAttribute('href'),
@@ -185,6 +222,9 @@ describe('plugin list page data boundaries', () => {
     expect(container.querySelectorAll('.soha-plugin-market-card')).toHaveLength(1)
     expect(container.querySelector('.soha-plugin-market-card-body')).not.toBeNull()
     expect(container.querySelector('.soha-plugin-market-card-actions')).not.toBeNull()
+    expect(
+      container.querySelector('.soha-plugin-market-card-actions button')?.textContent,
+    ).toContain('安装')
   })
 
   it('shows installed plugins through the marketplace page', async () => {
@@ -224,11 +264,11 @@ describe('plugin list page data boundaries', () => {
 
     const container = await renderPage(<PluginMarketplacePage />, '/plugins/marketplace')
 
-    expect(container.textContent).toContain('无法连接插件市场')
-    expect(container.textContent).toContain('请确认本地插件市场已启动')
+    expect(container.textContent).toContain('插件市场读取失败')
+    expect(container.textContent).toContain('network unavailable')
     expect(
       Array.from(container.querySelectorAll('button')).some(
-        (button) => button.textContent === '重试',
+        (button) => button.textContent === '重试读取',
       ),
     ).toBe(true)
   })

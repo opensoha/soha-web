@@ -1,27 +1,34 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
-import { Alert, App, Button, Card, Descriptions, Space, Spin, Tabs } from 'antd'
-import { DiffOutlined, HistoryOutlined, RollbackOutlined } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useParams, useSearchParams } from 'react-router-dom'
 import { AdminTable } from '@/components/admin-table'
-import { OperationalPlanModal } from '@/components/operational-plan-modal'
-import { YamlDraftDiffEditor } from '@/components/yaml-draft-diff-editor'
-import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
 import { ManagementState } from '@/components/management-list'
+import { OperationalPlanModal } from '@/components/operational-plan-modal'
+import { ReadFeedback } from '@/components/request-feedback'
 import { StatusTag } from '@/components/status-tag'
+import { useYamlDraft } from '@/components/use-yaml-draft'
+import { YamlDraftDiffEditor } from '@/components/yaml-draft-diff-editor'
 import { hasAllowedAction, hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useAIPageContext } from '@/features/copilot'
 import { useClusterCapability } from '@/features/platform/cluster-capabilities'
+import '@/features/platform/extensions/styles.css'
+import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
+import {
+  platformResourceTarget,
+  usePlatformMutation,
+} from '@/features/platform/shared/use-platform-mutation'
 import { useI18n } from '@/i18n'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
-import { formatDateTime } from '@/utils/time'
+import { readableQueryData } from '@/utils/query-feedback'
 import { tableColumnPresets } from '@/utils/table-columns'
+import { formatDateTime } from '@/utils/time'
+import { DiffOutlined, HistoryOutlined, RollbackOutlined } from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { TableColumnsType, TabsProps } from 'antd'
-import { helmMutations } from '../mutations'
+import { Alert, Button, Card, Descriptions, Space, Spin, Tabs } from 'antd'
+import { lazy, Suspense, useEffect, useState } from 'react'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { planHelmReleaseRollback } from '../api'
+import { helmMutations } from '../mutations'
 import { helmQueries } from '../queries'
 import type { HelmReleaseHistory, HelmReleaseRollbackVariables, HelmReleaseTarget } from '../types'
-import '@/features/platform/extensions/styles.css'
 
 const HelmReleaseValuesPanel = lazy(async () => {
   const module = await import('./values-panel')
@@ -29,7 +36,6 @@ const HelmReleaseValuesPanel = lazy(async () => {
 })
 
 export function HelmReleaseDetailPage() {
-  const { message } = App.useApp()
   const { t, localeCode } = useI18n()
   const { clusterId, namespace } = usePlatformScopeStore()
   const { releaseName = '' } = useParams()
@@ -45,24 +51,27 @@ export function HelmReleaseDetailPage() {
   const requestedTab =
     searchParams.get('tab') === 'history' || !canViewValues ? 'history' : 'values'
   const [activeTab, setActiveTab] = useState(requestedTab)
-  const [valuesDraft, setValuesDraft] = useState('')
   const [selectedRevision, setSelectedRevision] = useState<string | null>(null)
   const [pendingRollback, setPendingRollback] = useState<HelmReleaseRollbackVariables | null>(null)
   const target: HelmReleaseTarget | null = clusterId
     ? { clusterId, name: releaseName, namespace: detailNamespace }
     : null
   const detailQuery = useQuery(helmQueries.releaseDetail(target))
+  const visibleDetailQueryData = readableQueryData(detailQuery)
   const valuesQuery = useQuery(
     helmQueries.releaseValues(target, canViewValues && activeTab === 'values'),
   )
+  const visibleValuesQueryData = canViewValues ? readableQueryData(valuesQuery) : undefined
   const historyQuery = useQuery(helmQueries.releaseHistory(target, activeTab === 'history'))
+  const visibleHistoryQueryData = readableQueryData(historyQuery)
   const currentManifestQuery = useQuery(
     helmQueries.releaseManifest(
       target,
-      detailQuery.data?.revision,
+      visibleDetailQueryData?.revision,
       activeTab === 'history' && canViewValues && Boolean(selectedRevision),
     ),
   )
+  const visibleCurrentManifestQueryData = readableQueryData(currentManifestQuery)
   const selectedManifestQuery = useQuery(
     helmQueries.releaseManifest(
       target,
@@ -70,9 +79,24 @@ export function HelmReleaseDetailPage() {
       activeTab === 'history' && canViewValues && Boolean(selectedRevision),
     ),
   )
-  const updateMutation = useMutation(helmMutations.updateValues(queryClient))
-  const rollbackPlanMutation = useMutation({ mutationFn: planHelmReleaseRollback })
-  const rollbackMutation = useMutation(helmMutations.rollbackRelease(queryClient))
+  const visibleSelectedManifestQueryData = readableQueryData(selectedManifestQuery)
+  const updateMutation = usePlatformMutation(helmMutations.updateValues(queryClient), {
+    label: ['更新资源', 'Update resource'],
+    target: platformResourceTarget,
+  })
+  const rollbackPlanMutation = usePlatformMutation(
+    { mutationFn: planHelmReleaseRollback },
+    {
+      label: ['Helm 回滚预检', 'Helm rollback preflight'],
+      target: platformResourceTarget,
+      readOnly: true,
+    },
+  )
+  const rollbackMutation = usePlatformMutation(helmMutations.rollbackRelease(queryClient), {
+    label: ['回滚资源', 'Roll back resource'],
+    target: platformResourceTarget,
+  })
+  const platformWriteBlocked = updateMutation.blocked || rollbackMutation.blocked
   useAIPageContext({
     sourceWorkbench: 'platform',
     sourceTitle: `Helm Release ${releaseName}`,
@@ -83,10 +107,14 @@ export function HelmReleaseDetailPage() {
   })
 
   useEffect(() => setActiveTab(requestedTab), [requestedTab])
-  useEffect(() => setValuesDraft(valuesQuery.data?.content ?? ''), [valuesQuery.data?.content])
+  const valuesState = useYamlDraft(
+    JSON.stringify([clusterId, detailNamespace, releaseName]),
+    visibleValuesQueryData?.content,
+  )
+  const { value: valuesDraft, setValue: setValuesDraft } = valuesState
 
-  const detail = detailQuery.data
-  const values = valuesQuery.data
+  const detail = visibleDetailQueryData
+  const values = visibleValuesQueryData
   const valuesOriginal = values?.original || values?.content || ''
   const canEdit = Boolean(
     (values?.editable || detail?.valuesEditable) &&
@@ -95,6 +123,7 @@ export function HelmReleaseDetailPage() {
   const mutationsDisabled = capability.status !== 'available'
   const capabilityReason = mutationsDisabled ? capability.reason : ''
   const clearRollbackPlan = () => {
+    if (rollbackMutation.blocked) return
     rollbackPlanMutation.reset()
     setPendingRollback(null)
   }
@@ -104,9 +133,7 @@ export function HelmReleaseDetailPage() {
     if (!Number.isInteger(revision) || revision < 1) return
     const variables = { ...target, revision, wait: true, timeoutSeconds: 300 }
     setPendingRollback(variables)
-    rollbackPlanMutation.mutate(variables, {
-      onError: (error) => void message.error(error.message),
-    })
+    rollbackPlanMutation.mutate(variables, {})
   }
 
   const historyColumns: TableColumnsType<HelmReleaseHistory> = [
@@ -179,35 +206,38 @@ export function HelmReleaseDetailPage() {
       children:
         activeTab === 'values' ? (
           <Suspense fallback={<Spin />}>
-            <HelmReleaseValuesPanel
-              original={valuesOriginal}
-              draft={valuesDraft}
-              onChange={setValuesDraft}
-              onReset={() => setValuesDraft(valuesOriginal)}
-              onApply={() => {
-                if (!target) return
-                updateMutation.mutate(
-                  { ...target, content: valuesDraft },
-                  {
-                    onSuccess: (nextValues) => {
-                      setValuesDraft(nextValues.content)
-                      void message.success('values.yaml 已应用')
+            {!canViewValues ||
+            (valuesQuery.isError && visibleValuesQueryData === undefined) ? null : (
+              <HelmReleaseValuesPanel
+                original={valuesOriginal}
+                draft={valuesDraft}
+                onChange={setValuesDraft}
+                onReset={valuesState.reset}
+                onApply={() => {
+                  if (!target) return
+                  updateMutation.mutate(
+                    { ...target, content: valuesDraft },
+                    {
+                      onSuccess: (nextValues) => {
+                        valuesState.applied(nextValues.content)
+                      },
                     },
-                    onError: (error) => void message.error(error.message),
-                  },
-                )
-              }}
-              error={valuesQuery.error}
-              canEdit={canEdit}
-              applying={updateMutation.isPending}
-              applyDisabled={
-                mutationsDisabled ||
-                !canEdit ||
-                !valuesDraft.trim() ||
-                valuesDraft === valuesOriginal ||
-                updateMutation.isPending
-              }
-            />
+                  )
+                }}
+                error={valuesQuery.error}
+                canEdit={canEdit}
+                applying={updateMutation.isPending}
+                applyDisabled={
+                  platformWriteBlocked ||
+                  Boolean(valuesQuery.error) ||
+                  mutationsDisabled ||
+                  !canEdit ||
+                  !valuesDraft.trim() ||
+                  valuesDraft === valuesOriginal ||
+                  updateMutation.isPending
+                }
+              />
+            )}
           </Suspense>
         ) : null,
     },
@@ -225,7 +255,7 @@ export function HelmReleaseDetailPage() {
             <AdminTable
               className="soha-platform-table"
               columns={historyColumns}
-              dataSource={historyQuery.data ?? []}
+              dataSource={visibleHistoryQueryData ?? []}
               rowKey={(record) => record.revision}
               pageSize={K8S_TABLE_PAGE_SIZE}
               tableSize="small"
@@ -235,15 +265,15 @@ export function HelmReleaseDetailPage() {
             {selectedRevision &&
             !currentManifestQuery.isLoading &&
             !selectedManifestQuery.isLoading &&
-            currentManifestQuery.data &&
-            selectedManifestQuery.data ? (
+            visibleCurrentManifestQueryData &&
+            visibleSelectedManifestQueryData ? (
               <YamlDraftDiffEditor
                 editable={false}
-                modified={selectedManifestQuery.data.content}
-                original={currentManifestQuery.data.content}
+                modified={visibleSelectedManifestQueryData.content}
+                original={visibleCurrentManifestQueryData.content}
                 title={localeCode === 'zh_CN' ? '渲染清单差异' : 'Rendered manifest diff'}
                 leftLabel={`Revision ${selectedRevision}`}
-                rightLabel={`Current · Revision ${currentManifestQuery.data.revision}`}
+                rightLabel={`Current · Revision ${visibleCurrentManifestQueryData.revision}`}
               />
             ) : selectedRevision && (currentManifestQuery.error || selectedManifestQuery.error) ? (
               <Alert
@@ -263,6 +293,24 @@ export function HelmReleaseDetailPage() {
 
   return (
     <div className="soha-page">
+      <ReadFeedback canRead={detailQuery.isEnabled} query={detailQuery} label="资源详情" />
+      <ReadFeedback canRead={valuesQuery.isEnabled} query={valuesQuery} label="Helm Values" />
+      <ReadFeedback canRead={historyQuery.isEnabled} query={historyQuery} label="Helm 历史" />
+      <ReadFeedback
+        canRead={currentManifestQuery.isEnabled}
+        query={currentManifestQuery}
+        label="当前 Manifest"
+      />
+      <ReadFeedback
+        canRead={selectedManifestQuery.isEnabled}
+        query={selectedManifestQuery}
+        label="所选版本 Manifest"
+      />
+
+      {updateMutation.feedback}
+      {rollbackPlanMutation.feedback}
+      {rollbackMutation.feedback}
+
       {!clusterId || !detailNamespace ? (
         <Card className="soha-detail-card" style={{ marginTop: 0 }}>
           <ManagementState compact kind="select-scope" />
@@ -319,6 +367,14 @@ export function HelmReleaseDetailPage() {
         </>
       )}
       <OperationalPlanModal
+        disabled={platformWriteBlocked}
+        feedback={
+          <>
+            {updateMutation.feedback}
+            {rollbackPlanMutation.feedback}
+            {rollbackMutation.feedback}
+          </>
+        }
         confirmText={localeCode === 'zh_CN' ? '确认回滚' : 'Confirm rollback'}
         loading={rollbackMutation.isPending}
         onCancel={clearRollbackPlan}
@@ -326,14 +382,8 @@ export function HelmReleaseDetailPage() {
           if (!pendingRollback) return
           rollbackMutation.mutate(pendingRollback, {
             onSuccess: () => {
-              void message.success(
-                localeCode === 'zh_CN'
-                  ? `已回滚到 revision ${pendingRollback.revision}`
-                  : `Rolled back to revision ${pendingRollback.revision}`,
-              )
               clearRollbackPlan()
             },
-            onError: (error) => void message.error(error.message),
           })
         }}
         plan={rollbackPlanMutation.data ?? null}

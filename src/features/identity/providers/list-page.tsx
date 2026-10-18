@@ -1,37 +1,36 @@
-import { useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
-import { isApiError } from '@/services/api-error'
-import { App, Button, Pagination, Popconfirm, Space, Typography } from 'antd'
-import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
   ManagementIconButton,
-  ManagementState,
   ManagementRefreshButton,
-  ManagementTableToolbar,
   ManagementSearchableListPane,
+  ManagementState,
+  ManagementTableToolbar,
 } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
 import { MetadataTag, StatusTag } from '@/components/status-tag'
+import { useOperationMutation } from '@/components/use-operation-mutation'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useI18n } from '@/i18n'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Pagination, Popconfirm, Space, Typography } from 'antd'
+import { useMemo, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { identityApplicationQueries } from '../applications'
-import type { IdentityApplication } from '../shared/types'
 import { identityOutpostQueries } from '../outposts'
 import { identityRuntimeQueries } from '../runtime'
+import '../shared/application-access.css'
+import type { IdentityApplication } from '../shared/types'
 import { ProviderDetailContent } from './components/provider-detail-content'
-import { ProviderConfigurationStatus } from './components/provider-setup-panel'
 import { ProviderFormModal } from './components/provider-form-modal'
+import { ProviderConfigurationStatus } from './components/provider-setup-panel'
 import { identityProviderMutations } from './mutations'
 import { identityProviderQueries } from './queries'
-import type { IdentityProvider, IdentityProviderInput, IdentityRuntimeProviderType } from './types'
-import '../shared/application-access.css'
 import './styles.css'
-
+import type { IdentityProvider, IdentityProviderInput, IdentityRuntimeProviderType } from './types'
 const { Text } = Typography
-
 export function IdentityProvidersPage() {
-  const { message } = App.useApp()
   const { t } = useI18n()
   const queryClient = useQueryClient()
   const [searchText, setSearchText] = useState('')
@@ -58,24 +57,39 @@ export function IdentityProvidersPage() {
   const canDelete = hasPermission(snapshot, 'identity.providers.delete')
   const canViewApplications = hasPermission(snapshot, 'identity.applications.view')
   const canViewOutposts = hasPermission(snapshot, 'identity.outposts.view')
-
   const providersQuery = useQuery(identityProviderQueries.list({}))
+  const visibleProvidersQueryData =
+    providersQuery.isEnabled === false ? undefined : readableQueryData(providersQuery)
   const applicationsQuery = useQuery({
     ...identityApplicationQueries.list({}),
     enabled: canViewApplications,
   })
+  const visibleApplicationsQueryData =
+    applicationsQuery.isEnabled === false ? undefined : readableQueryData(applicationsQuery)
   const outpostsQuery = useQuery({
     ...identityOutpostQueries.list(),
     enabled: modalOpen && formProviderType === 'proxy' && canViewOutposts,
   })
+  const visibleOutpostsQueryData =
+    outpostsQuery.isEnabled === false ? undefined : readableQueryData(outpostsQuery)
   const runtimeQuery = useQuery(identityRuntimeQueries.capabilities())
-  const samlCapability = runtimeQuery.data?.samlApplicationProvider
+  const visibleRuntimeQueryData =
+    runtimeQuery.isEnabled === false ? undefined : readableQueryData(runtimeQuery)
+  const samlCapability = visibleRuntimeQueryData?.samlApplicationProvider
   const samlAvailable = samlCapability?.available === true
-  const createMutation = useMutation(identityProviderMutations.create(queryClient))
-  const updateMutation = useMutation(identityProviderMutations.update(queryClient))
-  const deleteMutation = useMutation(identityProviderMutations.remove(queryClient))
-
-  const applications = canViewApplications ? (applicationsQuery.data ?? []) : []
+  const createMutation = useOperationMutation(identityProviderMutations.create(queryClient), {
+    label: ['创建 认证接入', 'Create provider'],
+    target: (v) => v.name,
+  })
+  const updateMutation = useOperationMutation(identityProviderMutations.update(queryClient), {
+    label: ['保存 认证接入', 'Save provider'],
+    target: (v) => v.providerId,
+  })
+  const deleteMutation = useOperationMutation(identityProviderMutations.remove(queryClient), {
+    label: ['删除 认证接入', 'Delete provider'],
+    target: (v) => v,
+  })
+  const applications = canViewApplications ? (visibleApplicationsQueryData ?? []) : []
   const applicationById = useMemo(() => {
     const result = new Map<string, IdentityApplication>()
     applications.forEach((application) => result.set(application.id, application))
@@ -91,57 +105,50 @@ export function IdentityProvidersPage() {
   )
   const outpostOptions = useMemo(
     () =>
-      (canViewOutposts ? (outpostsQuery.data ?? []) : []).map((outpost) => ({
+      (canViewOutposts ? (visibleOutpostsQueryData ?? []) : []).map((outpost) => ({
         label: `${outpost.name} (${outpost.mode})`,
         value: outpost.id,
       })),
-    [canViewOutposts, outpostsQuery.data],
+    [canViewOutposts, visibleOutpostsQueryData],
   )
-
   const closeModal = () => {
     setModalOpen(false)
     setEditing(null)
   }
-
   const openCreate = () => {
+    if (operationBlocked) return
     setEditing(null)
     setFormProviderType('oidc')
     setModalOpen(true)
   }
-
   const openEdit = (provider: IdentityProvider) => {
+    if (operationBlocked) return
     setEditing(provider)
     setFormProviderType(provider.type)
     setModalOpen(true)
   }
-
   const submitForm = (input: IdentityProviderInput) => {
     if (editing) {
       updateMutation.mutate(
         { providerId: editing.id, input },
         {
-          onSuccess: (provider) => {
-            message.success(t('identity.providers.updated', `已更新 ${provider.name}`))
+          onSuccess: () => {
             closeModal()
           },
-          onError: (error: Error) => message.error(error.message),
         },
       )
       return
     }
     createMutation.mutate(input, {
       onSuccess: (provider) => {
-        message.success(t('identity.providers.created', `已创建 ${provider.name}`))
         closeModal()
         selectProvider(provider.id)
       },
-      onError: (error: Error) => message.error(error.message),
     })
   }
-
   const filteredProviders = useMemo(() => {
     const query = searchText.trim().toLowerCase()
-    const providers = providersQuery.data ?? []
+    const providers = visibleProvidersQueryData ?? []
     if (!query) return providers
     return providers.filter((provider) => {
       const application = applicationById.get(provider.applicationId)
@@ -157,8 +164,7 @@ export function IdentityProvidersPage() {
           .includes(query),
       )
     })
-  }, [applicationById, searchText, providersQuery.data])
-
+  }, [applicationById, searchText, visibleProvidersQueryData])
   const requestedIndex = filteredProviders.findIndex(
     (provider) => provider.id === params.get('provider'),
   )
@@ -175,32 +181,39 @@ export function IdentityProvidersPage() {
   )
   const selectedId = params.get('provider') ?? visibleProviders[0]?.id ?? ''
   const detailQuery = useQuery(identityProviderQueries.detail(selectedId))
-  const selectedProvider = detailQuery.data
+  const visibleDetailQueryData =
+    detailQuery.isEnabled === false ? undefined : readableQueryData(detailQuery)
+  const operationBlocked =
+    createMutation.blocked ||
+    updateMutation.blocked ||
+    deleteMutation.blocked ||
+    (providersQuery.isEnabled !== false && queryAccessDenied(providersQuery))
+  const selectedProvider = visibleDetailQueryData
   const selectedApplication =
     selectedProvider && applicationById.get(selectedProvider.applicationId)
-
   const providerActions = (provider: IdentityProvider) => (
     <Space size={4}>
       <ManagementIconButton
         aria-label={t('common.edit', '编辑')}
-        disabled={!canUpdate}
+        disabled={operationBlocked || !canUpdate}
         icon={<EditOutlined />}
         onClick={() => openEdit(provider)}
         tooltip={t('common.edit', '编辑')}
       />
       <Popconfirm
         cancelText={t('common.cancel', '取消')}
-        disabled={!canDelete}
-        okButtonProps={{ danger: true, loading: deleteMutation.isPending }}
+        disabled={operationBlocked || !canDelete}
+        okButtonProps={{
+          ...{ danger: true, loading: deleteMutation.isPending },
+          disabled: operationBlocked,
+        }}
         okText={t('common.delete', '删除')}
         title={t('identity.providers.deleteConfirm', `删除 ${provider.name}`)}
         onConfirm={() =>
           deleteMutation.mutate(provider.id, {
             onSuccess: () => {
-              message.success(t('identity.providers.deleted', 'Provider 已删除'))
               if (selectedId === provider.id) clearSelection()
             },
-            onError: (error: Error) => message.error(error.message),
           })
         }
       >
@@ -214,32 +227,31 @@ export function IdentityProvidersPage() {
       </Popconfirm>
     </Space>
   )
-
   return (
     <>
+      {!(
+        modalOpen && !(providersQuery.isEnabled !== false && queryAccessDenied(providersQuery))
+      ) && (
+        <>
+          {' '}
+          {createMutation.feedback}
+          {updateMutation.feedback}
+          {deleteMutation.feedback}{' '}
+        </>
+      )}
+
+      <ReadFeedback canRead={providersQuery.isEnabled} query={providersQuery} label="认证接入" />
+      <ReadFeedback
+        canRead={applicationsQuery.isEnabled}
+        query={applicationsQuery}
+        label="应用目录"
+      />
+      <ReadFeedback canRead={outpostsQuery.isEnabled} query={outpostsQuery} label="Outpost" />
+      <ReadFeedback canRead={runtimeQuery.isEnabled} query={runtimeQuery} label="运行能力" />
+      <ReadFeedback canRead={detailQuery.isEnabled} query={detailQuery} label="身份数据" />
+
       <ManagementDataPage
         className="soha-identity-access-page soha-identity-providers-page"
-        beforeQuery={
-          providersQuery.isError ? (
-            <ManagementState
-              kind={
-                isApiError(providersQuery.error) && providersQuery.error.status === 403
-                  ? 'no-permission'
-                  : 'error'
-              }
-              title="认证接入加载失败"
-              description={providersQuery.error.message}
-              actions={<Button onClick={() => void providersQuery.refetch()}>重试</Button>}
-            />
-          ) : canViewApplications && applicationsQuery.isError ? (
-            <ManagementState
-              kind="error"
-              title="应用信息加载失败"
-              description={applicationsQuery.error.message}
-              actions={<Button onClick={() => void applicationsQuery.refetch()}>重试</Button>}
-            />
-          ) : null
-        }
         tableNode={
           <section className="soha-identity-provider-workbench" aria-label="认证接入配置工作区">
             <div className="soha-identity-provider-workspace">
@@ -249,14 +261,16 @@ export function IdentityProvidersPage() {
                   items={visibleProviders}
                   getItemKey={(provider) => provider.id}
                   isLoading={providersQuery.isLoading}
-                  isError={providersQuery.isError}
-                  onRetry={() => void providersQuery.refetch()}
+                  isError={providersQuery.isError && !visibleProvidersQueryData}
+                  onRetry={() =>
+                    void (providersQuery.isEnabled === false ? undefined : providersQuery.refetch())
+                  }
                   searchActions={
                     <ManagementTableToolbar>
                       <ManagementIconButton
                         aria-label={t('identity.providers.create', '新建 Provider')}
                         color="primary"
-                        disabled={!canCreate}
+                        disabled={operationBlocked || !canCreate}
                         icon={<PlusOutlined />}
                         onClick={openCreate}
                         tooltip={t('identity.providers.create', '新建 Provider')}
@@ -266,8 +280,13 @@ export function IdentityProvidersPage() {
                         aria-label={t('common.refresh', '刷新')}
                         loading={providersQuery.isFetching || detailQuery.isFetching}
                         onClick={() => {
-                          void providersQuery.refetch()
-                          if (selectedId) void detailQuery.refetch()
+                          void (providersQuery.isEnabled === false
+                            ? undefined
+                            : providersQuery.refetch())
+                          if (selectedId)
+                            void (detailQuery.isEnabled === false
+                              ? undefined
+                              : detailQuery.refetch())
                         }}
                         tooltip={t('common.refresh', '刷新')}
                       />
@@ -316,7 +335,7 @@ export function IdentityProvidersPage() {
                     </>
                   )}
                 />
-                {!providersQuery.isError &&
+                {(!providersQuery.isError || Boolean(visibleProvidersQueryData)) &&
                   !providersQuery.isLoading &&
                   filteredProviders.length > 0 && (
                     <Pagination
@@ -341,18 +360,7 @@ export function IdentityProvidersPage() {
                 aria-busy={detailQuery.isFetching}
               >
                 {selectedId ? (
-                  detailQuery.isError ? (
-                    <ManagementState
-                      kind={
-                        isApiError(detailQuery.error) && detailQuery.error.status === 403
-                          ? 'no-permission'
-                          : 'error'
-                      }
-                      title="认证接入加载失败"
-                      description={detailQuery.error.message}
-                      actions={<Button onClick={() => void detailQuery.refetch()}>重试</Button>}
-                    />
-                  ) : selectedProvider ? (
+                  detailQuery.isError && !visibleDetailQueryData ? null : selectedProvider ? (
                     <>
                       <div className="soha-identity-provider-detail-heading">
                         <div>
@@ -394,13 +402,24 @@ export function IdentityProvidersPage() {
       />
 
       <ProviderFormModal
+        blocked={operationBlocked}
+        feedback={
+          <>
+            {createMutation.feedback}
+            {updateMutation.feedback}
+          </>
+        }
         applicationOptions={applicationOptions}
         applicationsLoading={applicationsQuery.isLoading || applicationsQuery.isFetching}
         editing={editing}
-        onCancel={closeModal}
+        onCancel={() => {
+          if (!operationBlocked) closeModal()
+        }}
         onProviderTypeChange={setFormProviderType}
         onSubmit={submitForm}
-        open={modalOpen}
+        open={
+          modalOpen && !(providersQuery.isEnabled !== false && queryAccessDenied(providersQuery))
+        }
         outpostLoading={outpostsQuery.isLoading || outpostsQuery.isFetching}
         outpostOptions={outpostOptions}
         providerType={formProviderType}

@@ -1,8 +1,32 @@
-import { useDeferredValue, useMemo, useState } from 'react'
-import type { ReactNode } from 'react'
+import { ManagementDataPage } from '@/components/management-data-page'
+import {
+  ManagementDensityButton,
+  ManagementKeywordField,
+  ManagementQueryActions,
+  ManagementRefreshButton,
+  ManagementState,
+  ManagementTableToolbar,
+} from '@/components/management-list'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import {
+  capabilityActionTooltip,
+  useClusterCapability,
+} from '@/features/platform/cluster-capabilities'
+import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
+import {
+  platformResourceTarget,
+  usePlatformMutation,
+} from '@/features/platform/shared/use-platform-mutation'
+import { useI18n } from '@/i18n'
+import { usePlatformScopeStore } from '@/stores/platform-scope-store'
+import { toScopeKey } from '@/types'
+import { readableQueryData } from '@/utils/query-feedback'
+import { formatDateTime } from '@/utils/time'
+import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TableColumnsType } from 'antd'
 import {
   Alert,
-  App,
   Button,
   Input,
   InputNumber,
@@ -14,32 +38,12 @@ import {
   Tooltip,
   Typography,
 } from 'antd'
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ManagementDataPage } from '@/components/management-data-page'
-import {
-  ManagementDensityButton,
-  ManagementKeywordField,
-  ManagementQueryActions,
-  ManagementState,
-  ManagementRefreshButton,
-  ManagementTableToolbar,
-} from '@/components/management-list'
-import {
-  capabilityActionTooltip,
-  useClusterCapability,
-} from '@/features/platform/cluster-capabilities'
-import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
-import { useI18n } from '@/i18n'
-import { usePlatformScopeStore } from '@/stores/platform-scope-store'
-import { toScopeKey } from '@/types'
-import { formatDateTime } from '@/utils/time'
-import type { TableColumnsType } from 'antd'
+import type { ReactNode } from 'react'
+import { useDeferredValue, useMemo, useState } from 'react'
+import '../styles.css'
 import { portForwardMutations } from './mutations'
 import { portForwardQueries } from './queries'
 import type { PortForwardDraft, PortForwardSession } from './types'
-import '../styles.css'
 
 const { Text } = Typography
 
@@ -76,7 +80,6 @@ function PlatformTableState({
 
 export function NetworkPortForwardPage() {
   const { localeCode } = useI18n()
-  const { message } = App.useApp()
   const queryClient = useQueryClient()
   const { clusterId, namespace } = usePlatformScopeStore()
   const scope = toScopeKey(clusterId, null)
@@ -92,12 +95,20 @@ export function NetworkPortForwardPage() {
   )
 
   const query = useQuery(portForwardQueries.list(scope))
-  const registerMutation = useMutation(portForwardMutations.register(queryClient))
-  const stopMutation = useMutation(portForwardMutations.stop(queryClient))
+  const visibleQueryData = readableQueryData(query)
+  const registerMutation = usePlatformMutation(portForwardMutations.register(queryClient), {
+    label: ['建立端口转发', 'Create port forward'],
+    target: platformResourceTarget,
+  })
+  const stopMutation = usePlatformMutation(portForwardMutations.stop(queryClient), {
+    label: ['停止端口转发', 'Stop port forward'],
+    target: platformResourceTarget,
+  })
+  const platformWriteBlocked = registerMutation.blocked || stopMutation.blocked
 
   const deferredSearchKeyword = useDeferredValue(searchKeyword)
   const normalizedKeyword = normalizeSearchKeyword(deferredSearchKeyword)
-  const rawItems = query.data ?? []
+  const rawItems = visibleQueryData ?? []
   const filteredItems = useMemo(
     () =>
       rawItems.filter((item) =>
@@ -180,20 +191,12 @@ export function NetworkPortForwardPage() {
             okText={localeCode === 'zh_CN' ? '停止' : 'Stop'}
             cancelText={localeCode === 'zh_CN' ? '取消' : 'Cancel'}
             okButtonProps={{
+              disabled: platformWriteBlocked,
               danger: true,
               loading: stopMutation.isPending && stopMutation.variables?.sessionId === value,
             }}
             placement="topRight"
-            onConfirm={() =>
-              stopMutation.mutate(
-                { scope, sessionId: value },
-                {
-                  onSuccess: () =>
-                    void message.success(localeCode === 'zh_CN' ? '已停止' : 'Stopped'),
-                  onError: (error) => void message.error(error.message),
-                },
-              )
-            }
+            onConfirm={() => stopMutation.mutate({ scope, sessionId: value }, {})}
           >
             <Button
               aria-label={stopPortForwardLabel}
@@ -239,6 +242,9 @@ export function NetworkPortForwardPage() {
         ),
       }}
       table={{
+        error: query.isEnabled === false ? null : query.error,
+        hasReadData: query.data !== undefined,
+        onRetry: query.isEnabled === false ? undefined : () => query.refetch(),
         className: 'soha-platform-table',
         columnSettingIconOnly: true,
         columnSettingPlacement: 'header',
@@ -307,6 +313,9 @@ export function NetworkPortForwardPage() {
         ),
       }}
     >
+      {registerMutation.feedback}
+      {stopMutation.feedback}
+
       {portForwardCapabilityReason ? (
         <Alert
           showIcon
@@ -319,6 +328,7 @@ export function NetworkPortForwardPage() {
         />
       ) : null}
       <Modal
+        okButtonProps={{ disabled: platformWriteBlocked }}
         title={localeCode === 'zh_CN' ? '新建 Port Forward' : 'New Port Forward'}
         open={modalVisible}
         onOk={() =>
@@ -327,17 +337,18 @@ export function NetworkPortForwardPage() {
             {
               onSuccess: () => {
                 setModalVisible(false)
-                void message.success(
-                  localeCode === 'zh_CN' ? '已登记 Port Forward' : 'Port forward registered',
-                )
               },
-              onError: (error) => void message.error(error.message),
             },
           )
         }
-        onCancel={() => setModalVisible(false)}
+        onCancel={() => {
+          if (!platformWriteBlocked) (() => setModalVisible(false))?.()
+        }}
         confirmLoading={registerMutation.isPending}
       >
+        {registerMutation.feedback}
+        {stopMutation.feedback}
+
         <Space orientation="vertical" align="start" style={{ width: '100%' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
             <Text style={{ width: 96 }}>{localeCode === 'zh_CN' ? '目标类型' : 'Target kind'}</Text>

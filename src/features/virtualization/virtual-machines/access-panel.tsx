@@ -1,4 +1,17 @@
-import { Alert, App, Button, Form, Input, InputNumber, Select, Space, Spin, Typography } from 'antd'
+import { readableQueryData } from '@/utils/query-feedback'
+import {
+  Alert,
+  App,
+  Button,
+  Card,
+  Form,
+  Input,
+  InputNumber,
+  Select,
+  Space,
+  Spin,
+  Typography,
+} from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type {
   VirtualMachineAccessBinding,
@@ -6,6 +19,8 @@ import type {
 } from '@opensoha/contracts/gen/ts/sohaapi'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { ApiError } from '@/services/api-error'
+
+import { localeText, useI18n } from '@/i18n'
 import { secretQueries, buildSecretReference } from '@/features/secrets'
 import { virtualizationQueries } from '../queries'
 import { virtualizationMutations } from '../mutations'
@@ -154,43 +169,51 @@ function AccessForm({
 }
 
 export function VMAccessPanel({ vm }: { vm: VirtualMachine }) {
+  const { localeCode } = useI18n()
   const { canConnectVMs, canManageVMAccess } = useVirtualizationPermissions()
   const binding = useQuery(virtualizationQueries.accessBinding(vm.id))
   const absent = binding.error instanceof ApiError && binding.error.status === 404
+  const readableBinding = absent ? undefined : readableQueryData(binding)
   return (
-    <Space orientation="vertical" size="large" style={{ width: '100%' }}>
-      <Alert
-        showIcon
-        type="info"
-        title="登录绑定只保存连接信息"
-        description="不会向已有 VM 安装公钥、修改 guest 账号或磁盘。Shell 连接成功后，个人 Agent 完整环境仍需单独验收。"
-      />
-      {binding.isPending ? (
-        <Spin />
-      ) : binding.error && !absent ? (
-        <Alert
-          type="error"
-          title="登录绑定加载失败"
-          description={binding.error.message}
-          action={<Button onClick={() => void binding.refetch()}>重试</Button>}
-        />
-      ) : (
-        <AccessForm
-          key={binding.data?.revision ?? 0}
-          vm={vm}
-          binding={binding.data}
-          canManage={canManageVMAccess}
-        />
-      )}
-      {binding.data ? (
+    <div className="soha-vm-access">
+      <Card
+        size="small"
+        title={<h2>{localeText(localeCode, 'SSH 登录配置', 'SSH access configuration')}</h2>}
+      >
+        <p className="soha-vm-access-description">
+          {localeText(
+            localeCode,
+            '配置登录账号、受管凭证与执行节点。保存绑定只更新连接信息，不会修改虚拟机内的账号、公钥或磁盘。',
+            'Configure the account, managed credentials and execution agent. Saving updates connection information without changing the VM account, public keys or disks.',
+          )}
+        </p>
+        {binding.isPending ? (
+          <Spin />
+        ) : binding.error && !absent ? (
+          <Alert
+            type="error"
+            title="登录绑定加载失败"
+            description={binding.error.message}
+            action={<Button onClick={() => void binding.refetch()}>重试</Button>}
+          />
+        ) : (
+          <AccessForm
+            key={readableBinding?.revision ?? 0}
+            vm={vm}
+            binding={readableBinding}
+            canManage={canManageVMAccess}
+          />
+        )}
+      </Card>
+      {readableBinding ? (
         <VMSSHTerminal
-          key={binding.data.revision}
-          binding={binding.data}
+          key={readableBinding.revision}
+          binding={readableBinding}
           enabled={canConnectVMs && vm.status === 'running'}
         />
       ) : (
         <Alert type="info" title="尚未配置 VM 登录绑定" />
       )}
-    </Space>
+    </div>
   )
 }

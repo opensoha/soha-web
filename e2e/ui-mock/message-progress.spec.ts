@@ -132,19 +132,15 @@ for (const width of [1440, 390]) {
     await expect(progress.locator('.soha-ai-message-progress__dots > span')).toHaveCount(3)
     await verifyGeometry(page, progress)
     await page.emulateMedia({ reducedMotion: 'reduce' })
-    expect(
-      await progress
-        .locator('.soha-ai-message-progress__dots > span')
-        .first()
-        .evaluate((element) => getComputedStyle(element).animationName),
-    ).toBe('none')
+    await expect(progress.locator('.soha-ai-message-progress__dots > span').first()).toHaveCSS(
+      'animation-name',
+      'none',
+    )
     await page.emulateMedia({ reducedMotion: 'no-preference' })
-    expect(
-      await progress
-        .locator('.soha-ai-message-progress__dots > span')
-        .first()
-        .evaluate((element) => getComputedStyle(element).animationName),
-    ).toBe('soha-ai-processing-dot')
+    await expect(progress.locator('.soha-ai-message-progress__dots > span').first()).toHaveCSS(
+      'animation-name',
+      'soha-ai-processing-dot',
+    )
     await page.screenshot({ path: info.outputPath('processing.png') })
     await page.getByRole('button', { name: '停止回复', exact: true }).click()
     await page.getByRole('button', { name: '停止任务', exact: true }).click()

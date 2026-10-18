@@ -16,6 +16,7 @@ export type CRDState = {
   data: typeof definitions
   deleteCalls: string[]
   failDelete: boolean
+  deleteFailureStatus: 409 | 503
   allowDelete: boolean
   failCatalog: boolean
 }
@@ -25,6 +26,7 @@ export const test = base.extend<{ catalog: CRDState; evidence: BrowserEvidence }
       data: structuredClone(definitions),
       deleteCalls: [],
       failDelete: true,
+      deleteFailureStatus: 409,
       allowDelete: true,
       failCatalog: false,
     }),
@@ -105,8 +107,14 @@ export const test = base.extend<{ catalog: CRDState; evidence: BrowserEvidence }
             }
           if (catalog.failDelete)
             return {
-              status: 503,
-              body: { error: { code: 'unavailable', message: 'Synthetic retryable failure' } },
+              status: catalog.deleteFailureStatus,
+              body: {
+                error: {
+                  code: catalog.deleteFailureStatus === 409 ? 'conflict' : 'unavailable',
+                  message: 'Synthetic deletion response',
+                  request_id: 'crd-delete-original-request',
+                },
+              },
             }
           catalog.data = catalog.data.filter((row) => row !== item)
           return { body: { data: null } }

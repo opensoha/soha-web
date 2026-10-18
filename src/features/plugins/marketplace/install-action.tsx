@@ -1,6 +1,8 @@
-import { CloudDownloadOutlined } from '@ant-design/icons'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Alert, App, Card, Descriptions, Space, Tag, Typography } from 'antd'
+import { operationModalStyles } from '@/components/modal-styles'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { useQueryClient } from '@tanstack/react-query'
+import { Alert, Card, Descriptions, Modal, Space, Tag, Typography } from 'antd'
+import { useState } from 'react'
 import { pluginMutations } from '../mutations'
 import type { MarketplacePlugin } from '../plugin-model'
 import {
@@ -10,8 +12,8 @@ import {
   manifestExtensionCount,
   requiredSecretValues,
 } from '../plugin-model'
-import { compactPluginTags, pluginRiskTag } from '../shared/formatters'
 import { ExtensionPointList } from '../shared/extension-list'
+import { compactPluginTags, pluginRiskTag } from '../shared/formatters'
 import { PermissionReview } from '../shared/manifest-sections'
 import './styles.css'
 
@@ -87,31 +89,62 @@ function InstallReview({ plugin }: { plugin: MarketplacePlugin }) {
 }
 
 export function useInstallPluginAction() {
-  const { modal, message } = App.useApp()
   const queryClient = useQueryClient()
-  const mutation = useMutation(pluginMutations.install(queryClient))
+  const [review, setReview] = useState<{ plugin: MarketplacePlugin; enable: boolean } | null>(null)
+  const mutation = useOperationMutation(pluginMutations.install(queryClient), {
+    label: ['安装插件', 'Install plugin'],
+    target: (input) => input.pluginId || '插件',
+    receipt: (item) => ({
+      message: `安装记录已保存：${item.name}`,
+      evidence: '启用状态以安装记录为准，不代表外部权限已授予或运行时已健康。',
+    }),
+  })
 
   return {
     loading: mutation.isPending,
+    blocked: mutation.blocked,
+    feedback: review ? null : mutation.feedback,
+    dialog: (
+      <Modal
+        open={Boolean(review)}
+        title={review ? `安装 ${review.plugin.name}` : '安装插件'}
+        width={720}
+        styles={operationModalStyles}
+        style={{ top: 32 }}
+        confirmLoading={mutation.isPending}
+        closable={!mutation.blocked}
+        keyboard={!mutation.blocked}
+        mask={{ closable: false }}
+        okButtonProps={{ disabled: mutation.blocked }}
+        cancelButtonProps={{ disabled: mutation.blocked }}
+        okText={review?.enable ? '安装并启用' : '安装'}
+        cancelText="取消"
+        onCancel={() => {
+          if (!mutation.blocked) setReview(null)
+        }}
+        onOk={() => {
+          if (!review || mutation.blocked) return
+          const { plugin, enable } = review
+          mutation.mutate(
+            {
+              pluginId: plugin.id,
+              enable,
+              sourceId: plugin.sourceId,
+              marketplaceUrl: plugin.sourceUrl,
+              version: plugin.latestVersion || plugin.version,
+            },
+            { onSuccess: () => setReview(null) },
+          )
+        }}
+      >
+        {mutation.feedback}
+        {review ? <InstallReview plugin={review.plugin} /> : null}
+      </Modal>
+    ),
     confirmInstall(plugin: MarketplacePlugin, enable = false) {
-      modal.confirm({
-        title: `安装 ${plugin.name}`,
-        width: 720,
-        icon: <CloudDownloadOutlined />,
-        content: <InstallReview plugin={plugin} />,
-        okText: enable ? '安装并启用' : '安装',
-        cancelText: '取消',
-        onOk: async () => {
-          const item = await mutation.mutateAsync({
-            pluginId: plugin.id,
-            enable,
-            sourceId: plugin.sourceId,
-            marketplaceUrl: plugin.sourceUrl,
-            version: plugin.latestVersion || plugin.version,
-          })
-          message.success(`已安装 ${item.name}`)
-        },
-      })
+      if (mutation.blocked) return
+      mutation.reset()
+      setReview({ plugin, enable })
     },
   }
 }

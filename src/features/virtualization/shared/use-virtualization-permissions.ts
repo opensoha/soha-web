@@ -22,8 +22,12 @@ export function useVirtualizationPermissions() {
     hasVirtualizationPermission('virtualization.images.view')
 
   return {
-    canConnectVMs:hasVirtualizationPermission('virtualization.vms.connect')&&hasVirtualizationPermission('secret.use'),
-    canManageVMAccess:hasVirtualizationPermission('virtualization.vm_access.update')&&hasVirtualizationPermission('secret.use'),
+    canConnectVMs:
+      hasVirtualizationPermission('virtualization.vms.connect') &&
+      hasVirtualizationPermission('secret.use'),
+    canManageVMAccess:
+      hasVirtualizationPermission('virtualization.vm_access.update') &&
+      hasVirtualizationPermission('secret.use'),
     virtualizationModuleEnabled,
     canViewWorkerPools,
     canCreateWorkers: canSupplyWorkers && canCreateVMs,
@@ -54,6 +58,7 @@ export function useVirtualizationPermissions() {
     canViewTasks:
       hasVirtualizationPermission('virtualization.operations.view') ||
       hasVirtualizationPermission('virtualization.sync.view'),
+    canViewVMOperations: hasVirtualizationPermission('virtualization.operations.view'),
     canCancelOperations: hasVirtualizationPermission('virtualization.operations.cancel'),
     canRetryOperations: hasVirtualizationPermission('virtualization.operations.retry'),
     canSync,

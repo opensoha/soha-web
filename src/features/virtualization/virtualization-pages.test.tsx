@@ -7,12 +7,13 @@ import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from 'antd'
+import { ApiError } from '@/services/api-error'
 import { VirtualizationConnectionStepModal } from './clusters/create-page'
 import { VirtualizationClustersPage } from './clusters/list-page'
 import { VirtualizationFlavorsPage } from './flavors/list-page'
 import { VirtualizationImagesPage } from './images/list-page'
 import { VirtualizationVmDetailPage } from './virtual-machines/detail-page'
-import { defaultRootDisk, VirtualizationVmsPage } from './virtual-machines/list-page'
+import { defaultRootDisk, pveVMSourceRef, VirtualizationVmsPage } from './virtual-machines/list-page'
 import {
   buildClusterPayload,
   buildCreateVmPayload,
@@ -84,6 +85,7 @@ const testState = vi.hoisted(() => ({
     visibleMenus: [],
   },
   vmAllowedActions: [] as string[],
+  catalogAllowedActions: [] as string[],
   apiGet: vi.fn(async (path: string) => {
     if (path === '/modules') {
       return {
@@ -258,6 +260,8 @@ const testState = vi.hoisted(() => ({
             credentialConfigured: false,
             config: {
               defaultNode: 'pve-1',
+              sshHost: 'node.example',
+              sshHostKeys: { 'pve-1': 'trusted-public-key' },
               defaultStorage: 'local-lvm',
               defaultBridge: 'vmbr0',
               defaultSnippetStorage: 'local',
@@ -332,6 +336,7 @@ const testState = vi.hoisted(() => ({
             {
               id: 'image-1',
               name: 'ubuntu-24.04',
+              allowedActions: testState.catalogAllowedActions,
               provider: 'kubevirt',
               connectionId: 'conn-1',
               sourceKind: 'datasource',
@@ -448,6 +453,7 @@ const testState = vi.hoisted(() => ({
           {
             id: 'flavor-1',
             name: 'standard-2c4g',
+            allowedActions: testState.catalogAllowedActions,
             cpu: 2,
             memoryMiB: 4096,
             diskGiB: 40,
@@ -705,6 +711,19 @@ async function clickButtonByText(container: ParentNode, text: string) {
   })
 }
 
+async function chooseVmAction(container: ParentNode, label: string) {
+  await clickButtonByLabel(container, '更多操作：build-vm')
+  await waitForText(label)
+  const item = Array.from(document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')).find(
+    (node) => node.textContent?.trim() === label,
+  )
+  expect(item).toBeDefined()
+  await act(async () => {
+    item!.click()
+    await Promise.resolve()
+  })
+}
+
 function hasButtonByLabel(container: ParentNode, label: string) {
   return Array.from(container.querySelectorAll('button')).some(
     (node) => node.getAttribute('aria-label') === label,
@@ -720,7 +739,7 @@ describe('virtualization pages', () => {
       </StrictMode>,
     )
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      await clickButtonByLabel(container, '调整虚拟机规格')
+      await chooseVmAction(container, '调整虚拟机规格')
       await waitForGetCall('/virtualization/vms/vm-1/devices')
       const dialog = document.body.querySelector('[role="dialog"]')!
       expect(dialog.querySelector<HTMLInputElement>('#cpu')?.value).toBe('2')
@@ -785,6 +804,7 @@ describe('virtualization pages', () => {
       visibleMenus: [],
     }
     testState.vmAllowedActions = []
+    testState.catalogAllowedActions = []
     testState.apiGet.mockClear()
     testState.apiPost.mockClear()
     testState.apiPostWithHeaders.mockClear()
@@ -887,7 +907,7 @@ describe('virtualization pages', () => {
     testState.vmAllowedActions = ['delete']
     const container = await renderWithProviders(<VirtualizationVmsPage />)
 
-    await clickButtonByLabel(container, '删除虚拟机')
+    await chooseVmAction(container, '删除虚拟机')
     await waitForText('从 Provider 删除虚拟机')
     expect(document.body.textContent).toContain('此操作不会删除虚拟化连接')
 
@@ -1061,6 +1081,28 @@ describe('virtualization pages', () => {
     expect(payload.imageId).toBeUndefined()
   })
 
+  it('clones the VM identity rather than its cloud image or clone origin', () => {
+    const source = {
+      id: 'created-vm',
+      name: 'created-vm',
+      externalId: '129',
+      sourceRef: 'local:import/debian.qcow2',
+      config: { sourceRef: 'local:import/debian.qcow2' },
+    }
+    const payload = buildCreateVmPayload({
+      provider: 'pve',
+      connectionId: 'conn-pve',
+      name: 'cloned-vm',
+      sourceMode: 'vm_clone',
+      templateId: pveVMSourceRef(source),
+    })
+    expect(payload).toMatchObject({ sourceId: '129', templateId: '129' })
+    expect(pveVMSourceRef({ ...source, sourceRef: '101' })).toBe('129')
+    expect(pveVMSourceRef({ ...source, externalId: undefined, config: { vmid: 130 } })).toBe('130')
+    expect(pveVMSourceRef({ ...source, externalId: undefined, config: undefined })).toBe('')
+    expect(pveVMSourceRef({ id: 'legacy', name: 'legacy', sourceRef: '101' })).toBe('101')
+  })
+
   it('creates from a catalog cloud image with managed credential references', () => {
     const payload = buildCreateVmPayload({
       provider: 'pve',
@@ -1210,6 +1252,45 @@ describe('virtualization pages', () => {
     expect(kubevirtPayload.config).not.toHaveProperty('prometheusBearerToken')
   })
 
+  it('preserves connection extensions without retaining cleared fields or crossing providers', () => {
+    const existing = {
+      id: 'conn-pve',
+      name: 'pve-a',
+      provider: 'pve',
+      config: {
+        defaultNode: 'old-node',
+        defaultStorage: 'old-storage',
+        snippetStorage: 'old-snippets',
+        sshHost: 'node.example',
+        sshHostKeys: { 'old-node': 'trusted-public-key' },
+        providerExtension: { enabled: true },
+        mode: 'provider-extension-mode',
+      },
+    }
+    const payload = buildClusterPayload(
+      { name: 'renamed', provider: 'pve', defaultNode: 'new-node' },
+      existing,
+    )
+    expect(payload.config).toEqual({
+      defaultNode: 'new-node',
+      sshHost: 'node.example',
+      sshHostKeys: { 'old-node': 'trusted-public-key' },
+      providerExtension: { enabled: true },
+      mode: 'provider-extension-mode',
+    })
+    expect(payload.credential).toBeUndefined()
+    expect(existing.config.defaultNode).toBe('old-node')
+    expect(
+      buildClusterPayload({ name: 'changed-provider', provider: 'kubevirt' }, existing).config,
+    ).toEqual({})
+    expect(
+      buildClusterPayload(
+        { name: 'cleared', provider: 'pve' },
+        { ...existing, config: { defaultNode: 'old-node' } },
+      ).config,
+    ).toEqual({})
+  })
+
   it('renders VM detail with provider raw, operations, logs and AI investigation entry', async () => {
     const container = await renderWithProviders(
       <VirtualizationVmDetailPage />,
@@ -1351,7 +1432,7 @@ describe('virtualization pages', () => {
     expect(container.textContent).toContain('build-vm')
     expect(hasButtonByLabel(container, '启动虚拟机')).toBe(false)
     expect(hasButtonByLabel(container, '停止虚拟机')).toBe(false)
-    expect(hasButtonByLabel(container, '删除虚拟机')).toBe(false)
+    expect(hasButtonByLabel(container, '更多操作：build-vm')).toBe(false)
   })
 
   it('gates VM metrics query and console tab by dedicated permissions', async () => {
@@ -1536,13 +1617,68 @@ describe('virtualization pages', () => {
         provider: 'pve',
         endpoint: 'https://pve.example:8006',
         verifyTls: true,
-        config: expect.objectContaining({ defaultNode: 'pve-1' }),
+        config: expect.objectContaining({
+          defaultNode: 'pve-1',
+          sshHost: 'node.example',
+          sshHostKeys: { 'pve-1': 'trusted-public-key' },
+        }),
       }),
     )
     expect(
       (testState.apiPut.mock.calls[0]?.[1] as VirtualizationClusterInput).credential,
     ).toBeUndefined()
   })
+
+  it.each([
+    {
+      label: '连接',
+      page: <VirtualizationClustersPage />,
+      route: '/virtualization/clusters',
+      edit: '编辑连接',
+      steps: 2,
+    },
+    {
+      label: '镜像',
+      page: <VirtualizationImagesPage />,
+      route: '/virtualization/images',
+      edit: '编辑镜像',
+      steps: 0,
+    },
+    {
+      label: '规格',
+      page: <VirtualizationFlavorsPage />,
+      route: '/virtualization/flavors',
+      edit: '编辑规格',
+      steps: 0,
+    },
+  ])(
+    'clears the previous $label save error when opening a fresh editor',
+    async ({ page, route, edit, steps }) => {
+      testState.permissionSnapshot.permissionKeys.push(
+        'virtualization.images.view',
+        'virtualization.images.update',
+        'virtualization.flavors.view',
+        'virtualization.flavors.update',
+      )
+      testState.catalogAllowedActions = ['update']
+      testState.apiPut.mockRejectedValueOnce(new Error('previous save rejected'))
+      const container = await renderWithProviders(page, route)
+      await clickButtonByLabel(container, edit)
+      for (let index = 0; index < steps; index++) await clickButtonByText(document.body, '下一步')
+      if (steps) await clickButtonByText(document.body, '保存连接')
+      else
+        await act(async () =>
+          document.querySelector<HTMLButtonElement>('.ant-modal-footer .ant-btn-primary')!.click(),
+        )
+      await waitForText('previous save rejected')
+      await act(async () => document.querySelector<HTMLButtonElement>('.ant-modal-close')!.click())
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 400)))
+      await clickButtonByLabel(container, edit)
+      expect(document.querySelector('.ant-modal')?.textContent).not.toContain(
+        'previous save rejected',
+      )
+    },
+  )
 
   it('does not carry edited connection values into another connection or a new one', async () => {
     const container = await renderWithProviders(
@@ -1575,6 +1711,31 @@ describe('virtualization pages', () => {
     expect(document.querySelector('#enabled')?.getAttribute('aria-checked')).toBe('true')
     expect(testState.apiPost).not.toHaveBeenCalled()
     expect(testState.apiPut).not.toHaveBeenCalled()
+  })
+
+  it('preserves an unresolved write receipt when reopening a flavor editor', async () => {
+    testState.permissionSnapshot.permissionKeys.push(
+      'virtualization.flavors.view',
+      'virtualization.flavors.update',
+    )
+    testState.catalogAllowedActions = ['update']
+    testState.apiPut.mockRejectedValueOnce(
+      new ApiError(503, 'pending record verification', { method: 'PUT' }),
+    )
+    const container = await renderWithProviders(
+      <VirtualizationFlavorsPage />,
+      '/virtualization/flavors',
+    )
+    await clickButtonByLabel(container, '编辑规格')
+    await act(async () =>
+      document.querySelector<HTMLButtonElement>('.ant-modal-footer .ant-btn-primary')!.click(),
+    )
+    await waitForText('pending record verification')
+    await act(async () => document.querySelector<HTMLButtonElement>('.ant-modal-close')!.click())
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 400)))
+    await clickButtonByLabel(container, '编辑规格')
+    expect(document.querySelector('.ant-modal')?.textContent).toContain('请求结果不明')
+    expect(document.querySelector('.ant-modal')?.textContent).toContain('flavor-1')
   })
 
   it('keeps optional PVE defaults collapsed while editing a connection', async () => {

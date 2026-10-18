@@ -149,3 +149,41 @@ it('readonly source confirmation and preflight display actual-capacity rejection
   expect(document.body.textContent).toContain('runtime memory exhausted')
   expect(document.body.textContent).toContain('"pending":1024')
 })
+
+it.each(['completed', 'pending'])(
+  'does not show a %s preflight after its inputs change',
+  async (mode) => {
+    let finish!: (value: unknown) => void
+    if (mode === 'pending')
+      state.check.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve
+          }),
+      )
+    await render(false)
+    const check = Array.from(document.querySelectorAll('button')).find(
+      (button) => button.textContent === '检查两道准入',
+    )!
+    await act(async () => {
+      check.click()
+      await new Promise((resolve) => setTimeout(resolve, 40))
+    })
+    if (mode === 'completed')
+      expect(document.body.textContent).toContain('runtime memory exhausted')
+    await act(async () => {
+      const input = document.querySelector<HTMLInputElement>('input#cpu')!
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(input, '8')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 40))
+    })
+    if (mode === 'pending')
+      await act(async () => {
+        finish({ status: 'available', reason: 'old input result', diagnostics: [] })
+        await new Promise((resolve) => setTimeout(resolve, 40))
+      })
+    expect(document.body.textContent).not.toContain('runtime memory exhausted')
+    expect(document.body.textContent).not.toContain('old input result')
+    expect(document.body.textContent).not.toContain('预检通过，提交时会重新检查')
+  },
+)

@@ -30,14 +30,20 @@ vi.mock('@/features/copilot', () => ({ useAIPageContext: vi.fn() }))
 vi.mock('./provider-instances-panel', () => ({
   ProviderInstancesPanel: ({
     canDiscover,
+    canViewTask,
     canTest,
     localeCode,
   }: {
     canDiscover: boolean
+    canViewTask: boolean
     canTest: boolean
     localeCode: 'zh_CN' | 'en_US'
   }) => (
-    <div data-can-discover={String(canDiscover)} data-can-test={String(canTest)}>
+    <div
+      data-can-view-task={String(canViewTask)}
+      data-can-discover={String(canDiscover)}
+      data-can-test={String(canTest)}
+    >
       {localeCode === 'zh_CN' ? '提供方实例' : 'Provider instances'}
     </div>
   ),
@@ -157,6 +163,24 @@ describe('compute overview page', () => {
     expect(panel?.getAttribute('data-can-discover')).toBe('true')
   })
 
+  it.each([
+    ['docker.operations.view', 'false'],
+    ['virtualization.sync.view', 'true'],
+  ])('gates Provider task evidence by its own domain (%s)', (permission, expected) => {
+    testState.permissionKeys = [permission, 'virtualization.sync.sync']
+    vi.mocked(useQuery).mockReturnValue({
+      data: undefined,
+      isError: false,
+      isLoading: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    } as never)
+    const container = render(<ComputeOverviewPage />)
+    expect(
+      container.querySelector('[data-can-view-task]')?.getAttribute('data-can-view-task'),
+    ).toBe(expected)
+  })
+
   it('retries the overview query from its error state', () => {
     const refetch = vi.fn()
     vi.mocked(useQuery).mockReturnValue({
@@ -168,7 +192,7 @@ describe('compute overview page', () => {
 
     const container = render(<ComputeOverviewPage />)
     const retry = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="重试加载计算资源总览"]',
+      'button[aria-label="重试读取计算资源总览"]',
     )
 
     expect(retry).toBeDefined()
@@ -490,6 +514,17 @@ describe('compute overview page', () => {
     )
     const button = container.querySelector<HTMLButtonElement>('.soha-compute-task-footer button')
     expect(button?.textContent).toContain('查看失败任务')
+    expect(
+      container
+        .querySelector('.soha-compute-task-grid .soha-compute-metric-failed')
+        ?.closest('a')
+        ?.getAttribute('href'),
+    ).toBe('/compute/tasks/operations')
+    expect(
+      container.querySelector(
+        '.soha-compute-task-footer a[href="/compute/tasks/operations?status=timeout"]',
+      )?.textContent,
+    ).toBe('查看超时任务')
     expect(container.textContent).toContain('部分任务来源读取失败')
     expect(
       container.querySelector('.soha-overview-metric-card.soha-compute-metric-tasks')?.textContent,
@@ -507,13 +542,13 @@ describe('compute overview page', () => {
       { isError: true, refetch },
     )
     const container = render(<ComputeOverviewPage />)
-    expect(container.textContent).toContain('更新失败，当前显示上次读取的数据')
+    expect(container.textContent).toContain('计算资源总览未更新，正在展示上次读取结果')
     expect(
       container.querySelector('.soha-overview-metric-card.soha-compute-metric-hosts')?.textContent,
     ).toContain('运行时主机2')
     act(() =>
       container
-        .querySelector<HTMLButtonElement>('button[aria-label="重试加载计算资源总览"]')
+        .querySelector<HTMLButtonElement>('button[aria-label="重试读取计算资源总览"]')
         ?.click(),
     )
     expect(refetch).toHaveBeenCalledOnce()

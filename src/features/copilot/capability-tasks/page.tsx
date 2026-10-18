@@ -1,8 +1,3 @@
-import { useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
-import { Alert, App, Button, Drawer, Input, Select, Space } from 'antd'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
@@ -10,17 +5,25 @@ import {
   ManagementState,
   ManagementTableToolbar,
 } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
 import { StatusTag } from '@/components/status-tag'
+import { useOperationMutation } from '@/components/use-operation-mutation'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
 import { tableColumnPresets } from '@/utils/table-columns'
+import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Alert, App, Button, Drawer, Input, Select, Space } from 'antd'
+import { useEffect, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import type { CapabilityTask, CapabilityTaskInput, CapabilityTaskRevisionInput } from './api'
-import { capabilityTaskQueries, taskCanResume } from './queries'
 import { capabilityTaskMutations } from './mutations'
+import { capabilityTaskQueries, taskCanResume } from './queries'
 
 export function CapabilityTasksPage() {
   const permissions = usePermissionSnapshot()
-  const canInvoke = hasPermission(permissions.data?.data, 'ai.gateway.invoke')
-  const { modal, message } = App.useApp()
+  const canInvoke = hasPermission(readableQueryData(permissions)?.data, 'ai.gateway.invoke')
+  const { modal } = App.useApp()
   const [params, setParams] = useSearchParams()
   const id = params.get('taskId') ?? ''
   const version = Number(params.get('planVersion') ?? 0)
@@ -33,9 +36,16 @@ export function CapabilityTasksPage() {
       canInvoke,
     ),
   )
-  const task = detail.data?.data
+  const task = readableQueryData(detail)?.data
   const client = useQueryClient()
-  const cancel = useMutation(capabilityTaskMutations.cancel(client))
+  const cancel = useOperationMutation(capabilityTaskMutations.cancel(client), {
+    label: ['请求取消目标任务', 'Request task cancellation'],
+    target: (id) => id,
+  })
+  const denied = queryAccessDenied(list) || queryAccessDenied(detail) || queryAccessDenied(cancel)
+  useEffect(() => {
+    if (!canInvoke || denied) setEditor(undefined)
+  }, [canInvoke, denied])
   const selectTask = (taskId: string, planVersion = 0) => {
     const next = new URLSearchParams(params)
     if (taskId) next.set('taskId', taskId)
@@ -44,7 +54,8 @@ export function CapabilityTasksPage() {
     else next.delete('planVersion')
     setParams(next)
   }
-  const openEditor = (current?: CapabilityTask) =>
+  const openEditor = (current?: CapabilityTask) => {
+    if (cancel.blocked || denied) return
     setEditor({
       task: current,
       value: JSON.stringify(
@@ -58,16 +69,21 @@ export function CapabilityTasksPage() {
         2,
       ),
     })
+  }
   if (permissions.isLoading) return <ManagementState title="正在读取权限" />
   if (!canInvoke) return <ManagementState kind="error" title="缺少目标任务访问权限" />
   return (
     <>
+      {!id && cancel.feedback}
       <ManagementDataPage
         table={{
           title: '目标任务',
           rowKey: 'id',
-          dataSource: list.data?.items ?? [],
+          dataSource: readableQueryData(list)?.items ?? [],
           loading: list.isLoading,
+          error: list.error,
+          hasReadData: readableQueryData(list) !== undefined,
+          onRetry: () => void list.refetch(),
           headerExtra: (
             <ManagementTableToolbar>
               <ManagementIconButton
@@ -77,7 +93,12 @@ export function CapabilityTasksPage() {
                 loading={list.isFetching}
                 onClick={() => void list.refetch()}
               />
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => openEditor()}>
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                disabled={cancel.blocked || denied}
+                onClick={() => openEditor()}
+              >
                 提交计划
               </Button>
             </ManagementTableToolbar>
@@ -118,22 +139,21 @@ export function CapabilityTasksPage() {
           task && !version ? (
             <Space>
               {taskCanResume(task.status) ? (
-                <Button onClick={() => openEditor(task)}>修订并续接</Button>
+                <Button disabled={cancel.blocked || denied} onClick={() => openEditor(task)}>
+                  修订并续接
+                </Button>
               ) : null}
               {!['completed', 'failed', 'canceled', 'inconclusive'].includes(task.status) ? (
                 <Button
                   danger
+                  disabled={cancel.blocked || denied}
                   loading={cancel.isPending}
                   onClick={() =>
                     modal.confirm({
                       title: '请求取消目标任务？',
                       content: '已完成的操作会保留，正在运行的操作由所属服务处理取消。',
                       okText: '请求取消',
-                      onOk: () =>
-                        cancel.mutateAsync(task.id).catch((error: Error) => {
-                          void message.error(error.message)
-                          throw error
-                        }),
+                      onOk: () => cancel.mutateAsync(task.id).catch(() => undefined),
                     })
                   }
                 >
@@ -144,7 +164,9 @@ export function CapabilityTasksPage() {
           ) : undefined
         }
       >
-        {detail.isError ? (
+        {cancel.feedback}
+        <ReadFeedback query={detail} label="目标任务" />
+        {queryAccessDenied(detail) || (!task && detail.isError) ? (
           <ManagementState
             kind="error"
             title="任务读取失败"
@@ -261,10 +283,30 @@ function CapabilityPlanEditor({
   const [validated, setValidated] = useState('')
   const { message, modal } = App.useApp()
   const client = useQueryClient()
-  const validation = useMutation(capabilityTaskMutations.validate())
-  const create = useMutation(capabilityTaskMutations.create(client))
-  const resume = useMutation(capabilityTaskMutations.resume(client))
+  const validation = useOperationMutation(capabilityTaskMutations.validate(), {
+    label: ['校验目标计划', 'Validate capability plan'],
+    target: () => '当前目标计划',
+    readOnly: true,
+  })
+  const create = useOperationMutation(capabilityTaskMutations.create(client), {
+    label: ['提交目标计划', 'Submit capability plan'],
+    target: (v) => v.idempotencyKey,
+  })
+  const resume = useOperationMutation(capabilityTaskMutations.resume(client), {
+    label: ['修订并续接目标任务', 'Resume capability task'],
+    target: (v) => v.id,
+  })
+  const blocked = create.blocked || resume.blocked || validation.blocked
+  const denied = queryAccessDenied(create) || queryAccessDenied(resume)
+  useEffect(() => {
+    if (denied) {
+      setValue('')
+      setValidated('')
+      onClose()
+    }
+  }, [denied, onClose])
   const validate = async () => {
+    if (blocked) return
     try {
       const input = JSON.parse(value) as CapabilityTaskInput | CapabilityTaskRevisionInput
       const result = await validation.mutateAsync(
@@ -277,7 +319,8 @@ function CapabilityPlanEditor({
       void message.error(error instanceof Error ? error.message : '计划 JSON 无效')
     }
   }
-  const submit = () =>
+  const submit = () => {
+    if (blocked || !validated || validated !== value) return
     modal.confirm({
       title: initial.task ? '提交修订并续接？' : '提交目标计划？',
       content: '提交后逐步执行，所需审批会进入现有审批队列。',
@@ -292,26 +335,31 @@ function CapabilityPlanEditor({
             : await create.mutateAsync(JSON.parse(value) as CapabilityTaskInput)
           onSubmitted(result.data)
         } catch (error) {
-          void message.error(error instanceof Error ? error.message : '提交失败')
-          throw error
+          // The editor keeps the request receipt and draft visible after failure.
+          void error
         }
       },
     })
+  }
   return (
     <Drawer
       title={initial.task ? '修订目标计划' : '提交目标计划'}
       size="min(800px, 100vw)"
       open
+      closable={!blocked}
+      keyboard={!blocked}
       mask={{ closable: false }}
-      onClose={onClose}
+      onClose={() => {
+        if (!blocked) onClose()
+      }}
       extra={
         <Space>
-          <Button loading={validation.isPending} onClick={() => void validate()}>
+          <Button disabled={blocked} loading={validation.isPending} onClick={() => void validate()}>
             校验计划
           </Button>
           <Button
             type="primary"
-            disabled={!validated || validated !== value}
+            disabled={blocked || !validated || validated !== value}
             loading={create.isPending || resume.isPending}
             onClick={submit}
           >
@@ -321,6 +369,9 @@ function CapabilityPlanEditor({
       }
     >
       <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+        {create.feedback}
+        {resume.feedback}
+        {validation.feedback}
         {initial.task ? (
           <Alert
             showIcon
@@ -330,6 +381,7 @@ function CapabilityPlanEditor({
         ) : null}
         <label htmlFor="capability-plan-json">计划 JSON</label>
         <Input.TextArea
+          disabled={blocked}
           id="capability-plan-json"
           value={value}
           autoSize={{ minRows: 16, maxRows: 32 }}

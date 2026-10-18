@@ -1,10 +1,13 @@
-import { useMutation, useQuery } from '@tanstack/react-query'
-import { Alert, Avatar, Button, Card, Spin, Typography } from 'antd'
+import { ReadFeedback } from '@/components/request-feedback'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { readableQueryData } from '@/utils/query-feedback'
 import { AppstoreOutlined, UserOutlined } from '@ant-design/icons'
+import { useQuery } from '@tanstack/react-query'
+import { Alert, Avatar, Button, Card, Spin, Typography } from 'antd'
 import { useParams } from 'react-router-dom'
 import { completeBrowserHandoff, inspectBrowserHandoff } from './browser-handoff-api'
-import { authKeys } from './keys'
 import './browser-handoff-page.css'
+import { authKeys } from './keys'
 
 const { Paragraph, Text, Title } = Typography
 
@@ -26,13 +29,16 @@ export function BrowserHandoffPage({
     enabled: Boolean(handoffId),
     retry: false,
   })
-  const completion = useMutation({
-    mutationFn: () => completeBrowserHandoff(handoffId),
-    onSuccess: ({ destinationUrl }) => {
-      navigate(new URL(destinationUrl, window.location.origin).toString())
+  const completion = useOperationMutation(
+    {
+      mutationFn: () => completeBrowserHandoff(handoffId),
+      onSuccess: ({ destinationUrl }) => {
+        navigate(new URL(destinationUrl, window.location.origin).toString())
+      },
     },
-  })
-  const handoff = handoffQuery.data
+    { label: ['浏览器登录交接', 'Browser login handoff'], target: () => '当前登录交接' },
+  )
+  const handoff = readableQueryData(handoffQuery)
 
   return (
     <main className="soha-browser-handoff-page">
@@ -42,6 +48,8 @@ export function BrowserHandoffPage({
           <Text strong>Soha 浏览器登录</Text>
         </div>
 
+        <ReadFeedback label="登录交接" query={handoffQuery} />
+        {completion.feedback}
         {handoffQuery.isLoading ? (
           <div className="soha-browser-handoff-loading">
             <Spin description="正在检查安全交接" />
@@ -83,20 +91,12 @@ export function BrowserHandoffPage({
               </div>
             </div>
 
-            {completion.error ? (
-              <Alert
-                showIcon
-                type="error"
-                title="登录交接失败"
-                description={errorMessage(completion.error)}
-              />
-            ) : null}
-
             <div className="soha-browser-handoff-actions">
               <Button href="/">取消</Button>
               <Button
                 type="primary"
                 loading={completion.isPending}
+                disabled={completion.blocked}
                 onClick={() => completion.mutate()}
               >
                 继续登录

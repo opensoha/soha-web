@@ -1,4 +1,21 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { ManagementDensityButton } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
+import { StatusTag } from '@/components/status-tag'
+import { useOperationMutation } from '@/components/use-operation-mutation'
+import { useAnnouncementInbox, type AnnouncementInboxItem } from '@/features/announcements'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import type { IdentityApplication } from '@/features/identity'
+import { MENU_WORKBENCH_LABELS, MENU_WORKBENCH_ORDER, resolveMenuIcon } from '@/features/system'
+import { useI18n } from '@/i18n'
+import {
+  canAccessRoute,
+  findFirstAccessiblePathForWorkbench,
+  getAccessibleWorkbenchIds,
+  getMenuWorkbenchId,
+  getRouteMeta,
+} from '@/routes/meta'
+import { useAuthStore } from '@/stores/auth-store'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
 import {
   AppstoreOutlined,
   BellOutlined,
@@ -7,6 +24,7 @@ import {
   LoadingOutlined,
   MenuFoldOutlined,
   MoreOutlined,
+  ReloadOutlined,
   RightOutlined,
   SearchOutlined,
   StarFilled,
@@ -14,31 +32,17 @@ import {
   TagsOutlined,
   UserOutlined,
 } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Badge, Button, Dropdown, Empty, Input, Menu, Spin, Tag, Typography } from 'antd'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Badge, Button, Dropdown, Empty, Input, Menu, Spin, Tag, Typography } from 'antd'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ManagementDensityButton } from '@/components/management-list'
-import { StatusTag } from '@/components/status-tag'
-import { useAnnouncementInbox, type AnnouncementInboxItem } from '@/features/announcements'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
-import type { IdentityApplication } from '@/features/identity'
-import { MENU_WORKBENCH_LABELS, MENU_WORKBENCH_ORDER, resolveMenuIcon } from '@/features/system'
-import { useI18n } from '@/i18n'
-import {
-  findFirstAccessiblePathForWorkbench,
-  getAccessibleWorkbenchIds,
-  getMenuWorkbenchId,
-  canAccessRoute,
-  getRouteMeta,
-} from '@/routes/meta'
-import { useAuthStore } from '@/stores/auth-store'
 import { providerPortalMutations } from '../mutations'
+import '../provider-portal-pages.css'
 import { providerPortalQueries } from '../queries'
 import { PortalUserAvatar } from '../shared/account-menu'
 import { PortalApplicationAvatar, portalStatusLabels } from '../shared/application-ui'
 import { formatPortalDateTime, portalApplicationSearchText } from '../shared/formatters'
 import type { PortalSecuritySummary } from '../shared/types'
-import '../provider-portal-pages.css'
 
 const { Paragraph, Text } = Typography
 
@@ -110,6 +114,7 @@ function ApplicationCard({
   favoriteLoading,
   launchLoading,
   viewMode,
+  blocked,
   onFavoriteToggle,
   onLaunch,
   onViewDetails,
@@ -119,6 +124,7 @@ function ApplicationCard({
   favoriteLoading: boolean
   launchLoading: boolean
   viewMode: PortalApplicationView
+  blocked: boolean
   onFavoriteToggle: (application: IdentityApplication) => void
   onLaunch: (application: IdentityApplication) => void
   onViewDetails: (application: IdentityApplication) => void
@@ -137,7 +143,7 @@ function ApplicationCard({
         aria-label={`${openLabel} ${application.name}${isEnabled ? '' : `: ${statusLabel}`}`}
         aria-busy={launchLoading}
         className="soha-portal-app-launch"
-        disabled={!isEnabled || launchLoading}
+        disabled={blocked || !isEnabled || launchLoading}
         type="button"
         onClick={() => onLaunch(application)}
       >
@@ -169,7 +175,7 @@ function ApplicationCard({
               key: 'favorite',
               icon: application.favorite ? <StarFilled /> : <StarOutlined />,
               label: favoriteLabel,
-              disabled: favoriteLoading,
+              disabled: blocked || favoriteLoading,
             },
             ...(canViewDetails
               ? [
@@ -223,20 +229,22 @@ function PortalUserPanel({ security }: { security?: PortalSecuritySummary }) {
             <Badge
               status={security?.mfaEnabled ? 'success' : 'default'}
               text={
-                security?.mfaEnabled
-                  ? t('providerPortal.home.enabled', 'Enabled')
-                  : t('providerPortal.home.notEnabled', 'Not enabled')
+                security === undefined
+                  ? '-'
+                  : security.mfaEnabled
+                    ? t('providerPortal.home.enabled', 'Enabled')
+                    : t('providerPortal.home.notEnabled', 'Not enabled')
               }
             />
           </div>
         </div>
         <div>
           <Text type="secondary">{t('providerPortal.home.sessions', 'Sessions')}</Text>
-          <div className="soha-portal-side-value">{security?.activeSession ?? 0}</div>
+          <div className="soha-portal-side-value">{security?.activeSession ?? '-'}</div>
         </div>
         <div>
           <Text type="secondary">{t('providerPortal.home.sources', 'Sources')}</Text>
-          <div className="soha-portal-side-value">{security?.linkedSources.length ?? 0}</div>
+          <div className="soha-portal-side-value">{security?.linkedSources.length ?? '-'}</div>
         </div>
         <div>
           <Text type="secondary">{t('providerPortal.home.recentLogin', 'Recent login')}</Text>
@@ -370,7 +378,6 @@ function PortalAnnouncementPanel({
 
 export function SohaProviderPortalPage() {
   const navigate = useNavigate()
-  const { message } = App.useApp()
   const { t, localeCode } = useI18n()
   const queryClient = useQueryClient()
   const currentUserId = useAuthStore((state) => state.user?.userId)
@@ -389,28 +396,44 @@ export function SohaProviderPortalPage() {
 
   const bootstrapQuery = useQuery(providerPortalQueries.bootstrap())
   const permissionSnapshotQuery = usePermissionSnapshot()
-  const launchMutation = useMutation(providerPortalMutations.launch(queryClient))
-  const favoriteMutation = useMutation(providerPortalMutations.toggleFavorite(queryClient))
+  const launchMutation = useOperationMutation(providerPortalMutations.launch(queryClient), {
+    label: ['打开应用', 'Open application'],
+    target: (v) => v.name,
+    resultError: (decision) =>
+      decision.launchUrl
+        ? undefined
+        : new Error(
+            t(
+              'providerPortal.home.launchUrlNotConfigured',
+              'Application launch URL is not configured',
+            ),
+          ),
+    receipt: () => ({
+      message: '已收到应用入口',
+      evidence: '目标系统是否登录成功由目标系统确认。',
+    }),
+  })
+  const favoriteMutation = useOperationMutation(
+    providerPortalMutations.toggleFavorite(queryClient),
+    {
+      label: ['更新应用收藏', 'Update favorite'],
+      target: (v) => v.name,
+      receipt: (_, v) => ({ message: v.favorite ? '已取消收藏' : '已收藏' }),
+    },
+  )
   const announcementQuery = useAnnouncementInbox(10, true)
 
   const launchApplication = (application: IdentityApplication) => {
     launchMutation.mutate(application, {
       onSuccess: (decision) => {
-        if (!decision.launchUrl) {
-          message.warning(
-            t(
-              'providerPortal.home.launchUrlNotConfigured',
-              'Application launch URL is not configured',
-            ),
-          )
-          return
-        }
-        window.location.assign(decision.launchUrl)
+        if (decision.launchUrl) window.location.assign(decision.launchUrl)
       },
     })
   }
 
-  const bootstrap = bootstrapQuery.data
+  const bootstrap = readableQueryData(bootstrapQuery)
+  const operationBlocked =
+    launchMutation.blocked || favoriteMutation.blocked || queryAccessDenied(bootstrapQuery)
   const permissionSnapshot = permissionSnapshotQuery.data?.data
   const canViewApplicationDetails = hasPermission(permissionSnapshot, 'identity.applications.view')
   const workbenches = useMemo(() => {
@@ -446,8 +469,8 @@ export function SohaProviderPortalPage() {
       )
   }, [localeCode, permissionSnapshot])
   const applications = bootstrap?.applications ?? []
-  const announcementItems = announcementQuery.data?.data.items ?? []
-  const announcementUnreadCount = announcementQuery.data?.data.unreadCount ?? 0
+  const announcementItems = readableQueryData(announcementQuery)?.data.items ?? []
+  const announcementUnreadCount = readableQueryData(announcementQuery)?.data.unreadCount ?? 0
   const applicationTags = useMemo(
     () =>
       Array.from(
@@ -499,6 +522,18 @@ export function SohaProviderPortalPage() {
   return (
     <div className="soha-provider-portal soha-provider-portal-home">
       <main className="soha-portal-main">
+        <ReadFeedback query={bootstrapQuery} label="应用门户" />
+        <ReadFeedback
+          query={announcementQuery}
+          label="门户公告"
+          canRead={announcementQuery.isEnabled}
+        />
+        {!queryAccessDenied(bootstrapQuery) ? (
+          <>
+            {launchMutation.feedback}
+            {favoriteMutation.feedback}
+          </>
+        ) : null}
         <div
           className={`soha-portal-workspace${isGroupCollapsed ? ' is-group-collapsed' : ''}${isSideCollapsed ? ' is-side-collapsed' : ''}`}
         >
@@ -554,6 +589,19 @@ export function SohaProviderPortalPage() {
                 onChange={(event) => setQuery(event.target.value)}
               />
               <div className="soha-portal-view-actions">
+                <Button
+                  aria-label="刷新门户"
+                  icon={<ReloadOutlined />}
+                  loading={bootstrapQuery.isFetching || announcementQuery.isFetching}
+                  onClick={() =>
+                    void Promise.all([
+                      bootstrapQuery.refetch(),
+                      announcementQuery.isEnabled === false
+                        ? undefined
+                        : announcementQuery.refetch(),
+                    ])
+                  }
+                />
                 {isGroupCollapsed ? (
                   <Button
                     aria-label={t(
@@ -596,11 +644,12 @@ export function SohaProviderPortalPage() {
               unreadCount={announcementUnreadCount}
             />
             <div className="soha-portal-catalog-results">
-              {filteredApplications.length ? (
+              {bootstrapQuery.isError && !bootstrap ? null : filteredApplications.length ? (
                 <div className={`soha-portal-app-grid is-${applicationView}`}>
                   {filteredApplications.map((application) => (
                     <ApplicationCard
                       application={application}
+                      blocked={operationBlocked}
                       canViewDetails={canViewApplicationDetails}
                       favoriteLoading={
                         favoriteMutation.isPending &&

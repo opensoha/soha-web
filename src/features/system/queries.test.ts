@@ -16,7 +16,9 @@ describe('systemQueries', () => {
     const options = systemQueries.sessions()
 
     expect(options.queryKey).toEqual(systemKeys.sessions.list())
-    expect(options.refetchInterval).toBe(10_000)
+    const interval = options.refetchInterval as (query: unknown) => number | false
+    expect(interval({ state: { status: 'success' } })).toBe(10_000)
+    expect(interval({ state: { status: 'error' } })).toBe(false)
     await executeQuery(options)
     expect(sessions).toHaveBeenCalledOnce()
   })

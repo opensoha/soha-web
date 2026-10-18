@@ -1,24 +1,29 @@
-import { useMemo, useState } from 'react'
-import { DeleteOutlined } from '@ant-design/icons'
-import { App, Popconfirm } from 'antd'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { TableColumnsType } from 'antd'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementIconButton, ManagementTableToolbar } from '@/components/management-list'
 import { TABLE_ACTIONS_COLUMN_CLASS_NAME } from '@/components/resource-actions'
 import { hasAllowedAction } from '@/features/auth'
-import { useI18n } from '@/i18n'
-import { usePlatformScopeStore } from '@/stores/platform-scope-store'
-import { toScopeKey } from '@/types'
-import { includesSearch, normalizeSearchKeyword } from '@/features/platform/workloads-model'
 import { useClusterCapability } from '@/features/platform/cluster-capabilities'
 import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
 import {
+  platformResourceTarget,
+  usePlatformMutation,
+} from '@/features/platform/shared/use-platform-mutation'
+import { includesSearch, normalizeSearchKeyword } from '@/features/platform/workloads-model'
+import { useI18n } from '@/i18n'
+import { usePlatformScopeStore } from '@/stores/platform-scope-store'
+import { toScopeKey } from '@/types'
+import { readableQueryData } from '@/utils/query-feedback'
+import { DeleteOutlined } from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TableColumnsType } from 'antd'
+import { Popconfirm } from 'antd'
+import { useMemo, useState } from 'react'
+import {
   useWorkloadListAIContext,
   useWorkloadTableDensity,
-  workloadRowAIContext,
   WorkloadQueryPanel,
   WorkloadRefreshButton,
+  workloadRowAIContext,
   WorkloadSearchInput,
   WorkloadTableEmpty,
 } from './list-controls'
@@ -43,17 +48,21 @@ export function ReplicaControllerListPage<T extends ReplicaControllerRecord>({
   label: string
 }) {
   const { localeCode } = useI18n()
-  const { message } = App.useApp()
   const { clusterId, namespace } = usePlatformScopeStore()
   const scope = toScopeKey(clusterId, namespace)
   const queryClient = useQueryClient()
   const listQuery = useQuery(workloadQueries.list<T>(kind, scope))
-  const removeMutation = useMutation(workloadMutations.remove(kind, queryClient))
+  const visibleListQueryData = readableQueryData(listQuery)
+  const removeMutation = usePlatformMutation(workloadMutations.remove(kind, queryClient), {
+    label: ['删除资源', 'Delete resource'],
+    target: platformResourceTarget,
+  })
+  const platformWriteBlocked = removeMutation.blocked
   const capability = useClusterCapability('workload.mutations', localeCode)
   const [searchKeyword, setSearchKeyword] = useState('')
   const normalizedKeyword = normalizeSearchKeyword(searchKeyword)
   const { densityButton, tableSize } = useWorkloadTableDensity(localeCode)
-  const records = listQuery.data ?? []
+  const records = visibleListQueryData ?? []
   const filteredRecords = useMemo(
     () =>
       records.filter((record) =>
@@ -104,15 +113,11 @@ export function ReplicaControllerListPage<T extends ReplicaControllerRecord>({
           title={localeCode === 'zh_CN' ? `确认删除 ${name}？` : `Delete ${name}?`}
           okText={deleteLabel}
           cancelText={localeCode === 'zh_CN' ? '取消' : 'Cancel'}
-          okButtonProps={{ danger: true, loading: pending }}
-          onConfirm={() =>
-            removeMutation.mutate(target, {
-              onSuccess: () => void message.success(localeCode === 'zh_CN' ? '已删除' : 'Deleted'),
-              onError: (error) => void message.error(error.message),
-            })
-          }
+          okButtonProps={{ disabled: platformWriteBlocked, danger: true, loading: pending }}
+          onConfirm={() => removeMutation.mutate(target, {})}
         >
           <ManagementIconButton
+            disabled={platformWriteBlocked}
             danger
             icon={<DeleteOutlined />}
             aria-label={deleteLabel}
@@ -126,6 +131,8 @@ export function ReplicaControllerListPage<T extends ReplicaControllerRecord>({
 
   return (
     <div className="soha-page">
+      {removeMutation.feedback}
+
       <WorkloadQueryPanel
         hasActiveFilters={Boolean(searchKeyword.trim())}
         localeCode={localeCode}
@@ -141,6 +148,9 @@ export function ReplicaControllerListPage<T extends ReplicaControllerRecord>({
         />
       </WorkloadQueryPanel>
       <AdminTable
+        error={listQuery.isEnabled === false ? null : listQuery.error}
+        hasReadData={listQuery.data !== undefined}
+        onRetry={listQuery.isEnabled === false ? undefined : () => listQuery.refetch()}
         className="soha-workload-replica-table soha-platform-table"
         columnSettingIconOnly
         columnSettingPlacement="header"

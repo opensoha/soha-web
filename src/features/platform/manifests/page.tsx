@@ -1,9 +1,4 @@
-import { useEffect, useState } from 'react'
-import { Button, Descriptions, Drawer, Space, Table, Tabs, Typography } from 'antd'
-import type { TableColumnsType } from 'antd'
-import { CodeOutlined, ExportOutlined } from '@ant-design/icons'
-import { useQueries, useQuery } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { ReadFeedback } from '@/components/request-feedback'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
   ManagementDensityButton,
@@ -20,9 +15,16 @@ import {
   type ManifestResourceInventory,
 } from '@/features/delivery'
 import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
-import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { useI18n } from '@/i18n'
+import { usePlatformScopeStore } from '@/stores/platform-scope-store'
+import { readableQueryData } from '@/utils/query-feedback'
 import { formatDateTime } from '@/utils/time'
+import { CodeOutlined, ExportOutlined } from '@ant-design/icons'
+import { useQueries, useQuery } from '@tanstack/react-query'
+import type { TableColumnsType } from 'antd'
+import { Button, Descriptions, Drawer, Space, Table, Tabs, Typography } from 'antd'
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import './styles.css'
 
 const { Text } = Typography
@@ -83,13 +85,16 @@ export function PlatformManifestsPage() {
       Boolean(clusterId),
     ),
   )
+  const visibleManifestsQueryData = readableQueryData(manifestsQuery)
 
-  const manifestItems = manifestsQuery.data?.items ?? []
+  const manifestItems = visibleManifestsQueryData?.items ?? []
   const deploymentQueries = useQueries({
     queries: manifestItems.map((item) => manifestQueries.deployments(item.id, Boolean(clusterId))),
   })
   const deploymentsByBinding = new Map(
-    deploymentQueries.flatMap((query) => query.data ?? []).map((item) => [item.bindingId, item]),
+    deploymentQueries
+      .flatMap((query) => readableQueryData(query) ?? [])
+      .map((item) => [item.bindingId, item]),
   )
   const scopedBindings: ManifestRuntimeRow[] = manifestItems.flatMap((item) =>
     item.bindings
@@ -202,11 +207,26 @@ export function PlatformManifestsPage() {
   return (
     <>
       <ManagementDataPage
+        children={
+          <>
+            {deploymentQueries.map((query, index) => (
+              <ReadFeedback
+                key={manifestItems[index].id}
+                canRead={query.isEnabled}
+                query={query}
+                label={`清单 ${manifestItems[index].name} 的部署记录`}
+              />
+            ))}
+          </>
+        }
         className="soha-platform-manifests"
         beforeQuery={
           <h1 className="soha-platform-manifests-heading">{t('common.manifest', '应用清单')}</h1>
         }
         table={{
+          error: manifestsQuery.isEnabled === false ? null : manifestsQuery.error,
+          hasReadData: manifestsQuery.data !== undefined,
+          onRetry: manifestsQuery.isEnabled === false ? undefined : () => manifestsQuery.refetch(),
           headerExtra: (
             <ManagementTableToolbar>
               <ManagementDensityButton
@@ -247,21 +267,18 @@ export function PlatformManifestsPage() {
           tableSize,
           pageSize: pagination.pageSize,
           pagination: {
-            current: manifestsQuery.data?.page ?? pagination.page,
-            pageSize: manifestsQuery.data?.pageSize ?? pagination.pageSize,
-            total: manifestsQuery.data?.total ?? 0,
+            current: visibleManifestsQueryData?.page ?? pagination.page,
+            pageSize: visibleManifestsQueryData?.pageSize ?? pagination.pageSize,
+            total: visibleManifestsQueryData?.total ?? 0,
+            locale: { items_per_page: localeCode === 'zh_CN' ? '份清单/页' : 'manifests/page' },
             onPageChange: (page: number) => setPagination((current) => ({ ...current, page })),
             onPageSizeChange: (pageSize: number) => setPagination({ page: 1, pageSize }),
           },
-          paginationSummary: (total, range) => (
+          paginationSummary: () => (
             <Text type="secondary">
               {localeCode === 'zh_CN'
-                ? total > 0
-                  ? `当前 ${range[0]}-${range[1]} / ${total} 条`
-                  : '当前 0 / 0 条'
-                : total > 0
-                  ? `${range[0]}-${range[1]} / ${total} items`
-                  : '0 / 0 items'}
+                ? `共 ${visibleManifestsQueryData?.total ?? 0} 份清单 · 当前页 ${manifestItems.length} 份清单 / ${scopedBindings.length} 条绑定`
+                : `${visibleManifestsQueryData?.total ?? 0} manifests · This page: ${manifestItems.length} manifests / ${scopedBindings.length} bindings`}
             </Text>
           ),
           scroll: { x: 'max-content' },
@@ -273,8 +290,8 @@ export function PlatformManifestsPage() {
               description={
                 clusterId
                   ? localeCode === 'zh_CN'
-                    ? '当前作用域没有绑定的应用清单'
-                    : 'No manifests are bound in the current scope'
+                    ? '当前页清单在此作用域没有绑定'
+                    : 'No bindings for this scope on the current manifest page'
                   : localeCode === 'zh_CN'
                     ? '请先选择集群'
                     : 'Please select a cluster'

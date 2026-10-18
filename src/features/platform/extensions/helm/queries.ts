@@ -76,6 +76,6 @@ export const helmQueries = {
       queryFn: () => getHelmReleaseDetail(target!),
       enabled: enabled && Boolean(target),
       retry: false,
-      refetchInterval: 5000,
+      refetchInterval: (query) => (query.state.status === 'error' ? false : 5000),
     }),
 }

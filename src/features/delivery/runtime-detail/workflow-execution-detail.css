@@ -219,17 +219,16 @@
 @media (prefers-reduced-motion: no-preference) {
   .soha-workflow-execution .soha-execution-identity,
   .soha-workflow-execution .soha-execution-stages-panel {
-    animation: soha-execution-reveal var(--soha-execution-motion-mid)
-      var(--soha-execution-motion-ease);
+    animation: soha-execution-reveal var(--soha-motion-duration-mid) var(--soha-motion-ease-out);
   }
   .soha-workflow-execution .soha-execution-node,
   .soha-workflow-execution .soha-execution-feedback {
     transition:
-      background-color var(--soha-execution-motion-fast) var(--soha-execution-motion-ease),
-      border-color var(--soha-execution-motion-fast) var(--soha-execution-motion-ease);
+      background-color var(--soha-motion-duration-fast) var(--soha-motion-ease-out),
+      border-color var(--soha-motion-duration-fast) var(--soha-motion-ease-out);
   }
   .soha-workflow-execution .soha-execution-live-dot {
-    animation: soha-execution-live 1.8s ease-in-out infinite;
+    animation: soha-execution-live var(--soha-motion-activity) var(--soha-motion-ease) infinite;
   }
 }
 .soha-workflow-execution[data-motion-paused='true'] .soha-execution-live-dot {

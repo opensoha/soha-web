@@ -39,6 +39,9 @@ beforeEach(async () => {
       </QueryClientProvider>,
     )
   })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1)
+  })
 })
 afterEach(async () => {
   await act(async () => root.unmount())
@@ -87,11 +90,53 @@ it.each([403, 503, 0])(
     expect(messages.error).not.toHaveBeenCalled()
   },
 )
-it('keeps local feedback for a delete rejection without a global notification', async () => {
+it('retains a known delete rejection for persistent feedback and permits a deliberate retry', async () => {
   remove.mockRejectedValueOnce(new ApiError(409, 'Resource is still in use'))
   await act(async () => {
     crud.deleteMutation.mutate('one')
     await vi.advanceTimersByTimeAsync(1)
   })
-  expect(messages.error).toHaveBeenCalledWith('Resource is still in use')
+  expect(crud.deleteMutation.error?.message).toBe('Resource is still in use')
+  expect(crud.deleteBlocked).toBe(false)
+  expect(messages.error).not.toHaveBeenCalled()
+})
+
+it('keeps the original editor and prevents replay after an unknown save, including reopen', async () => {
+  create.mockRejectedValueOnce(new ApiError(503, 'Response interrupted'))
+  await act(async () => {
+    crud.openEdit({ id: 'original' })
+    await vi.advanceTimersByTimeAsync(1)
+  })
+  await act(async () => {
+    crud.handleSubmit({ name: 'Original draft' })
+    await vi.advanceTimersByTimeAsync(1)
+  })
+  expect(crud.saveBlocked).toBe(true)
+  await act(async () => {
+    crud.closeModal()
+    crud.openEdit({ id: 'other' })
+    crud.handleSubmit({ name: 'Replay' })
+    await vi.advanceTimersByTimeAsync(1)
+  })
+  expect(create).toHaveBeenCalledTimes(1)
+  expect(crud.editing?.id).toBe('original')
+  expect(crud.modalVisible).toBe(true)
+  expect(crud.saveError?.message).toBe('Response interrupted')
+})
+it('fences duplicate deletes and retains an unknown delete until evidence is checked', async () => {
+  remove.mockRejectedValueOnce(new ApiError(503, 'Delete response interrupted'))
+  await act(async () => {
+    crud.deleteRecord('original')
+    crud.deleteRecord('original')
+    await vi.advanceTimersByTimeAsync(1)
+  })
+  expect(remove).toHaveBeenCalledTimes(1)
+  expect(crud.deleteBlocked).toBe(true)
+  await act(async () => {
+    crud.deleteRecord('other')
+    await crud.refetch()
+    await vi.advanceTimersByTimeAsync(1)
+  })
+  expect(remove).toHaveBeenCalledTimes(1)
+  expect(crud.deleteMutation.variables).toBe('original')
 })

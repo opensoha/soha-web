@@ -1,22 +1,3 @@
-import { useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
-import { isApiError } from '@/services/api-error'
-import { identityProviderQueries } from '../providers'
-import { providersForOutpost } from './deployment-model'
-import { OutpostDetailDrawer } from './components/outpost-detail-drawer'
-import {
-  App,
-  Button,
-  Form,
-  Popconfirm,
-  Select,
-  Space,
-  Typography,
-  Tooltip,
-  type TableColumnsType,
-} from 'antd'
-import { DeleteOutlined, EditOutlined, KeyOutlined, PlusOutlined } from '@ant-design/icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ManagementDataPage } from '@/components/management-data-page'
 import {
   ManagementDensityButton,
@@ -28,16 +9,38 @@ import {
   ManagementState,
   ManagementTableToolbar,
 } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
 import { MetadataTag, StatusTag } from '@/components/status-tag'
-import { tableColumnPresets } from '@/utils/table-columns'
+import { useOperationMutation } from '@/components/use-operation-mutation'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useI18n } from '@/i18n'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import { tableColumnPresets } from '@/utils/table-columns'
+import { DeleteOutlined, EditOutlined, KeyOutlined, PlusOutlined } from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  Button,
+  Form,
+  Popconfirm,
+  Select,
+  Space,
+  Tooltip,
+  Typography,
+  type TableColumnsType,
+} from 'antd'
+import { useMemo, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { identityProviderQueries } from '../providers'
 import { identityRuntimeQueries } from '../runtime'
+import '../shared/application-access.css'
+import { createIdentityOutpost, rotateIdentityOutpostToken } from './api'
+import { OutpostDetailDrawer } from './components/outpost-detail-drawer'
 import { IdentityOutpostFormModal } from './components/outpost-form-modal'
 import {
   IdentityOutpostTokenModal,
   type IdentityOutpostCreatedToken,
 } from './components/outpost-token-modal'
+import { providersForOutpost } from './deployment-model'
 import { identityOutpostMutations } from './mutations'
 import { identityOutpostModeOptions } from './options'
 import { identityOutpostQueries } from './queries'
@@ -46,22 +49,18 @@ import {
   outpostRuntimeLabels,
   outpostRuntimeReason,
 } from './runtime-model'
+import './styles.css'
 import type {
   IdentityOutpost,
   IdentityOutpostFilters,
   IdentityOutpostInput,
   IdentityOutpostMode,
 } from './types'
-import '../shared/application-access.css'
-import './styles.css'
-
 const { Text } = Typography
-
 interface IdentityOutpostPageFilters extends IdentityOutpostFilters {
   query: string
   runtimeStatus?: IdentityOutpost['runtimeStatus'] | ''
 }
-
 function modeTag(mode: IdentityOutpostMode) {
   const tone =
     mode === 'embedded'
@@ -73,7 +72,6 @@ function modeTag(mode: IdentityOutpostMode) {
           : 'default'
   return <MetadataTag label={mode} tone={tone} />
 }
-
 function formatDateTime(value?: string) {
   if (!value) return '-'
   const date = new Date(value)
@@ -85,9 +83,7 @@ function formatDateTime(value?: string) {
     minute: '2-digit',
   }).format(date)
 }
-
 export function IdentityOutpostsPage() {
-  const { message } = App.useApp()
   const { t } = useI18n()
   const queryClient = useQueryClient()
   const [queryForm] = Form.useForm<IdentityOutpostPageFilters>()
@@ -126,14 +122,19 @@ export function IdentityOutpostsPage() {
     ...identityProviderQueries.list({ type: 'proxy' }),
     enabled: canViewProviders,
   })
-
+  const visibleProviderBindingsData =
+    providerBindings.isEnabled === false ? undefined : readableQueryData(providerBindings)
   const outpostsQuery = useQuery({
     ...identityOutpostQueries.list({ mode: filters.mode }),
-    refetchInterval: 15_000,
+    refetchInterval: 15000,
   })
+  const visibleOutpostsQueryData =
+    outpostsQuery.isEnabled === false ? undefined : readableQueryData(outpostsQuery)
   const runtimeQuery = useQuery(identityRuntimeQueries.capabilities())
+  const visibleRuntimeQueryData =
+    runtimeQuery.isEnabled === false ? undefined : readableQueryData(runtimeQuery)
   const allowedModes = useMemo<IdentityOutpostMode[]>(() => {
-    const capability = runtimeQuery.data?.outpost
+    const capability = visibleRuntimeQueryData?.outpost
     if (!capability) return []
     return [
       capability.embeddedRuntime.available && 'embedded',
@@ -141,26 +142,50 @@ export function IdentityOutpostsPage() {
       capability.kubernetesArtifact.available && 'kubernetes',
       capability.externalProtocol.available && 'external',
     ].filter((mode): mode is IdentityOutpostMode => Boolean(mode))
-  }, [runtimeQuery.data])
-
-  const createMutation = useMutation({
-    ...identityOutpostMutations.create(queryClient),
-    onError: (error: Error) => message.error(error.message),
-  })
-  const updateMutation = useMutation({
-    ...identityOutpostMutations.update(queryClient),
-    onError: (error: Error) => message.error(error.message),
-  })
-  const deleteMutation = useMutation({
-    ...identityOutpostMutations.remove(queryClient),
-    onError: (error: Error) => message.error(error.message),
-  })
-  const rotateTokenMutation = useMutation({
-    ...identityOutpostMutations.rotateToken(queryClient),
-    onError: (error: Error) => message.error(error.message),
-  })
-
-  const outposts = outpostsQuery.data ?? []
+  }, [visibleRuntimeQueryData])
+  const createMutation = useOperationMutation(
+    {
+      ...identityOutpostMutations.create(queryClient),
+      gcTime: 0,
+      mutationFn: async (input: IdentityOutpostInput) => {
+        const result = await createIdentityOutpost(input)
+        if (result.token) setCreatedToken({ name: result.name, token: result.token })
+        return { ...result, token: undefined }
+      },
+    },
+    { label: ['创建 Outpost', 'Create Outpost'], target: (v) => v.name },
+  )
+  const updateMutation = useOperationMutation(
+    {
+      ...identityOutpostMutations.update(queryClient),
+    },
+    { label: ['保存 Outpost', 'Save Outpost'], target: (v) => v.outpostId },
+  )
+  const deleteMutation = useOperationMutation(
+    {
+      ...identityOutpostMutations.remove(queryClient),
+    },
+    { label: ['删除 Outpost', 'Delete Outpost'], target: (v) => v },
+  )
+  const rotateTokenMutation = useOperationMutation(
+    {
+      ...identityOutpostMutations.rotateToken(queryClient),
+      gcTime: 0,
+      mutationFn: async (input: string) => {
+        const result = await rotateIdentityOutpostToken(input)
+        if (result.token) setCreatedToken({ name: result.name, token: result.token })
+        return { ...result, token: undefined }
+      },
+    },
+    { label: ['轮换 Outpost Token', 'Rotate token Outpost'], target: (v) => v },
+  )
+  const operationBlocked =
+    createMutation.blocked ||
+    updateMutation.blocked ||
+    deleteMutation.blocked ||
+    rotateTokenMutation.blocked ||
+    (outpostsQuery.isEnabled !== false && queryAccessDenied(outpostsQuery))
+  const outposts = visibleOutpostsQueryData ?? []
   const filteredOutposts = useMemo(() => {
     const keyword = filters.query.trim().toLowerCase()
     return outposts.filter(
@@ -181,24 +206,22 @@ export function IdentityOutpostsPage() {
           )),
     )
   }, [filters.query, filters.runtimeStatus, outposts])
-
   const openCreate = () => {
+    if (operationBlocked) return
     setEditing(null)
     setModalOpen(true)
   }
-
   const openEdit = (outpost: IdentityOutpost) => {
+    if (operationBlocked) return
     setEditing(outpost)
     setModalOpen(true)
   }
-
   const submitForm = (input: IdentityOutpostInput) => {
     if (editing) {
       updateMutation.mutate(
         { outpostId: editing.id, input },
         {
-          onSuccess: (outpost) => {
-            message.success(`已更新 Outpost ${outpost.name}`)
+          onSuccess: () => {
             setModalOpen(false)
             setEditing(null)
           },
@@ -208,7 +231,6 @@ export function IdentityOutpostsPage() {
     }
     createMutation.mutate(input, {
       onSuccess: (outpost) => {
-        message.success(`已创建 Outpost ${outpost.name}`)
         showDetails(outpost.id)
         if (outpost.token) {
           setCreatedToken({ name: outpost.name, token: outpost.token })
@@ -218,7 +240,6 @@ export function IdentityOutpostsPage() {
       },
     })
   }
-
   const currentPage = Math.min(
     pagination.current,
     Math.max(1, Math.ceil(filteredOutposts.length / pagination.pageSize)),
@@ -226,7 +247,7 @@ export function IdentityOutpostsPage() {
   const nodeActions = (outpost: IdentityOutpost) => (
     <Space size={4}>
       <ManagementIconButton
-        disabled={!canUpdate}
+        disabled={operationBlocked || !canUpdate}
         icon={<EditOutlined />}
         onClick={() => openEdit(outpost)}
         tooltip="编辑 Outpost"
@@ -234,13 +255,15 @@ export function IdentityOutpostsPage() {
       <Popconfirm
         title="轮换 Outpost token"
         description="旧 token 将立即失效。确认已准备更新 Outpost 配置。"
-        disabled={!canRotate}
-        okButtonProps={{ loading: rotateTokenMutation.isPending }}
+        disabled={operationBlocked || !canRotate}
+        okButtonProps={{
+          ...{ loading: rotateTokenMutation.isPending },
+          disabled: operationBlocked,
+        }}
         okText="轮换"
         onConfirm={() =>
           rotateTokenMutation.mutate(outpost.id, {
             onSuccess: (result) => {
-              message.success(`已轮换 ${result.name} token`)
               if (result.token) setCreatedToken({ name: result.name, token: result.token })
             },
           })
@@ -251,13 +274,15 @@ export function IdentityOutpostsPage() {
       <Popconfirm
         title="删除 Outpost"
         description={`确认删除 ${outpost.name}？`}
-        disabled={!canDelete}
-        okButtonProps={{ danger: true, loading: deleteMutation.isPending }}
+        disabled={operationBlocked || !canDelete}
+        okButtonProps={{
+          ...{ danger: true, loading: deleteMutation.isPending },
+          disabled: operationBlocked,
+        }}
         okText="删除"
         onConfirm={() =>
           deleteMutation.mutate(outpost.id, {
             onSuccess: () => {
-              message.success('已删除 Outpost')
               if (params.get('outpost') === outpost.id) closeDetails()
             },
           })
@@ -272,7 +297,6 @@ export function IdentityOutpostsPage() {
       </Popconfirm>
     </Space>
   )
-
   const columns: TableColumnsType<IdentityOutpost> = [
     {
       title: '接入节点',
@@ -324,15 +348,21 @@ export function IdentityOutpostsPage() {
       render: (_, outpost) =>
         !canViewProviders ? (
           '无查看权限'
-        ) : providerBindings.isError ? (
-          <Button type="link" size="small" onClick={() => void providerBindings.refetch()}>
+        ) : providerBindings.isError && !visibleProviderBindingsData ? (
+          <Button
+            type="link"
+            size="small"
+            onClick={() =>
+              void (providerBindings.isEnabled === false ? undefined : providerBindings.refetch())
+            }
+          >
             加载失败，重试
           </Button>
         ) : providerBindings.isSuccess ? (
           <Button type="link" size="small" onClick={() => showDetails(outpost.id, 'apps')}>
             {
               new Set(
-                providersForOutpost(providerBindings.data, outpost.id).map(
+                providersForOutpost(visibleProviderBindingsData ?? [], outpost.id).map(
                   (provider) => provider.applicationId,
                 ),
               ).size
@@ -362,9 +392,26 @@ export function IdentityOutpostsPage() {
       render: (_, outpost) => nodeActions(outpost),
     },
   ]
-
   return (
     <>
+      {!(modalOpen && !(outpostsQuery.isEnabled !== false && queryAccessDenied(outpostsQuery))) && (
+        <>
+          {' '}
+          {createMutation.feedback}
+          {updateMutation.feedback}
+          {deleteMutation.feedback}
+          {rotateTokenMutation.feedback}{' '}
+        </>
+      )}
+
+      <ReadFeedback
+        canRead={providerBindings.isEnabled}
+        query={providerBindings}
+        label="身份数据"
+      />
+
+      <ReadFeedback canRead={runtimeQuery.isEnabled} query={runtimeQuery} label="运行能力" />
+
       <ManagementDataPage
         className="soha-identity-access-page soha-identity-outposts-page"
         query={{
@@ -427,30 +474,34 @@ export function IdentityOutpostsPage() {
           },
         }}
         beforeQuery={
-          outpostsQuery.isError ? (
-            <ManagementState
-              kind={
-                isApiError(outpostsQuery.error) && outpostsQuery.error.status === 403
-                  ? 'no-permission'
-                  : 'error'
-              }
-              title="接入节点加载失败"
-              description={outpostsQuery.error.message}
-              actions={<Button onClick={() => void outpostsQuery.refetch()}>重试</Button>}
-            />
-          ) : runtimeQuery.isError ? (
+          outpostsQuery.isError && !visibleOutpostsQueryData ? null : runtimeQuery.isError &&
+            !visibleRuntimeQueryData ? (
             <ManagementState
               kind="error"
               title="运行能力加载失败"
               description={runtimeQuery.error.message}
-              actions={<Button onClick={() => void runtimeQuery.refetch()}>重试</Button>}
+              actions={
+                <Button
+                  onClick={() =>
+                    void (runtimeQuery.isEnabled === false ? undefined : runtimeQuery.refetch())
+                  }
+                >
+                  重试
+                </Button>
+              }
             />
           ) : null
         }
         table={{
+          error: outpostsQuery.isEnabled === false ? null : outpostsQuery.error,
+          hasReadData:
+            readableQueryData(outpostsQuery) !== undefined && outpostsQuery.isEnabled !== false,
+          onRetry: () => {
+            if (outpostsQuery.isEnabled !== false) void outpostsQuery.refetch()
+          },
           rowKey: 'id',
           columns,
-          dataSource: outpostsQuery.isError ? [] : filteredOutposts,
+          dataSource: outpostsQuery.isError && !visibleOutpostsQueryData ? [] : filteredOutposts,
           loading: outpostsQuery.isLoading || outpostsQuery.isFetching,
           tableSize,
           columnSettingPlacement: 'header',
@@ -462,8 +513,12 @@ export function IdentityOutpostsPage() {
           },
           empty: (
             <ManagementState
-              kind={outpostsQuery.isError ? 'error' : 'empty'}
-              title={outpostsQuery.isError ? '接入节点加载失败' : '暂无接入节点'}
+              kind={outpostsQuery.isError && !visibleOutpostsQueryData ? 'error' : 'empty'}
+              title={
+                outpostsQuery.isError && !visibleOutpostsQueryData
+                  ? '接入节点加载失败'
+                  : '暂无接入节点'
+              }
               description={
                 filters.query || filters.mode || filters.runtimeStatus
                   ? '没有符合条件的接入节点，请调整筛选条件。'
@@ -474,7 +529,7 @@ export function IdentityOutpostsPage() {
           headerExtra: (
             <ManagementTableToolbar>
               <Button
-                disabled={!canCreate || allowedModes.length === 0}
+                disabled={operationBlocked || !canCreate || allowedModes.length === 0}
                 icon={<PlusOutlined />}
                 onClick={openCreate}
                 type="primary"
@@ -489,7 +544,9 @@ export function IdentityOutpostsPage() {
               <ManagementRefreshButton
                 aria-label={t('common.refresh', '刷新')}
                 loading={outpostsQuery.isFetching}
-                onClick={() => void outpostsQuery.refetch()}
+                onClick={() =>
+                  void (outpostsQuery.isEnabled === false ? undefined : outpostsQuery.refetch())
+                }
                 tooltip={t('common.refresh', '刷新')}
               />
             </ManagementTableToolbar>
@@ -498,11 +555,20 @@ export function IdentityOutpostsPage() {
       />
 
       <IdentityOutpostFormModal
+        blocked={operationBlocked}
+        feedback={
+          <>
+            {createMutation.feedback}
+            {updateMutation.feedback}
+          </>
+        }
         allowedModes={allowedModes}
         editing={editing}
-        onCancel={() => setModalOpen(false)}
+        onCancel={() => {
+          if (!operationBlocked) (() => setModalOpen(false))()
+        }}
         onSubmit={submitForm}
-        open={modalOpen}
+        open={modalOpen && !(outpostsQuery.isEnabled !== false && queryAccessDenied(outpostsQuery))}
         submitting={createMutation.isPending || updateMutation.isPending}
       />
 
@@ -510,15 +576,20 @@ export function IdentityOutpostsPage() {
         <OutpostDetailDrawer
           id={params.get('outpost') ?? ''}
           initialTab={params.get('outpostTab') ?? 'overview'}
-          onClose={closeDetails}
+          onClose={() => {
+            if (!operationBlocked) closeDetails()
+          }}
           onEdit={openEdit}
         />
       )}
       <IdentityOutpostTokenModal
         onClose={() => {
-          setCreatedToken(null)
-          createMutation.reset()
-          rotateTokenMutation.reset()
+          if (!operationBlocked)
+            (() => {
+              setCreatedToken(null)
+              createMutation.reset()
+              rotateTokenMutation.reset()
+            })()
         }}
         value={createdToken}
       />

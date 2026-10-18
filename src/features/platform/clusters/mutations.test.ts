@@ -63,4 +63,21 @@ describe('cluster mutation options', () => {
     await expect(observer.mutate(target)).rejects.toBe(failure)
     expect(invalidate).not.toHaveBeenCalled()
   })
+
+  it('keeps each batch target result and invalidates partial deletion records', async () => {
+    const failure = new Error('cluster-b refused deletion')
+    apiMocks.deleteCluster.mockResolvedValueOnce(undefined).mockRejectedValueOnce(failure)
+    const queryClient = new QueryClient()
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue()
+    const observer = new MutationObserver(queryClient, clusterMutations.removeMany(queryClient))
+    const secondScope = { clusterId: 'cluster-b', namespace: null }
+
+    const results = await observer.mutate({ scopes: [target.scope, secondScope] })
+    expect(results).toEqual([
+      { status: 'fulfilled', value: undefined },
+      { status: 'rejected', reason: failure },
+    ])
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: clusterKeys.list() })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: clusterKeys.detail(secondScope) })
+  })
 })

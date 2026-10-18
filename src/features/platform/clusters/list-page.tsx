@@ -1,6 +1,45 @@
-import { useEffect, useMemo, useState } from 'react'
-import type { Key } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { AdminTable } from '@/components/admin-table'
+import {
+  ManagementBatchBar,
+  ManagementDensityButton,
+  ManagementIconButton,
+  ManagementKeywordField,
+  ManagementQueryActions,
+  ManagementQueryField,
+  ManagementQueryPanel,
+  ManagementRefreshButton,
+  ManagementTableToolbar,
+} from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
+import { MetadataTag, StatusTag } from '@/components/status-tag'
+import { hasPermission, usePermissionSnapshot } from '@/features/auth'
+import { encodeAIContextForElement, useAIPageContext } from '@/features/copilot'
+import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
+import {
+  platformBatchReceipt,
+  platformBatchUnknown,
+  platformResourceTarget,
+  usePlatformMutation,
+} from '@/features/platform/shared/use-platform-mutation'
+import { useI18n } from '@/i18n'
+import { usePlatformScopeStore } from '@/stores/platform-scope-store'
+import { toScopeKey } from '@/types'
+import { readableQueryData } from '@/utils/query-feedback'
+import { tableColumnPresets } from '@/utils/table-columns'
+import { formatDateTime } from '@/utils/time'
+import {
+  CloudUploadOutlined,
+  CopyOutlined,
+  DeleteOutlined,
+  DownloadOutlined,
+  EditOutlined,
+  EyeOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+} from '@ant-design/icons'
+import type { AgentInstallation } from '@opensoha/contracts/gen/ts/sohaapi'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { TableColumnsType } from 'antd'
 import {
   App,
   Button,
@@ -14,42 +53,11 @@ import {
   Spin,
   Typography,
 } from 'antd'
-import {
-  CopyOutlined,
-  CloudUploadOutlined,
-  DeleteOutlined,
-  DownloadOutlined,
-  EditOutlined,
-  EyeOutlined,
-  PlusOutlined,
-  ReloadOutlined,
-} from '@ant-design/icons'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import type { AgentInstallation } from '@opensoha/contracts/gen/ts/sohaapi'
-import { AdminTable } from '@/components/admin-table'
-import {
-  ManagementBatchBar,
-  ManagementDensityButton,
-  ManagementIconButton,
-  ManagementKeywordField,
-  ManagementQueryActions,
-  ManagementQueryField,
-  ManagementQueryPanel,
-  ManagementRefreshButton,
-  ManagementTableToolbar,
-} from '@/components/management-list'
-import { MetadataTag, StatusTag } from '@/components/status-tag'
-import { hasPermission, usePermissionSnapshot } from '@/features/auth'
-import { encodeAIContextForElement, useAIPageContext } from '@/features/copilot'
-import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
-import { useI18n } from '@/i18n'
-import { usePlatformScopeStore } from '@/stores/platform-scope-store'
-import { tableColumnPresets } from '@/utils/table-columns'
-import { formatDateTime } from '@/utils/time'
-import { toScopeKey } from '@/types'
-import type { TableColumnsType } from 'antd'
+import type { Key } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { AgentUpgradeModal } from './agent-upgrade-modal'
 import { clusterMutations } from './mutations'
-import { clusterQueries } from './queries'
 import {
   clusterTypeOf,
   clusterTypeOptions,
@@ -57,9 +65,9 @@ import {
   formatClusterType,
   formatConnectionMode,
 } from './presentation'
-import type { Cluster, ClusterFormValues, ConnectionMode } from './types'
+import { clusterQueries } from './queries'
 import './styles.css'
-import { AgentUpgradeModal } from './agent-upgrade-modal'
+import type { Cluster, ClusterFormValues, ConnectionMode } from './types'
 
 const { Text } = Typography
 
@@ -90,24 +98,59 @@ export function ClustersPage() {
   const canDelete = hasPermission(permissionSnapshot, 'platform.clusters.delete')
 
   const clustersQuery = useQuery(clusterQueries.list())
+  const visibleClustersQueryData = readableQueryData(clustersQuery)
   const editingScope = toScopeKey(editingCluster?.id, null)
   const editDetailOptions = clusterQueries.detail(editingScope)
   const clusterDetailQuery = useQuery({
     ...editDetailOptions,
     enabled: Boolean(editDetailOptions.enabled) && modalVisible && Boolean(editingCluster),
   })
-  const createMutation = useMutation(clusterMutations.create(queryClient))
-  const agentInstallationMutation = useMutation(clusterMutations.createAgentInstallation())
-  const updateMutation = useMutation(clusterMutations.update(queryClient))
-  const deleteMutation = useMutation(clusterMutations.remove(queryClient))
-  const batchDeleteMutation = useMutation(clusterMutations.removeMany(queryClient))
+  const visibleClusterDetailQueryData =
+    Boolean(editDetailOptions.enabled) && modalVisible && Boolean(editingCluster)
+      ? readableQueryData(clusterDetailQuery)
+      : undefined
+  const createMutation = usePlatformMutation(clusterMutations.create(queryClient), {
+    label: ['创建集群', 'Create cluster'],
+    target: (v) => String(v.name || 'Cluster'),
+  })
+  const agentInstallationMutation = usePlatformMutation(
+    clusterMutations.createAgentInstallation(),
+    {
+      label: ['生成 Agent 安装配置', 'Generate Agent installation'],
+      target: platformResourceTarget,
+    },
+  )
+  const updateMutation = usePlatformMutation(clusterMutations.update(queryClient), {
+    label: ['更新资源', 'Update resource'],
+    target: platformResourceTarget,
+  })
+  const deleteMutation = usePlatformMutation(clusterMutations.remove(queryClient), {
+    label: ['删除资源', 'Delete resource'],
+    target: platformResourceTarget,
+  })
+  const batchDeleteMutation = usePlatformMutation(clusterMutations.removeMany(queryClient), {
+    label: ['批量删除集群', 'Delete clusters'],
+    target: (v) => v.scopes.map((scope) => platformResourceTarget({ scope })).join(' · '),
+    resultError: platformBatchUnknown,
+    receipt: (results, variables) =>
+      platformBatchReceipt(
+        results,
+        variables.scopes.map((scope) => platformResourceTarget({ scope })),
+        localeCode,
+      ),
+  })
+  const platformWriteBlocked =
+    createMutation.blocked ||
+    agentInstallationMutation.blocked ||
+    updateMutation.blocked ||
+    deleteMutation.blocked ||
+    batchDeleteMutation.blocked
 
-  const clusters = clustersQuery.data ?? []
+  const clusters = visibleClustersQueryData ?? []
   const targetFor = (id: string) => ({ scope: toScopeKey(id, null) })
   const showAgentInstallation = (clusterId: string) => {
     agentInstallationMutation.mutate(targetFor(clusterId), {
       onSuccess: setAgentInstallation,
-      onError: (error) => void message.error(error.message),
     })
   }
 
@@ -276,6 +319,7 @@ export function ClustersPage() {
           ) : null}
           {canUpdate ? (
             <ManagementIconButton
+              disabled={platformWriteBlocked}
               aria-label={localeCode === 'zh_CN' ? '编辑集群' : 'Edit cluster'}
               icon={<EditOutlined />}
               size="small"
@@ -310,20 +354,17 @@ export function ClustersPage() {
               okText={localeCode === 'zh_CN' ? '删除' : 'Delete'}
               cancelText={localeCode === 'zh_CN' ? '取消' : 'Cancel'}
               okButtonProps={{
+                disabled: platformWriteBlocked,
                 danger: true,
                 loading:
                   deleteMutation.isPending &&
                   deleteMutation.variables?.scope.clusterId === record.id,
               }}
               placement="topRight"
-              onConfirm={() =>
-                deleteMutation.mutate(targetFor(record.id), {
-                  onSuccess: () => void message.success('集群已删除'),
-                  onError: (error) => void message.error(error.message),
-                })
-              }
+              onConfirm={() => deleteMutation.mutate(targetFor(record.id), {})}
             >
               <ManagementIconButton
+                disabled={platformWriteBlocked}
                 aria-label={localeCode === 'zh_CN' ? '删除集群' : 'Delete cluster'}
                 danger
                 icon={<DeleteOutlined />}
@@ -345,14 +386,14 @@ export function ClustersPage() {
     if (!modalVisible) return
     if (editingCluster) {
       setConnectionMode(
-        (clusterDetailQuery.data?.connection.mode as ConnectionMode) ||
+        (visibleClusterDetailQueryData?.connection.mode as ConnectionMode) ||
           (editingCluster.connectionMode as ConnectionMode) ||
           'direct_kubeconfig',
       )
       return
     }
     setConnectionMode('direct_kubeconfig')
-  }, [modalVisible, editingCluster, clusterDetailQuery.data])
+  }, [modalVisible, editingCluster, visibleClusterDetailQueryData])
 
   const initialValues = useMemo<ClusterFormValues>(() => {
     if (!editingCluster) {
@@ -363,7 +404,7 @@ export function ClustersPage() {
         provider: 'standard_kubernetes',
       }
     }
-    const detail = clusterDetailQuery.data
+    const detail = visibleClusterDetailQueryData
     return {
       name: editingCluster.name,
       provider: clusterTypeOf(editingCluster) || undefined,
@@ -375,10 +416,10 @@ export function ClustersPage() {
       agentCustomResourceRules: detail?.connection.customResourceRules || [],
       prometheusBaseUrl: detail?.monitoring.prometheus.baseUrl || '',
     }
-  }, [editingCluster, clusterDetailQuery.data])
+  }, [editingCluster, visibleClusterDetailQueryData])
 
   const formKey = editingCluster
-    ? `cluster-edit:${editingCluster.id}:${clusterDetailQuery.data ? 'ready' : 'loading'}`
+    ? `cluster-edit:${editingCluster.id}:${visibleClusterDetailQueryData ? 'ready' : 'loading'}`
     : 'cluster-create'
 
   const handleSubmit = (values: Record<string, unknown>) => {
@@ -401,23 +442,19 @@ export function ClustersPage() {
         { scope: toScopeKey(editingCluster.id, null), values: payload },
         {
           onSuccess: () => {
-            void message.success('集群更新成功')
             setModalVisible(false)
             setEditingCluster(null)
           },
-          onError: (error) => void message.error(error.message),
         },
       )
     } else {
       createMutation.mutate(payload, {
         onSuccess: (cluster) => {
-          void message.success('集群创建成功')
           setModalVisible(false)
           if (values.connectionMode === 'agent') {
             showAgentInstallation(cluster.id)
           }
         },
-        onError: (error) => void message.error(error.message),
       })
     }
   }
@@ -458,11 +495,16 @@ export function ClustersPage() {
   const handleBatchDelete = async () => {
     if (selectedRowKeys.length === 0) return
     try {
-      await batchDeleteMutation.mutateAsync({
-        scopes: selectedRowKeys.map((id) => toScopeKey(id, null)),
+      const scopes = selectedRowKeys.map((id) => toScopeKey(id, null))
+      const results = await batchDeleteMutation.mutateAsync({
+        scopes,
       })
-      void message.success('集群已删除')
-      setSelectedRowKeys([])
+      setSelectedRowKeys(
+        scopes
+          .filter((_scope, index) => results[index].status === 'rejected')
+          .map((scope) => scope.clusterId)
+          .filter((id): id is string => Boolean(id)),
+      )
     } catch (err) {
       void message.error((err as Error).message)
       throw err
@@ -558,11 +600,11 @@ export function ClustersPage() {
             }
             okText={localeCode === 'zh_CN' ? '删除' : 'Delete'}
             cancelText={localeCode === 'zh_CN' ? '取消' : 'Cancel'}
-            okButtonProps={{ danger: true }}
+            okButtonProps={{ disabled: platformWriteBlocked, danger: true }}
             placement="top"
             onConfirm={handleBatchDelete}
           >
-            <Button autoInsertSpace={false} size="small" danger>
+            <Button autoInsertSpace={false} size="small" danger disabled={platformWriteBlocked}>
               {localeCode === 'zh_CN' ? '批量删除' : 'Batch Delete'}
             </Button>
           </Popconfirm>
@@ -584,6 +626,7 @@ export function ClustersPage() {
         <Button
           autoInsertSpace={false}
           className="soha-clusters-create-button"
+          disabled={platformWriteBlocked}
           icon={<PlusOutlined />}
           type="primary"
           onClick={openCreateModal}
@@ -609,6 +652,18 @@ export function ClustersPage() {
 
   return (
     <div className="soha-page soha-clusters-page">
+      <ReadFeedback
+        canRead={clusterDetailQuery.isEnabled}
+        query={clusterDetailQuery}
+        label="集群详情"
+      />
+
+      {createMutation.feedback}
+      {agentInstallationMutation.feedback}
+      {updateMutation.feedback}
+      {deleteMutation.feedback}
+      {batchDeleteMutation.feedback}
+
       {queryPanel}
       {upgradingCluster ? (
         <AgentUpgradeModal
@@ -618,6 +673,9 @@ export function ClustersPage() {
         />
       ) : null}
       <AdminTable
+        error={clustersQuery.isEnabled === false ? null : clustersQuery.error}
+        hasReadData={clustersQuery.data !== undefined}
+        onRetry={clustersQuery.isEnabled === false ? undefined : () => clustersQuery.refetch()}
         columnSettingIconOnly
         columnSettingPlacement="header"
         shellClassName="soha-management-table-shell"
@@ -650,12 +708,21 @@ export function ClustersPage() {
       />
 
       <Modal
+        okButtonProps={{ disabled: platformWriteBlocked }}
         title={localeCode === 'zh_CN' ? 'Agent 安装命令' : 'Agent install command'}
         open={Boolean(agentInstallation)}
         destroyOnHidden
-        onCancel={() => setAgentInstallation(null)}
+        onCancel={() => {
+          if (!platformWriteBlocked) (() => setAgentInstallation(null))?.()
+        }}
         footer={null}
       >
+        {createMutation.feedback}
+        {agentInstallationMutation.feedback}
+        {updateMutation.feedback}
+        {deleteMutation.feedback}
+        {batchDeleteMutation.feedback}
+
         {agentInstallation ? (
           <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
             <Input.TextArea
@@ -699,18 +766,28 @@ export function ClustersPage() {
       </Modal>
 
       <Modal
+        okButtonProps={{ disabled: platformWriteBlocked }}
         destroyOnHidden
         title={editingCluster ? '编辑集群' : '添加集群'}
         open={modalVisible}
         width={760}
         styles={{ body: { maxHeight: 'calc(100vh - 220px)', overflowY: 'auto' } }}
         onCancel={() => {
-          setModalVisible(false)
-          setEditingCluster(null)
+          if (!platformWriteBlocked)
+            (() => {
+              setModalVisible(false)
+              setEditingCluster(null)
+            })?.()
         }}
         footer={null}
       >
-        {editingCluster && clusterDetailQuery.isLoading && !clusterDetailQuery.data ? (
+        {createMutation.feedback}
+        {agentInstallationMutation.feedback}
+        {updateMutation.feedback}
+        {deleteMutation.feedback}
+        {batchDeleteMutation.feedback}
+
+        {editingCluster && clusterDetailQuery.isLoading && !visibleClusterDetailQueryData ? (
           <div className="flex items-center justify-center h-64">
             <Spin size="large" />
           </div>

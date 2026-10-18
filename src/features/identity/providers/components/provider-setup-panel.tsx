@@ -1,14 +1,15 @@
-import { Button, Descriptions, Space, Typography } from 'antd'
-import { InfoCircleOutlined } from '@ant-design/icons'
-import { useQuery } from '@tanstack/react-query'
 import { ManagementIconButton, ManagementState } from '@/components/management-list'
+import { ReadFeedback } from '@/components/request-feedback'
 import { StatusTag } from '@/components/status-tag'
 import { useI18n } from '@/i18n'
 import { isApiError } from '@/services/api-error'
+import { readableQueryData } from '@/utils/query-feedback'
+import { InfoCircleOutlined } from '@ant-design/icons'
+import { useQuery } from '@tanstack/react-query'
+import { Descriptions, Space, Typography } from 'antd'
 import { identityProviderQueries } from '../queries'
 import type { IdentityProvider } from '../types'
 import { ProxySetupPanel } from './proxy-setup-panel'
-
 const issues: Record<string, string> = {
   public_url_unconfigured: '尚未设置 Soha 公开访问地址，请在系统设置中配置。',
   remote_public_url_requires_https: '远程节点的登录回跳要求 Soha 公开访问地址使用 HTTPS。',
@@ -33,23 +34,18 @@ const endpointLabels = {
   samlSSOUrl: 'SAML SSO',
 }
 const endpointKeys = Object.keys(endpointLabels) as (keyof typeof endpointLabels)[]
-
 export function ProviderSetupPanel({ provider }: { provider: IdentityProvider }) {
   const { t } = useI18n()
   const query = useQuery(identityProviderQueries.setup(provider.id))
+  const visibleQueryData = query.isEnabled === false ? undefined : readableQueryData(query)
   if (query.isPending) return <ManagementState kind="loading" compact />
-  if (query.isError)
-    return (
-      <ManagementState
-        kind={isApiError(query.error) && query.error.status === 403 ? 'no-permission' : 'error'}
-        title="无法读取接入配置"
-        description={query.error.message}
-        actions={<Button onClick={() => void query.refetch()}>重试</Button>}
-      />
-    )
-  const setup = query.data
+  if (!visibleQueryData)
+    return <ReadFeedback canRead={query.isEnabled} query={query} label="接入配置" />
+  const setup = visibleQueryData
   return (
     <div className="soha-identity-provider-setup">
+      <ReadFeedback canRead={query.isEnabled} query={query} label="当前记录" />
+
       <div className="soha-identity-provider-setup-summary">
         <Space size={4} wrap>
           <StatusTag
@@ -100,10 +96,10 @@ export function ProviderSetupPanel({ provider }: { provider: IdentityProvider })
     </div>
   )
 }
-
 export function ProviderConfigurationStatus({ providerId }: { providerId: string }) {
   const { t } = useI18n()
   const query = useQuery(identityProviderQueries.setup(providerId))
+  const visibleQueryData = query.isEnabled === false ? undefined : readableQueryData(query)
   if (query.isPending) return <Typography.Text type="secondary">检查中</Typography.Text>
   if (query.isError)
     return (
@@ -111,7 +107,8 @@ export function ProviderConfigurationStatus({ providerId }: { providerId: string
         {isApiError(query.error) && query.error.status === 403 ? '无查看权限' : '检查失败'}
       </Typography.Text>
     )
-  const setup = query.data
+  if (!visibleQueryData) return <Typography.Text type="secondary">状态不可用</Typography.Text>
+  const setup = visibleQueryData
   return (
     <Typography.Text type={setup.configurationStatus === 'complete' ? 'secondary' : 'warning'}>
       {t(

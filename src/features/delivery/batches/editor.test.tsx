@@ -5,6 +5,7 @@ import { App, ConfigProvider } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { ApiError } from '@/services/api-error'
 import { deliveryApi } from '../api'
 import type { DeliveryBatch, DeliveryWorkflow, DeliveryWorkflowDefinition } from '../types'
 import { DeliveryBatchEditor } from './editor'
@@ -98,6 +99,7 @@ beforeEach(() => {
     })),
   )
   vi.spyOn(deliveryApi.workflowTemplates, 'list').mockResolvedValue([])
+  vi.spyOn(deliveryApi.releaseBundles, 'list').mockResolvedValue([])
   vi.spyOn(deliveryApi.documents, 'source').mockResolvedValue({})
   vi.spyOn(deliveryApi.deliveryWorkflows, 'create').mockImplementation(async (input) => ({
     ...workflow,
@@ -261,6 +263,16 @@ async function click(label: string) {
     await new Promise((resolve) => setTimeout(resolve, 20))
   })
 }
+async function clickReady(label: string) {
+  await vi.waitFor(() => {
+    const button = [...document.querySelectorAll('button')].find(
+      (item) => item.textContent?.replace(/\s/g, '') === label.replace(/\s/g, ''),
+    )
+    expect(button, label).toBeDefined()
+    expect(button?.disabled).toBe(false)
+  })
+  await click(label)
+}
 async function toggleFailure() {
   const checkbox = document.querySelector<HTMLInputElement>('input[type="checkbox"]')
   expect(checkbox?.checked).toBe(true)
@@ -383,8 +395,8 @@ it('checks service delivery inputs before execution and retains its idempotency 
     )
     await new Promise((resolve) => setTimeout(resolve, 30))
   })
-  await click('检查交付参数')
-  expect(document.body.textContent).toContain('确认交付参数')
+  await clickReady('检查交付参数')
+  await vi.waitFor(() => expect(document.body.textContent).toContain('确认交付参数'))
   expect(deliveryApi.batches.create).not.toHaveBeenCalled()
   await click('确认并开始')
   await click('确认并开始')
@@ -423,8 +435,24 @@ it('allows an embedded pure build without an environment', async () => {
     )
     await new Promise((resolve) => setTimeout(resolve, 30))
   })
-  await click('检查交付参数')
-  expect(onSave).toHaveBeenCalledWith(
-    expect.objectContaining({ action: 'build', applicationEnvironmentId: undefined }),
+  await clickReady('检查交付参数')
+  await vi.waitFor(() =>
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'build', applicationEnvironmentId: undefined }),
+    ),
   )
+})
+
+it('retains the original idempotency receipt and locks a batch with an unknown POST outcome', async () => {
+  vi.mocked(deliveryApi.batches.create).mockRejectedValueOnce(
+    new ApiError(503, 'batch response lost', { method: 'POST', requestId: 'req-batch-unknown' }),
+  )
+  await renderEditor(workflow)
+  await click('开始交付')
+  expect(document.body.textContent).toContain('请求结果不明')
+  expect(document.body.textContent).toContain('req-batch-unknown')
+  expect(document.body.textContent).toContain('核对执行记录')
+  await click('开始交付')
+  expect(deliveryApi.batches.create).toHaveBeenCalledTimes(1)
+  expect(vi.mocked(deliveryApi.batches.create).mock.calls[0][0].idempotencyKey).toBeTruthy()
 })

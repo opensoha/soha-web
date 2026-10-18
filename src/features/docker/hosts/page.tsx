@@ -1,3 +1,6 @@
+import { readableQueryData } from '@/utils/query-feedback'
+import { ReadFeedback } from '@/components/request-feedback'
+import { ComputeMutationFeedback } from '@/features/compute'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { App, Button, Descriptions, Form, Input, Popconfirm, Select, Space } from 'antd'
@@ -80,7 +83,7 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
     },
   })
   const page = normalizePage(
-    hostsQuery.data,
+    readableQueryData(hostsQuery),
     filters.page ?? 1,
     filters.pageSize ?? (embedded ? 5 : 15),
   )
@@ -149,7 +152,11 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
       title: localeText(localeCode, '最近任务', 'Latest task'),
       render: (_value, record) => (
         <ResourceTaskActions
-          task={latestTaskForResource(tasksQuery.data?.items ?? [], 'runtime_host', record.id)}
+          task={latestTaskForResource(
+            canViewOperations ? (readableQueryData(tasksQuery)?.items ?? []) : [],
+            'runtime_host',
+            record.id,
+          )}
           resourceKind="runtime_host"
           resourceId={record.id}
         />
@@ -256,7 +263,27 @@ function HostsTable({ embedded = false }: { embedded?: boolean }) {
           </ManagementQueryPanel>
         </div>
       ) : null}
+      <ReadFeedback
+        query={hostsQuery}
+        label={localeText(localeCode, '运行时主机', 'Runtime hosts')}
+      />
+      <ReadFeedback query={tasksQuery} label={localeText(localeCode, '主机任务', 'Host tasks')} />
+      <ComputeMutationFeedback
+        operations={[
+          {
+            label: localeText(localeCode, '删除主机记录', 'Delete host record'),
+            mutation: deleteMutation,
+            target: deleteMutation.variables,
+            receipt: { message: localeText(localeCode, '主机记录已删除', 'Host record deleted') },
+          },
+        ]}
+      />
       <DockerAdminTable
+        empty={
+          hostsQuery.isError
+            ? localeText(localeCode, '数据读取失败，请先重试', 'Read failed; retry first')
+            : undefined
+        }
         rowKey="id"
         enableColumnSelection={!embedded}
         loading={hostsQuery.isLoading}
