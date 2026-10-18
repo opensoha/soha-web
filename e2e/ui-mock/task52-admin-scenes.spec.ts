@@ -301,8 +301,13 @@ async function mocks(context: BrowserContext, page: Page, detail = plugin) {
     }
     if (path === '/plugins/marketplace') {
       const query = url.searchParams.get('q') ?? ''
+      const type = url.searchParams.get('type')
       return {
-        body: { data: state.marketplacePlugins.filter((item) => item.name.includes(query)) },
+        body: {
+          data: state.marketplacePlugins.filter(
+            (item) => item.name.includes(query) && (!type || item.type === type),
+          ),
+        },
       }
     }
     if (path === '/plugins/marketplace/qa-plugin') return { body: { data: detail } }
@@ -401,6 +406,44 @@ async function mocks(context: BrowserContext, page: Page, detail = plugin) {
   return { state, evidence }
 }
 
+async function verifyTagContrast(page: Page) {
+  const ratios = await page
+    .locator(
+      '.ant-tag-success, .ant-tag-warning, .ant-tag-green, .ant-tag-gold, .soha-plugin-market-card-detail',
+    )
+    .evaluateAll((tags) => {
+      const parse = (color: string) => {
+        const channels = color.match(/[\d.]+/g)!.map(Number)
+        return color.startsWith('color(srgb ')
+          ? channels.map((value, i) => (i < 3 ? value * 255 : value))
+          : channels
+      }
+      const blend = (front: number[], back: number[]) =>
+        front
+          .slice(0, 3)
+          .map((value, i) => value * (front[3] ?? 1) + back[i] * (1 - (front[3] ?? 1)))
+      const luminance = (color: number[]) =>
+        color
+          .map((value) => value / 255)
+          .map((value) => (value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4))
+          .reduce((sum, value, i) => sum + value * [0.2126, 0.7152, 0.0722][i], 0)
+      return tags.map((tag) => {
+        const ancestors: Element[] = []
+        for (let node: Element | null = tag; node; node = node.parentElement)
+          ancestors.unshift(node)
+        const background = ancestors.reduce(
+          (color, node) => blend(parse(getComputedStyle(node).backgroundColor), color),
+          [255, 255, 255],
+        )
+        const foreground = blend(parse(getComputedStyle(tag).color), background)
+        const levels = [luminance(foreground), luminance(background)].sort((a, b) => b - a)
+        return { label: tag.textContent, ratio: (levels[0] + 0.05) / (levels[1] + 0.05) }
+      })
+    })
+  expect(ratios.length).toBeGreaterThan(0)
+  for (const item of ratios) expect(item.ratio, item.label ?? 'Tag').toBeGreaterThanOrEqual(4.5)
+}
+
 for (const item of cases) {
   test(`${item.route} retains labeled stale reads and hides denied data`, async ({
     context,
@@ -444,9 +487,15 @@ for (const view of [
       name: `交付助手扩展${'长名称LongName'.repeat(12)}`,
       publisher: 'LongPublisher'.repeat(8),
       sourceId: 'long-source-'.repeat(12),
+      verified: true,
+      riskLevel: 'read',
     }
     const { state, evidence } = await mocks(context, page, item)
     state.installedPlugins = []
+    state.marketplacePlugins = [
+      item,
+      { ...item, id: 'qa-mutating', name: '变更扩展', type: 'connector', riskLevel: 'mutate' },
+    ]
     await page.goto('/plugins/marketplace')
     if (view.dark) await page.getByRole('button', { name: '切换到深色模式' }).click()
     await expect(page.locator('h1')).toHaveText('插件市场')
@@ -454,13 +503,21 @@ for (const view of [
       await page.locator('h1').evaluate((element) => element.getBoundingClientRect().height),
     ).toBeLessThanOrEqual(1)
     await expect(page.getByRole('heading', { name: item.name, level: 2 })).toBeVisible()
-    await verifyGeometry(page, page.getByRole('button', { name: /安\s*装$/ }))
-    await expect(page.getByText('1 个插件', { exact: true })).toBeVisible()
+    await verifyGeometry(page, page.getByRole('button', { name: /安\s*装$/ }).first())
+    await expect(page.getByText('2 个插件', { exact: true })).toBeVisible()
+    const card = page.locator('.soha-plugin-market-card').first()
+    await expect(card.getByText('查看详情', { exact: true })).toBeVisible()
+    await expect(card.getByText('版本 1.0.0', { exact: true })).toBeVisible()
+    await expect(card.getByText(`来源 ${item.sourceId}`, { exact: true })).toBeVisible()
+    await expect(card.locator('.soha-plugin-market-card-source')).not.toHaveCSS('cursor', 'pointer')
+    await expect(page.getByRole('button', { name: /更多筛选$/ })).toBeVisible()
     await page.screenshot({
       path: info.outputPath('plugin-marketplace.png'),
       fullPage: true,
       animations: 'disabled',
     })
+    // Measure the settled theme after the screenshot has finished CSS transitions.
+    await verifyTagContrast(page)
     const link = page.getByRole('link', { name: `查看 ${item.name} 详情`, exact: true })
     await link.focus()
     await page.keyboard.press('Enter')
@@ -518,6 +575,54 @@ for (const view of [
     verifyBrowserEvidence(evidence)
   })
 }
+
+for (const dark of [false, true]) {
+  test(`shared tag contrast remains readable outside Plugins in ${dark ? 'dark' : 'light'}`, async ({
+    context,
+    page,
+  }) => {
+    const { state, evidence } = await mocks(context, page)
+    await page.goto('/system/menus')
+    if (dark) await page.getByRole('button', { name: '切换到深色模式' }).click()
+    await page.getByRole('button', { name: '展开行', exact: true }).click()
+    await expect(page.getByText(menu.labelZh, { exact: true })).toBeVisible()
+    await expect(page.locator('.soha-status-tag.ant-tag-success').first()).toBeVisible()
+    await verifyTagContrast(page)
+    expect(state.writes).toEqual([])
+    verifyBrowserEvidence(evidence)
+  })
+}
+
+test('plugin type scope displays all initially and after reset, and submits the selected type', async ({
+  context,
+  page,
+}) => {
+  const { state, evidence } = await mocks(context, page)
+  state.marketplacePlugins = [
+    plugin,
+    { ...plugin, id: 'qa-connector', type: 'connector', name: '连接器' },
+  ]
+  await page.goto('/plugins/marketplace')
+  const select = page
+    .locator('.ant-select')
+    .filter({ has: page.getByRole('combobox', { name: /类型/ }) })
+  await expect(select).toContainText('全部类型')
+  await page.getByRole('combobox', { name: /类型/ }).click()
+  await page.locator('.ant-select-dropdown').getByText('Skill', { exact: true }).click()
+  await page.getByRole('button', { name: /查\s*询/ }).click()
+  await expect(page.locator('.soha-plugin-market-card')).toHaveCount(1)
+  await expect(page.getByRole('heading', { name: plugin.name, level: 2 })).toBeVisible()
+  expect(
+    evidence.requests.some(
+      (path) => new URL(path, 'http://127.0.0.1:4179').searchParams.get('type') === 'skill',
+    ),
+  ).toBe(true)
+  await page.getByRole('button', { name: /重\s*置/ }).click()
+  await expect(select).toContainText('全部类型')
+  await expect(page.locator('.soha-plugin-market-card')).toHaveCount(2)
+  expect(state.writes).toEqual([])
+  verifyBrowserEvidence(evidence)
+})
 
 test('plugin marketplace preserves query, local pagination, installation filters and management navigation', async ({
   context,

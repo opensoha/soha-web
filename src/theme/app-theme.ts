@@ -471,6 +471,16 @@ export function getAntdTheme(themeMode: ThemeMode | ResolvedThemeMode): ThemeCon
       boxShadowSecondary: palette.boxShadowSecondary,
     },
     components: {
+      // Tag uses semantic base colors as text; scope readable foregrounds to this component.
+      Tag:
+        resolvedMode === 'light'
+          ? {
+              colorSuccess: '#15803d',
+              colorWarning: '#c2410c',
+              green7: '#237804',
+              gold7: '#874d00',
+            }
+          : {},
       Tooltip: {
         colorBgSpotlight: palette.colorBgElevated,
         colorTextLightSolid: palette.colorText,

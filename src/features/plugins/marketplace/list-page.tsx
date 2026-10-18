@@ -79,7 +79,6 @@ function PluginMarketplaceCard({
 
   return (
     <Card
-      hoverable
       size="small"
       classNames={{ root: 'soha-plugin-market-card', body: 'soha-plugin-market-card-body' }}
     >
@@ -99,9 +98,14 @@ function PluginMarketplaceCard({
           )}
         </div>
         <div className="soha-plugin-market-card-meta">
-          <h2 className="soha-plugin-market-card-title" title={plugin.name}>
-            {plugin.name}
-          </h2>
+          <div className="soha-plugin-market-card-heading">
+            <h2 className="soha-plugin-market-card-title" title={plugin.name}>
+              {plugin.name}
+            </h2>
+            <span className="soha-plugin-market-card-detail" aria-hidden="true">
+              查看详情
+            </span>
+          </div>
           <Text type="secondary" title={`${plugin.publisher} / ${plugin.id}`}>
             {plugin.publisher} / {plugin.id}
           </Text>
@@ -129,12 +133,9 @@ function PluginMarketplaceCard({
         </div>
       </Link>
       <div className="soha-plugin-market-card-actions">
-        <Text
-          type="secondary"
-          className="soha-plugin-market-card-source"
-          title={plugin.sourceId || 'static'}
-        >
-          v{plugin.latestVersion || plugin.version} · {plugin.sourceId || 'static'}
+        <Text type="secondary" className="soha-plugin-market-card-source">
+          <span>版本 {plugin.latestVersion || plugin.version}</span>
+          <span title={plugin.sourceId || 'static'}>来源 {plugin.sourceId || 'static'}</span>
         </Text>
         {plugin.installed ? (
           <Button
@@ -228,6 +229,8 @@ export function PluginMarketplacePage() {
           }
           form={filterForm}
           initialValues={initialFilters}
+          moreLabel="更多筛选"
+          lessLabel="收起筛选"
           onFinish={(values) => setFilters({ ...initialFilters, ...values })}
         >
           <ManagementKeywordField
@@ -238,7 +241,11 @@ export function PluginMarketplacePage() {
             width={300}
           />
           <ManagementQueryField label="类型" minWidth={180} name="type" width={180}>
-            <Select allowClear placeholder="全部" options={[...pluginTypeOptions]} />
+            <Select
+              allowClear
+              placeholder="全部类型"
+              options={[{ label: '全部类型', value: '' }, ...pluginTypeOptions]}
+            />
           </ManagementQueryField>
           <ManagementQueryField label="发布者" minWidth={220} name="publisher" width={220}>
             <Input allowClear placeholder="发布者" />

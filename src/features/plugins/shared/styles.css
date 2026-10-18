@@ -84,6 +84,9 @@
 }
 
 .soha-plugin-market-card-source {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
   min-width: 0;
   overflow-wrap: anywhere;
   font-size: 12px;
@@ -105,6 +108,7 @@
 .soha-plugin-market-card-title {
   display: -webkit-box;
   min-width: 0;
+  flex: 1;
   margin: 0;
   overflow: hidden;
   -webkit-box-orient: vertical;
@@ -116,8 +120,22 @@
   overflow-wrap: anywhere;
 }
 
+.soha-plugin-market-card-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.soha-plugin-market-card-detail {
+  flex-shrink: 0;
+  font-size: 12px;
+  line-height: 26px;
+  white-space: nowrap;
+}
+
+.soha-plugin-market-card-detail,
 .soha-plugin-market-card-link:hover .soha-plugin-market-card-title {
-  color: var(--ant-color-primary);
+  color: color-mix(in srgb, var(--ant-color-link) 80%, var(--ant-color-text));
 }
 
 .soha-plugin-market-card-meta {
