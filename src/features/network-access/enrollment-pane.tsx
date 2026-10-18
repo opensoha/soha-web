@@ -42,7 +42,7 @@ export function NetworkEnrollmentPane({
   canRevoke,
   runtimeKind,
 }: NetworkEnrollmentPaneProps) {
-  const { t } = useI18n()
+  const { localeCode, t } = useI18n()
   const queryClient = useQueryClient()
   const enrollments = useQuery(networkAccessQueries.enrollments(LIST_FILTER))
   const visibleEnrollmentsData =
@@ -96,14 +96,19 @@ export function NetworkEnrollmentPane({
       dataIndex: 'runtimeKind',
       width: 120,
       render: (value: string) => {
-        const labels: Record<string, string> = {
-          endpoint: '终端',
-          gateway: '网关',
-          nas: 'RADIUS 服务',
-          proxy: '代理',
+        const labels: Record<string, [string, string]> = {
+          endpoint: ['终端', 'Endpoint'],
+          gateway: ['网关', 'Gateway'],
+          nas: ['RADIUS 服务', 'RADIUS service'],
+          proxy: ['代理', 'Proxy'],
         }
         return (
-          <MetadataTag label={t(`networkAccess.runtimeKind.${value}`, labels[value] ?? value)} />
+          <MetadataTag
+            label={t(
+              `networkAccess.runtimeKind.${value}`,
+              labels[value]?.[localeCode === 'zh_CN' ? 0 : 1] ?? value,
+            )}
+          />
         )
       },
     },

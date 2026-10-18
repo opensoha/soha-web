@@ -380,6 +380,16 @@ test('snapshot errors use the snapshot owner and remain retryable', async ({ con
   verifyBrowserEvidence(evidence)
 })
 
+test('runtime category and state labels follow the language switch', async ({ context, page }) => {
+  const { evidence } = await setup(context, page)
+  await page.goto('/network-access/enrollments')
+  await expect(page.locator('main')).toContainText('网关')
+  await page.getByRole('button', { name: '切换到英文', exact: true }).click()
+  await expect(page.locator('main')).toContainText('Gateway')
+  await expect(page.locator('main')).toContainText('Pending')
+  verifyBrowserEvidence(evidence)
+})
+
 test('VPN refresh retains the submitted range and cache, then hides denied observations', async ({
   context,
   page,

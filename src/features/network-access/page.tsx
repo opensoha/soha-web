@@ -663,8 +663,8 @@ export function NetworkAccessPage() {
       render: (value: boolean) => (
         <BooleanTag
           value={value}
-          trueLabel={t('networkAccess.protected', '受保护')}
-          falseLabel={t('networkAccess.standard', '普通')}
+          trueLabel={t('networkAccess.protected', localeCode === 'zh_CN' ? '受保护' : 'Protected')}
+          falseLabel={t('networkAccess.standard', localeCode === 'zh_CN' ? '普通' : 'Standard')}
           trueColor="warning"
         />
       ),
