@@ -8,7 +8,7 @@ import {
   ManagementTableToolbar,
   useManagementTextFilter,
 } from '@/components/management-list'
-import { ReadFeedback } from '@/components/request-feedback'
+import { ReadFeedback, useInlineApiError } from '@/components/request-feedback'
 import { formatBytes } from '@/components/resource-metrics-format'
 import { useI18n } from '@/i18n'
 import { readableQueryData } from '@/utils/query-feedback'
@@ -45,6 +45,7 @@ export function NetworkTelemetryPane({ proxyOnly = false }: NetworkTelemetryPane
   const telemetry = useQuery(networkAccessQueries.telemetrySummary(FILTER))
   const visibleTelemetryData =
     telemetry.isEnabled === false ? undefined : readableQueryData(telemetry)
+  useInlineApiError(telemetry.isError ? telemetry.error : null)
   const summary = visibleTelemetryData
   const visibleFlows = useManagementTextFilter(summary?.proxyFlows ?? [], flowKeyword, (flow) => [
     flow.producerId,
@@ -139,25 +140,11 @@ export function NetworkTelemetryPane({ proxyOnly = false }: NetworkTelemetryPane
   ]
   if (!proxyOnly && telemetry.isError && !summary)
     return (
-      <div className="soha-proxy-error-state">
-        <ManagementState
-          kind="error"
-          description={
-            proxyOnly
-              ? t(
-                  'networkAccess.proxyOverview.error',
-                  '代理遥测暂不可用，请检查遥测查询服务后重试。',
-                )
-              : undefined
-          }
-        />
-        <Button
-          icon={<ReloadOutlined />}
-          onClick={() => void (telemetry.isEnabled === false ? undefined : telemetry.refetch())}
-        >
-          {t('networkAccess.refresh', '刷新')}
-        </Button>
-      </div>
+      <ReadFeedback
+        canRead={telemetry.isEnabled}
+        query={telemetry}
+        label={t('networkAccess.telemetry.title', '遥测')}
+      />
     )
   if (proxyOnly) {
     const unavailable = telemetry.isError && !summary

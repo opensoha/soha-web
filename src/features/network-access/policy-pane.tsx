@@ -1,15 +1,10 @@
-import { AdminTable } from '@/components/admin-table'
-import {
-  ManagementIconButton,
-  ManagementTableToolbar,
-  ManagementToolbarSearch,
-} from '@/components/management-list'
+import { ManagementIconButton } from '@/components/management-list'
 import { operationModalStyles } from '@/components/modal-styles'
 import { ReadFeedback } from '@/components/request-feedback'
 import { useOperationMutation } from '@/components/use-operation-mutation'
 import { useI18n } from '@/i18n'
 import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
-import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
+import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import type {
   EndpointDevicePostureStatus,
   EndpointDeviceStatus,
@@ -39,9 +34,11 @@ import {
   Space,
   Switch,
   Tabs,
-  Tag,
 } from 'antd'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
+import { TablePane } from './table-pane'
+import { BooleanTag, StatusTag } from '@/components/status-tag'
+import { formatDateTime } from '@/utils/time'
 import { networkAccessMutations } from './mutations'
 import { networkAccessQueries } from './queries'
 interface NetworkPolicyPaneProps {
@@ -156,29 +153,11 @@ export function NetworkPolicyPane({ canCreate, canDelete, canUpdate }: NetworkPo
     deletePolicy.blocked ||
     compilePolicy.blocked ||
     (policies.isEnabled !== false && queryAccessDenied(policies))
-  const [search, setSearch] = useState('')
   const [editor, setEditor] = useState<NetworkAccessPolicy | 'new' | null>(null)
   const [policyForm] = Form.useForm<PolicyFormValues>()
   const [previewForm] = Form.useForm<NetworkPolicyPreviewRequest>()
   const [conflictForm] = Form.useForm<ConflictFormValues>()
   const effect = Form.useWatch('effect', policyForm)
-  const filteredPolicies = useMemo(() => {
-    const keyword = search.trim().toLocaleLowerCase()
-    if (!keyword) return visiblePoliciesData ?? []
-    return (visiblePoliciesData ?? []).filter((policy) =>
-      [
-        policy.name,
-        policy.effect,
-        policy.accessProfile,
-        ...policy.subjects.users,
-        ...policy.subjects.teams,
-        ...policy.subjects.tags,
-        ...policy.siteIds,
-        ...policy.resourceIds,
-        ...policy.modes,
-      ].some((value) => value.toLocaleLowerCase().includes(keyword)),
-    )
-  }, [visiblePoliciesData, search])
   function openEditor(policy?: NetworkAccessPolicy) {
     setEditor(policy ?? 'new')
     policyForm.resetFields()
@@ -260,16 +239,14 @@ export function NetworkPolicyPane({ canCreate, canDelete, canUpdate }: NetworkPo
       title: t('networkAccess.policy.effect', '效果'),
       dataIndex: 'effect',
       width: 90,
-      render: (value: NetworkPolicyEffect) => (
-        <Tag color={value === 'deny' ? 'red' : 'green'}>{value}</Tag>
-      ),
+      render: (value: NetworkPolicyEffect) => <StatusTag value={value} />,
     },
     { title: t('networkAccess.policy.priority', '优先级'), dataIndex: 'priority', width: 90 },
     {
       title: t('networkAccess.policy.enabled', '启用'),
       dataIndex: 'enabled',
       width: 80,
-      render: (value: boolean) => String(value),
+      render: (value: boolean) => <BooleanTag value={value} />,
     },
     {
       title: t('networkAccess.policy.profile', '访问等级'),
@@ -378,11 +355,11 @@ export function NetworkPolicyPane({ canCreate, canDelete, canUpdate }: NetworkPo
                   {
                     key: 'publishedAt',
                     label: t('networkAccess.policy.publishedAt', '发布时间'),
-                    children: visibleSnapshotData.publishedAt,
+                    children: formatDateTime(visibleSnapshotData.publishedAt),
                   },
                 ]}
               />
-            ) : (
+            ) : snapshot.isError || snapshot.isPending ? null : (
               <Alert
                 showIcon
                 type="warning"
@@ -390,43 +367,37 @@ export function NetworkPolicyPane({ canCreate, canDelete, canUpdate }: NetworkPo
               />
             )}
           </Card>
-          <AdminTable
+          <TablePane
             columns={columns}
-            dataSource={filteredPolicies}
-            empty={policies.isError && !visiblePoliciesData ? null : undefined}
+            items={visiblePoliciesData}
             loading={policies.isLoading}
-            localSorting
-            rowKey="id"
-            toolbar={
-              <ManagementTableToolbar>
-                <ManagementToolbarSearch
-                  placeholder={t('networkAccess.policy.search', '搜索策略、主体或资源')}
-                  value={search}
-                  onChange={setSearch}
-                />
-                <ManagementIconButton
-                  aria-label={t('networkAccess.refresh', '刷新')}
-                  icon={<ReloadOutlined />}
-                  loading={policies.isFetching}
-                  tooltip={t('networkAccess.refresh', '刷新')}
-                  onClick={() =>
-                    void (policies.isEnabled === false ? undefined : policies.refetch())
-                  }
-                />
-                {canCreate ? (
-                  <Button
-                    size="small"
-                    type="primary"
-                    icon={<PlusOutlined />}
-                    onClick={() => openEditor()}
-                    disabled={operationBlocked}
-                  >
-                    {t('networkAccess.policy.add', '新增策略')}
-                  </Button>
-                ) : null}
-              </ManagementTableToolbar>
+            error={policies.isEnabled === false ? null : policies.error}
+            refreshing={policies.isFetching}
+            onRefresh={() => void (policies.isEnabled === false ? undefined : policies.refetch())}
+            searchPlaceholder={t('networkAccess.policy.search', '搜索策略、主体或资源')}
+            getSearchValues={(policy) => [
+              policy.name,
+              policy.effect,
+              policy.accessProfile,
+              ...policy.subjects.users,
+              ...policy.subjects.teams,
+              ...policy.subjects.tags,
+              ...policy.siteIds,
+              ...policy.resourceIds,
+              ...policy.modes,
+            ]}
+            createAction={
+              canCreate ? (
+                <Button
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  onClick={() => openEditor()}
+                  disabled={operationBlocked}
+                >
+                  {t('networkAccess.policy.add', '新增策略')}
+                </Button>
+              ) : null
             }
-            viewportScroll
           />
         </Space>
       ),
@@ -646,8 +617,7 @@ export function NetworkPolicyPane({ canCreate, canDelete, canUpdate }: NetworkPo
         </>
       )}
 
-      <ReadFeedback canRead={policies.isEnabled} query={policies} label="策略" />
-      <ReadFeedback canRead={snapshot.isEnabled} query={snapshot} label="连接采样" />
+      <ReadFeedback canRead={snapshot.isEnabled} query={snapshot} label="策略快照" />
 
       <Tabs items={tabs} />
       <Modal

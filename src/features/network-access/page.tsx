@@ -2,6 +2,7 @@ import { ManagementDataPage } from '@/components/management-data-page'
 import { ManagementIconButton, ManagementState } from '@/components/management-list'
 import { operationModalStyles } from '@/components/modal-styles'
 import { ReadFeedback } from '@/components/request-feedback'
+import { BooleanTag, MetadataTag } from '@/components/status-tag'
 import { useOperationMutation } from '@/components/use-operation-mutation'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useI18n } from '@/i18n'
@@ -44,10 +45,11 @@ import {
   Space,
   Switch,
   Tabs,
-  Tag,
 } from 'antd'
 import { useEffect, useState, type ReactNode } from 'react'
 import { useLocation, useSearchParams } from 'react-router-dom'
+import { NetworkStatusTag } from './network-status-tag'
+import './styles.css'
 import { NetworkAccessGrantPane } from './access-grant-pane'
 import {
   EndpointDeviceDetailDrawer,
@@ -132,15 +134,8 @@ interface NetworkAccessSection {
   key: string
 }
 const LIST_FILTER = { limit: 200 } as const
-function statusColor(status: string) {
-  if (['active', 'online', 'compliant'].includes(status)) return 'green'
-  if (['pending', 'unknown', 'degraded'].includes(status)) return 'orange'
-  if (['quarantined', 'revoked', 'offline', 'disabled', 'non_compliant'].includes(status))
-    return 'red'
-  return 'default'
-}
 function statusTag(status?: string) {
-  return status ? <Tag color={statusColor(status)}>{status}</Tag> : '-'
+  return status ? <NetworkStatusTag value={status} /> : '-'
 }
 function parseTextList(value?: string) {
   return String(value ?? '')
@@ -477,18 +472,39 @@ export function NetworkAccessPage() {
     return t('networkAccess.add.resource', '新增资源')
   }
   const deviceColumns: TableColumnsType<EndpointDevice> = [
-    { title: t('networkAccess.name', '名称'), dataIndex: 'name', width: 180 },
+    {
+      title: t('networkAccess.name', '名称'),
+      dataIndex: 'name',
+      width: 200,
+      render: (_, device) => (
+        <Button
+          type="link"
+          className="soha-network-name"
+          title={device.name}
+          onClick={() => setDeviceDetail(device)}
+        >
+          {device.name}
+        </Button>
+      ),
+    },
+    {
+      title: t('networkAccess.status', '状态'),
+      dataIndex: 'status',
+      width: 120,
+      render: statusTag,
+    },
+
     {
       title: t('networkAccess.device.type', '终端类型'),
       dataIndex: 'deviceType',
       width: 110,
-      render: (value) => <Tag>{endpointDeviceTypeLabel(value, localeCode)}</Tag>,
+      render: (value) => <MetadataTag label={endpointDeviceTypeLabel(value, localeCode)} />,
     },
     {
       title: t('networkAccess.device.ownership', '设备归属'),
       dataIndex: 'ownershipType',
       width: 130,
-      render: (value) => <Tag>{endpointOwnershipLabel(value, localeCode)}</Tag>,
+      render: (value) => <MetadataTag label={endpointOwnershipLabel(value, localeCode)} />,
     },
     {
       title: t('networkAccess.device.os', '操作系统'),
@@ -499,12 +515,6 @@ export function NetworkAccessPage() {
         record.platform,
     },
     { title: t('networkAccess.owner', '用户'), dataIndex: 'ownerUserId', width: 220 },
-    {
-      title: t('networkAccess.status', '状态'),
-      dataIndex: 'status',
-      width: 120,
-      render: statusTag,
-    },
     {
       title: t('networkAccess.device.lastSeen', '最近活跃'),
       dataIndex: 'lastSeenAt',
@@ -651,7 +661,12 @@ export function NetworkAccessPage() {
       dataIndex: 'protected',
       width: 130,
       render: (value: boolean) => (
-        <Tag color={value ? 'red' : 'default'}>{value ? 'protected' : 'standard'}</Tag>
+        <BooleanTag
+          value={value}
+          trueLabel={t('networkAccess.protected', '受保护')}
+          falseLabel={t('networkAccess.standard', '普通')}
+          trueColor="warning"
+        />
       ),
     },
     { title: t('networkAccess.pathMode', '路径'), dataIndex: 'pathMode', width: 150 },
@@ -698,7 +713,7 @@ export function NetworkAccessPage() {
     {
       title: t('networkAccess.gateway.accepting', '接受新连接'),
       dataIndex: 'acceptNewConnections',
-      render: (value: boolean) => statusTag(value ? 'enabled' : 'disabled'),
+      render: (value: boolean) => <BooleanTag value={value} />,
     },
     {
       title: t('networkAccess.gateway.maxSessions', '会话上限'),
@@ -1114,7 +1129,10 @@ export function NetworkAccessPage() {
     gatewayCreate.isPending ||
     gatewayUpdate.isPending
   return (
-    <ManagementDataPage tableNode={activeSection?.children}>
+    <ManagementDataPage
+      className="soha-network-page"
+      tableNode={<section key={activeSection?.key}>{activeSection?.children}</section>}
+    >
       {!(Boolean(editor) && !(activeRead && queryAccessDenied(activeRead))) && (
         <>
           {' '}

@@ -1,15 +1,9 @@
-import { AdminTable } from '@/components/admin-table'
-import {
-  ManagementIconButton,
-  ManagementTableToolbar,
-  ManagementToolbarSearch,
-} from '@/components/management-list'
+import { ManagementIconButton } from '@/components/management-list'
 import { operationModalStyles } from '@/components/modal-styles'
-import { ReadFeedback } from '@/components/request-feedback'
 import { useOperationMutation } from '@/components/use-operation-mutation'
 import { useI18n } from '@/i18n'
 import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
-import { PlusOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons'
+import { PlusOutlined, StopOutlined } from '@ant-design/icons'
 import type {
   NetworkAccessGrant,
   NetworkAccessGrantInput,
@@ -27,12 +21,14 @@ import {
   Popconfirm,
   Select,
   Space,
-  Tag,
   Typography,
 } from 'antd'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { networkAccessMutations } from './mutations'
 import { networkAccessQueries } from './queries'
+import { TablePane } from './table-pane'
+import { NetworkStatusTag } from './network-status-tag'
+import { formatDateTime } from '@/utils/time'
 interface NetworkAccessGrantPaneProps {
   canCreate: boolean
   canRevoke: boolean
@@ -67,24 +63,7 @@ export function NetworkAccessGrantPane({ canCreate, canRevoke }: NetworkAccessGr
     (grants.isEnabled !== false && queryAccessDenied(grants))
   const [createOpen, setCreateOpen] = useState(false)
   const [secret, setSecret] = useState<NetworkAccessGrantSecret | null>(null)
-  const [search, setSearch] = useState('')
   const [form] = Form.useForm<GrantFormValues>()
-  const filtered = useMemo(() => {
-    const keyword = search.trim().toLocaleLowerCase()
-    if (!keyword) return visibleGrantsData ?? []
-    return (visibleGrantsData ?? []).filter((item) =>
-      [
-        item.id,
-        item.subjectId,
-        item.deviceId,
-        item.siteId,
-        item.networkSpaceId,
-        item.mode,
-        item.status,
-        ...item.resourceIds,
-      ].some((value) => value.toLocaleLowerCase().includes(keyword)),
-    )
-  }, [visibleGrantsData, search])
   function openCreate() {
     if (operationBlocked) return
     form.resetFields()
@@ -131,15 +110,12 @@ export function NetworkAccessGrantPane({ canCreate, canRevoke }: NetworkAccessGr
       title: t('networkAccess.status', '状态'),
       dataIndex: 'status',
       width: 110,
-      render: (value: string) => (
-        <Tag color={value === 'issued' ? 'orange' : value === 'consumed' ? 'green' : 'red'}>
-          {value}
-        </Tag>
-      ),
+      render: (value: string) => <NetworkStatusTag value={value} />,
     },
     {
       title: t('networkAccess.grant.expiresAt', '过期时间'),
       dataIndex: 'expiresAt',
+      render: formatDateTime,
       width: 200,
     },
     ...(canRevoke
@@ -180,43 +156,36 @@ export function NetworkAccessGrantPane({ canCreate, canRevoke }: NetworkAccessGr
         </>
       )}
 
-      <ReadFeedback canRead={grants.isEnabled} query={grants} label="访问授权" />
-
-      <AdminTable
+      <TablePane
         columns={columns}
-        dataSource={filtered}
-        empty={grants.isError && !visibleGrantsData ? null : undefined}
+        items={visibleGrantsData}
         loading={grants.isLoading}
-        localSorting
-        rowKey="id"
-        toolbar={
-          <ManagementTableToolbar>
-            <ManagementToolbarSearch
-              placeholder={t('networkAccess.grant.search', '搜索主体、设备、站点、资源或状态')}
-              value={search}
-              onChange={setSearch}
-            />
-            <ManagementIconButton
-              aria-label={t('networkAccess.refresh', '刷新')}
-              icon={<ReloadOutlined />}
-              loading={grants.isFetching}
-              tooltip={t('networkAccess.refresh', '刷新')}
-              onClick={() => void (grants.isEnabled === false ? undefined : grants.refetch())}
-            />
-            {canCreate ? (
-              <Button
-                size="small"
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={openCreate}
-                disabled={operationBlocked}
-              >
-                {t('networkAccess.grant.create', '创建访问授权')}
-              </Button>
-            ) : null}
-          </ManagementTableToolbar>
+        error={grants.isEnabled === false ? null : grants.error}
+        refreshing={grants.isFetching}
+        onRefresh={() => void (grants.isEnabled === false ? undefined : grants.refetch())}
+        searchPlaceholder={t('networkAccess.grant.search', '搜索主体、设备、站点、资源或状态')}
+        getSearchValues={(item) => [
+          item.id,
+          item.subjectId,
+          item.deviceId,
+          item.siteId,
+          item.networkSpaceId,
+          item.mode,
+          item.status,
+          ...item.resourceIds,
+        ]}
+        createAction={
+          canCreate ? (
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={openCreate}
+              disabled={operationBlocked}
+            >
+              {t('networkAccess.grant.create', '创建访问授权')}
+            </Button>
+          ) : null
         }
-        viewportScroll
       />
 
       <Modal

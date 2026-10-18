@@ -23,20 +23,11 @@ import type {
 } from '@opensoha/contracts/gen/ts/sohaapi'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { TableColumnsType } from 'antd'
-import {
-  Alert,
-  App,
-  Button,
-  Form,
-  Input,
-  Modal,
-  Select,
-  Space,
-  Switch,
-  Tag,
-  Typography,
-} from 'antd'
+import { Alert, App, Button, Form, Input, Modal, Select, Space, Switch, Typography } from 'antd'
 import { useState } from 'react'
+import { MetadataTag } from '@/components/status-tag'
+import { NetworkStatusTag } from '../network-status-tag'
+import '../styles.css'
 import { networkAccessKeys } from '../keys'
 import { createEnrollment, createInstance, updateConfiguration } from './api'
 import { proxyKeys, proxyQueries } from './queries'
@@ -118,35 +109,17 @@ export default function ProxyInstancesPage() {
   const columns: TableColumnsType<NetworkProxyInstance> = [
     { title: t('networkAccess.proxyRuntime.name', '名称'), dataIndex: 'name', ellipsis: true },
     { title: t('networkAccess.proxyRuntime.id', '实例 ID'), dataIndex: 'id', ellipsis: true },
-    { title: t('networkAccess.proxyRuntime.engine', '引擎'), dataIndex: 'engine', width: 105 },
+    {
+      title: t('networkAccess.proxyRuntime.engine', '引擎'),
+      dataIndex: 'engine',
+      width: 105,
+      render: (value: string) => <MetadataTag label={value} />,
+    },
     {
       title: t('networkAccess.proxyRuntime.status', '状态'),
       dataIndex: 'status',
       width: 100,
-      render: (status: NetworkProxyInstance['status']) => (
-        <Tag
-          color={
-            {
-              online: 'success',
-              degraded: 'warning',
-              offline: 'error',
-              disabled: 'default',
-              unregistered: 'default',
-            }[status]
-          }
-        >
-          {t(
-            `networkAccess.proxyRuntime.status.${status}`,
-            {
-              online: '在线',
-              degraded: '降级',
-              offline: '失联',
-              disabled: '已停用',
-              unregistered: '未登记',
-            }[status],
-          )}
-        </Tag>
-      ),
+      render: (status: NetworkProxyInstance['status']) => <NetworkStatusTag value={status} />,
     },
     {
       title: t('networkAccess.proxyRuntime.version', '版本'),
@@ -220,7 +193,7 @@ export default function ProxyInstancesPage() {
         </>
       )}
 
-      <h1 className="soha-server-proxy-list-title">
+      <h1 className="soha-network-sr-only">
         {t('networkAccess.proxyRuntime.instances', '代理实例')}
       </h1>
       <Typography.Text type="secondary">

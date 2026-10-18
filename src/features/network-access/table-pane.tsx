@@ -6,7 +6,6 @@ import {
   ManagementQueryPanel,
   ManagementState,
   ManagementTableToolbar,
-  ManagementToolbarSearch,
 } from '@/components/management-list'
 import { useI18n } from '@/i18n'
 import { ReloadOutlined } from '@ant-design/icons'
@@ -26,7 +25,6 @@ interface TablePaneProps<
   error: boolean | Error | null
   errorDescription?: string
   onRefresh: () => void
-  queryCard?: boolean
   refreshing: boolean
   searchPlaceholder: string
 }
@@ -43,7 +41,6 @@ export function TablePane<
   items: sourceItems,
   loading,
   onRefresh,
-  queryCard = false,
   refreshing,
   searchPlaceholder,
 }: TablePaneProps<T>) {
@@ -75,27 +72,25 @@ export function TablePane<
     </ManagementTableToolbar>
   )
   return (
-    <>
-      {queryCard ? (
-        <ManagementQueryPanel
-          actions={
-            <ManagementQueryActions
-              disabledReset={!draftSearch && !search}
-              onReset={() => {
-                setDraftSearch('')
-                setSearch('')
-              }}
-            />
-          }
-          onFinish={() => setSearch(draftSearch.trim())}
-        >
-          <ManagementKeywordField
-            onChange={setDraftSearch}
-            placeholder={searchPlaceholder}
-            value={draftSearch}
+    <div className="soha-page">
+      <ManagementQueryPanel
+        actions={
+          <ManagementQueryActions
+            disabledReset={!draftSearch && !search}
+            onReset={() => {
+              setDraftSearch('')
+              setSearch('')
+            }}
           />
-        </ManagementQueryPanel>
-      ) : null}
+        }
+        onFinish={() => setSearch(draftSearch.trim())}
+      >
+        <ManagementKeywordField
+          onChange={setDraftSearch}
+          placeholder={searchPlaceholder}
+          value={draftSearch}
+        />
+      </ManagementQueryPanel>
       <AdminTable
         error={error instanceof Error ? error : undefined}
         hasReadData={sourceItems !== undefined}
@@ -122,23 +117,11 @@ export function TablePane<
         localSorting
         rowKey="id"
         shellClassName="soha-management-table-shell"
-        toolbar={
-          queryCard ? undefined : (
-            <ManagementTableToolbar>
-              <ManagementToolbarSearch
-                placeholder={searchPlaceholder}
-                value={search}
-                onChange={setSearch}
-              />
-            </ManagementTableToolbar>
-          )
-        }
-        headerExtra={queryCard ? tableActions : undefined}
-        toolbarExtra={queryCard ? undefined : tableActions}
-        columnSettingPlacement={queryCard ? 'header' : 'toolbar'}
+        headerExtra={tableActions}
+        columnSettingPlacement="header"
         columnSettingIconOnly
         viewportScroll
       />
-    </>
+    </div>
   )
 }

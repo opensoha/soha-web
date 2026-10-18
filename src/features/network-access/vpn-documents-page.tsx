@@ -17,6 +17,8 @@ import { Alert, Button, Drawer, Form, Modal, Popconfirm, Space, Typography } fro
 import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { TablePane } from './table-pane'
+import { formatDateTime } from '@/utils/time'
+import './styles.css'
 import {
   deleteVPNDocument,
   publishVPNDocument,
@@ -103,13 +105,7 @@ export default function VPNDocumentsPage() {
       : text('VPN Auto 策略', 'VPN Auto policies')
   return (
     <ManagementDataPage
-      header={{
-        title,
-        description: text(
-          '发布后的修订控制新连接；安全范围变更会撤销受影响会话。',
-          'Published revisions govern new connections. Security scope changes revoke affected sessions.',
-        ),
-      }}
+      className="soha-network-page"
       tableNode={
         <TablePane<VPNDocument>
           items={visibleQueryData}
@@ -213,6 +209,13 @@ export default function VPNDocumentsPage() {
         />
       }
     >
+      <h1 className="soha-network-sr-only">{title}</h1>
+      <Typography.Paragraph type="secondary" className="soha-network-note">
+        {text(
+          '发布后的修订控制新连接；保存草稿不会直接应用到终端。安全范围变更会撤销受影响会话。',
+          'Published revisions govern new connections; drafts are not applied to endpoints. Security scope changes revoke affected sessions.',
+        )}
+      </Typography.Paragraph>
       {!(
         (editing !== undefined && !(query.isEnabled !== false && queryAccessDenied(query))) ||
         (!!history && !(query.isEnabled !== false && queryAccessDenied(query)))
@@ -279,7 +282,7 @@ export default function VPNDocumentsPage() {
           columns={[
             { title: text('修订', 'Revision'), dataIndex: 'revision' },
             { title: text('操作者', 'Actor'), dataIndex: 'createdBy' },
-            { title: text('时间', 'Time'), dataIndex: 'createdAt' },
+            { title: text('时间', 'Time'), dataIndex: 'createdAt', render: formatDateTime },
             {
               title: text('操作', 'Action'),
               key: 'rollback',

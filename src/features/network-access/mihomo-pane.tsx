@@ -303,7 +303,6 @@ export function NetworkMihomoPane({ canCreate, canDelete, canUpdate }: NetworkMi
         refreshing={profiles.isFetching}
         error={profiles.isEnabled === false ? null : profiles.error}
         onRefresh={() => void (profiles.isEnabled === false ? undefined : profiles.refetch())}
-        queryCard
         searchPlaceholder={t('networkAccess.mihomo.search', '搜索名称、设备或节点')}
         getSearchValues={(item) => [
           item.name,
