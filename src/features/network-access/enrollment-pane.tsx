@@ -3,7 +3,7 @@ import { operationModalStyles } from '@/components/modal-styles'
 import { useOperationMutation } from '@/components/use-operation-mutation'
 import { useI18n } from '@/i18n'
 import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
-import { PlusOutlined, StopOutlined } from '@ant-design/icons'
+import { PlusOutlined, QuestionCircleOutlined, StopOutlined } from '@ant-design/icons'
 import type {
   NetworkRuntimeEnrollment,
   NetworkRuntimeEnrollmentInput,
@@ -14,12 +14,12 @@ import type { TableColumnsType } from 'antd'
 import {
   Alert,
   Button,
-  Collapse,
   Form,
   Input,
   InputNumber,
   Modal,
   Popconfirm,
+  Popover,
   Select,
   Space,
   Typography,
@@ -91,31 +91,37 @@ export function NetworkEnrollmentPane({
   }
   const columns: TableColumnsType<NetworkRuntimeEnrollment> = [
     { title: t('networkAccess.enrollment.runtimeId', '运行时 ID'), dataIndex: 'runtimeId' },
-    {
-      title: t('networkAccess.enrollment.runtimeKind', '运行时类型'),
-      dataIndex: 'runtimeKind',
-      width: 120,
-      render: (value: string) => {
-        const labels: Record<string, [string, string]> = {
-          endpoint: ['终端', 'Endpoint'],
-          gateway: ['网关', 'Gateway'],
-          nas: ['RADIUS 服务', 'RADIUS service'],
-          proxy: ['代理', 'Proxy'],
-        }
-        return (
-          <MetadataTag
-            label={t(
-              `networkAccess.runtimeKind.${value}`,
-              labels[value]?.[localeCode === 'zh_CN' ? 0 : 1] ?? value,
-            )}
-          />
-        )
-      },
-    },
+    ...(isRadius
+      ? []
+      : [
+          {
+            title: t('networkAccess.enrollment.runtimeKind', '运行时类型'),
+            dataIndex: 'runtimeKind',
+            width: 120,
+            render: (value: string) => {
+              const labels: Record<string, [string, string]> = {
+                endpoint: ['终端', 'Endpoint'],
+                gateway: ['网关', 'Gateway'],
+                nas: ['RADIUS 运行时', 'RADIUS runtime'],
+                proxy: ['代理', 'Proxy'],
+              }
+              return (
+                <MetadataTag
+                  label={t(
+                    `networkAccess.runtimeKind.${value}`,
+                    labels[value]?.[localeCode === 'zh_CN' ? 0 : 1] ?? value,
+                  )}
+                />
+              )
+            },
+          },
+        ]),
     { title: t('networkAccess.enrollment.deviceId', '设备 ID'), dataIndex: 'deviceId' },
     { title: t('networkAccess.enrollment.subjectId', '主体 ID'), dataIndex: 'subjectId' },
     {
-      title: t('networkAccess.status', '状态'),
+      title: isRadius
+        ? t('networkAccess.radius.registrationStatus', '注册状态')
+        : t('networkAccess.status', '状态'),
       dataIndex: 'status',
       width: 110,
       render: (value: string) => <NetworkStatusTag value={value} />,
@@ -164,21 +170,6 @@ export function NetworkEnrollmentPane({
         </>
       )}
 
-      {isRadius ? (
-        <Collapse
-          size="small"
-          items={[
-            {
-              key: 'radius-guide',
-              label: t('networkAccess.radius.runtimeTitle', '接入 FreeRADIUS 服务'),
-              children: t(
-                'networkAccess.radius.runtimeHint',
-                '先创建一次性注册令牌，再由 Docker Compose、Kubernetes 或独立 FreeRADIUS 实例完成注册；密钥不会保存在网络设备记录中。',
-              ),
-            },
-          ]}
-        />
-      ) : null}
       <TablePane
         columns={columns}
         items={visibleEnrollmentsData?.filter(
@@ -197,17 +188,39 @@ export function NetworkEnrollmentPane({
           item.status,
         ]}
         createAction={
-          canCreate ? (
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={openCreate}
-              disabled={operationBlocked}
-            >
-              {isRadius
-                ? t('networkAccess.radius.connect', '接入 RADIUS 服务')
-                : t('networkAccess.enrollment.create', '创建注册令牌')}
-            </Button>
+          isRadius || canCreate ? (
+            <Space wrap>
+              {isRadius ? (
+                <Popover
+                  trigger="click"
+                  title={t('networkAccess.radius.runtimeTitle', 'RADIUS 接入说明')}
+                  content={
+                    <Typography.Paragraph style={{ maxWidth: 320, marginBottom: 0 }}>
+                      {t(
+                        'networkAccess.radius.registrationHint',
+                        '创建一次性接入令牌，再由 Docker Compose、Kubernetes 或独立 FreeRADIUS 运行时完成注册。这里展示注册令牌状态，不代表服务健康；密钥不会保存在网络设备记录中。',
+                      )}
+                    </Typography.Paragraph>
+                  }
+                >
+                  <Button type="text" icon={<QuestionCircleOutlined aria-hidden />}>
+                    {t('networkAccess.radius.help', '接入说明')}
+                  </Button>
+                </Popover>
+              ) : null}
+              {canCreate ? (
+                <Button
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  onClick={openCreate}
+                  disabled={operationBlocked}
+                >
+                  {isRadius
+                    ? t('networkAccess.radius.createToken', '创建接入令牌')
+                    : t('networkAccess.enrollment.create', '创建注册令牌')}
+                </Button>
+              ) : null}
+            </Space>
           ) : null
         }
       />
@@ -221,7 +234,7 @@ export function NetworkEnrollmentPane({
         open={createOpen && !(enrollments.isEnabled !== false && queryAccessDenied(enrollments))}
         title={
           isRadius
-            ? t('networkAccess.radius.connect', '接入 RADIUS 服务')
+            ? t('networkAccess.radius.createToken', '创建接入令牌')
             : t('networkAccess.enrollment.create', '创建注册令牌')
         }
         confirmLoading={createEnrollment.isPending}

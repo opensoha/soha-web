@@ -791,17 +791,11 @@ export function NetworkAccessPage() {
     )
   }
   const admissionSettingsTabs = [
-    canViewEnrollments
+    canViewSites
       ? {
-          key: 'radius-services',
-          label: t('networkAccess.settings.radius', 'RADIUS 服务'),
-          children: (
-            <NetworkEnrollmentPane
-              canCreate={canCreateEnrollments}
-              canRevoke={canRevokeEnrollments}
-              runtimeKind="nas"
-            />
-          ),
+          key: 'nas-bindings',
+          label: t('networkAccess.settings.networkDevices', '网络设备'),
+          children: <NetworkNASBindingsPane canManage={canUpdateSites} />,
         }
       : null,
     canViewSites
@@ -811,11 +805,17 @@ export function NetworkAccessPage() {
           children: <NetworkNASBindingsPane canManage={canUpdateSites} view="ssid" />,
         }
       : null,
-    canViewSites
+    canViewEnrollments
       ? {
-          key: 'nas-bindings',
-          label: t('networkAccess.settings.networkDevices', '网络设备'),
-          children: <NetworkNASBindingsPane canManage={canUpdateSites} />,
+          key: 'radius-services',
+          label: t('networkAccess.settings.radius', 'RADIUS 接入'),
+          children: (
+            <NetworkEnrollmentPane
+              canCreate={canCreateEnrollments}
+              canRevoke={canRevokeEnrollments}
+              runtimeKind="nas"
+            />
+          ),
         }
       : null,
   ].filter(Boolean) as Array<{

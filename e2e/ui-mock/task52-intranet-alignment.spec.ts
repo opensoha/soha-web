@@ -1,6 +1,7 @@
 import { test, expect, type BrowserContext, type Page } from '@playwright/test'
 import { installMocks, verifyBrowserEvidence } from '../fixtures/mock-app'
 import { verifyGeometry } from '../fixtures/geometry'
+import type { VisibleMenu } from '../../src/types'
 
 const time = '2026-10-18T01:00:00Z'
 const device = {
@@ -79,8 +80,110 @@ const permissions = [
   'vpn_dashboard',
 ].map((key) => `network_access.${key}.view`)
 
+const sceneGroups: VisibleMenu[] = [
+  {
+    id: 'network-access-infrastructure',
+    parentId: 'identity',
+    path: '/network-access/infrastructure',
+    labelZh: '站点与网络',
+    labelEn: 'Sites & Networks',
+    section: 'vpn',
+    sortOrder: 10,
+  },
+  {
+    id: 'network-access-controls',
+    parentId: 'identity',
+    path: '/network-access/controls',
+    labelZh: '访问控制',
+    labelEn: 'Access Control',
+    section: 'vpn',
+    sortOrder: 30,
+  },
+  {
+    id: 'network-access-vpn',
+    parentId: 'identity',
+    path: '/network-access/vpn',
+    labelZh: 'VPN 配置',
+    labelEn: 'VPN Configuration',
+    section: 'vpn',
+    sortOrder: 40,
+  },
+  {
+    id: 'network-access-monitoring',
+    parentId: 'identity',
+    path: '/network-access/monitoring',
+    labelZh: '连接监控',
+    labelEn: 'Connection Monitoring',
+    section: 'vpn',
+    sortOrder: 50,
+  },
+]
+const groupedRoutes: Record<string, [string, number]> = {
+  sites: ['infrastructure', 10],
+  spaces: ['infrastructure', 20],
+  gateways: ['infrastructure', 30],
+  policy: ['controls', 10],
+  'access-grants': ['controls', 20],
+  'site-profile-bindings': ['controls', 30],
+  'vpn/profiles': ['vpn', 10],
+  'vpn/selection-policies': ['vpn', 20],
+  sessions: ['monitoring', 10],
+  telemetry: ['monitoring', 20],
+  'vpn/dashboard': ['monitoring', 30],
+}
+const menuLabels: Record<string, [string, string]> = {
+  devices: ['终端资产', 'Endpoint Assets'],
+  sites: ['站点', 'Sites'],
+  spaces: ['网络空间', 'Network Spaces'],
+  gateways: ['网关', 'Gateways'],
+  resources: ['网络资源', 'Network Resources'],
+  policy: ['策略', 'Policies'],
+  'access-grants': ['访问授权', 'Access Grants'],
+  'site-profile-bindings': ['接入等级', 'Access Levels'],
+  enrollments: ['运行时接入', 'Runtime Access'],
+  settings: ['入网配置', 'Admission Configuration'],
+  'user-admission': ['用户入网', 'User Admission'],
+  'vpn/profiles': ['VPN 连接方案', 'VPN Profiles'],
+  'vpn/selection-policies': ['VPN Auto 策略', 'VPN Auto Policies'],
+  'vpn/dashboard': ['VPN 看板', 'VPN Dashboard'],
+  sessions: ['会话', 'Sessions'],
+  telemetry: ['遥测', 'Telemetry'],
+}
+function intranetMenus(): VisibleMenu[] {
+  return [
+    {
+      id: 'identity',
+      path: '/internal-workbench',
+      labelZh: '内网工作台',
+      labelEn: 'Internal Workbench',
+    },
+    ...sceneGroups,
+    ...routes.map((route, index) => ({
+      id: `network-access-${route.replace(/\//g, '-')}`,
+      parentId: groupedRoutes[route] ? `network-access-${groupedRoutes[route][0]}` : 'identity',
+      path: `/network-access/${route}`,
+      labelZh: menuLabels[route]?.[0] ?? route,
+      labelEn: menuLabels[route]?.[1] ?? route,
+      section:
+        route === 'devices'
+          ? 'endpoint'
+          : ['settings', 'user-admission'].includes(route)
+            ? 'network'
+            : route === 'mihomo-profiles'
+              ? 'proxy'
+              : 'vpn',
+      sortOrder:
+        groupedRoutes[route]?.[1] ??
+        (route === 'resources' ? 20 : route === 'enrollments' ? 60 : index),
+    })),
+  ]
+}
+
 async function setup(context: BrowserContext, page: Page) {
   const state = {
+    permissions: ['workbench.security.view', ...permissions],
+    menus: intranetMenus(),
+    reads: [] as string[],
     snapshotError: false,
     telemetryError: false,
     dashboardStatus: 200,
@@ -104,18 +207,9 @@ async function setup(context: BrowserContext, page: Page) {
       return {
         body: {
           data: {
-            permissionKeys: ['workbench.security.view', ...permissions],
-            visibleMenuIds: routes.map((route) => `network-access-${route.replace(/\//g, '-')}`),
-            visibleMenus: routes.map((route) => ({
-              id: `network-access-${route.replace(/\//g, '-')}`,
-              path: `/network-access/${route}`,
-              labelZh:
-                route === 'devices'
-                  ? '终端资产'
-                  : route === 'vpn/dashboard'
-                    ? 'VPN Dashboard'
-                    : route,
-            })),
+            permissionKeys: state.permissions,
+            visibleMenuIds: state.menus.map((menu) => menu.id),
+            visibleMenus: state.menus,
           },
         },
       }
@@ -123,6 +217,7 @@ async function setup(context: BrowserContext, page: Page) {
       if (path.startsWith('/network-access/')) state.writes.push(`${method} ${path}`)
       return undefined
     }
+    if (path.startsWith('/network-access/')) state.reads.push(path)
     if (path === '/network-access/devices')
       return {
         body: {
@@ -141,6 +236,15 @@ async function setup(context: BrowserContext, page: Page) {
               runtimeId: 'runtime-office',
               runtimeKind: 'gateway',
               deviceId: device.id,
+              subjectId: device.ownerUserId,
+              status: 'pending',
+              expiresAt: time,
+            },
+            {
+              id: 'registration-radius',
+              runtimeId: 'radius-office',
+              runtimeKind: 'nas',
+              deviceId: 'nas-office',
               subjectId: device.ownerUserId,
               status: 'pending',
               expiresAt: time,
@@ -420,10 +524,18 @@ test('admission settings preserve their tab scopes and reveal the runtime guide 
   const { evidence } = await setup(context, page)
   await page.goto('/network-access/settings')
   await expect(page.locator('.soha-management-query-card')).toBeVisible()
-  const guide = page.getByRole('button', { name: /接入 FreeRADIUS 服务/ })
-  await expect(guide).toHaveAttribute('aria-expanded', 'false')
+  await expect(page.getByRole('tab', { name: '网络设备', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  )
+  await page.getByRole('tab', { name: 'RADIUS 接入', exact: true }).click()
+  await expect(page.getByRole('cell', { name: 'radius-office', exact: true })).toBeVisible()
+  await expect(page.getByRole('cell', { name: 'runtime-office', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('columnheader', { name: '注册状态', exact: true })).toBeVisible()
+  await expect(page.getByRole('columnheader', { name: '运行时类型', exact: true })).toHaveCount(0)
+  const guide = page.getByRole('button', { name: '接入说明', exact: true })
   await guide.click()
-  await expect(page.getByText(/先创建一次性注册令牌/)).toBeVisible()
+  await expect(page.getByText(/创建一次性接入令牌/)).toBeVisible()
   await page.getByRole('tab', { name: 'SSID', exact: true }).click()
   await expect(page).toHaveURL(/tab=ssids/)
   await expect(page.locator('.soha-management-query-card')).toBeVisible()
@@ -448,3 +560,121 @@ test('telemetry first-load errors are owned inline and recover without a global 
   await expect(page.locator('.ant-notification-notice')).toHaveCount(0)
   verifyBrowserEvidence(evidence)
 })
+
+for (const [width, theme] of [
+  [1440, 'light'],
+  [1166, 'dark'],
+] as const) {
+  test(`six intranet scene entries preserve deep-link selection and keyboard navigation ${width} ${theme}`, async ({
+    context,
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 1000 })
+    const { evidence } = await setup(context, page)
+    await page.goto('/network-access/access-grants')
+    if (theme === 'dark')
+      await page.getByRole('button', { name: '切换到深色模式', exact: true }).click()
+    const vpnGroup = page
+      .locator('.ant-menu-item-group')
+      .filter({ has: page.locator('.soha-nav-section-title', { hasText: '零信任网络与 VPN' }) })
+    await expect(vpnGroup.locator(':scope > .ant-menu-item-group-list > li')).toHaveCount(6)
+    await expect(vpnGroup.locator('.ant-menu-item-selected')).toHaveText('访问授权')
+    await expect(
+      vpnGroup.locator('.ant-menu-submenu-title').filter({ hasText: '访问控制' }),
+    ).toHaveAttribute('aria-expanded', 'true')
+    await expect(page.locator('.ant-breadcrumb')).toContainText('访问控制')
+    await expect(page.locator('.ant-breadcrumb a').filter({ hasText: '访问控制' })).toHaveCount(0)
+    const vpn = vpnGroup.locator('.ant-menu-submenu-title').filter({ hasText: 'VPN 配置' })
+    await vpn.focus()
+    await page.keyboard.press('Enter')
+    await expect(vpn).toHaveAttribute('aria-expanded', 'true')
+    await vpnGroup.getByRole('menuitem', { name: /VPN 连接方案$/ }).click()
+    await expect(page).toHaveURL(/\/network-access\/vpn\/profiles$/)
+    await expect(vpnGroup.locator('.ant-menu-item-selected')).toHaveText('VPN 连接方案')
+    verifyBrowserEvidence(evidence)
+  })
+}
+for (const tab of ['radius-services', 'ssids', 'nas-bindings']) {
+  test(`legacy admission ${tab} preserves view and search/hash context`, async ({
+    context,
+    page,
+  }) => {
+    const { evidence } = await setup(context, page)
+    await page.goto(`/network-access/${tab}?scope=retained#network-settings`)
+    await expect(page).toHaveURL(
+      new RegExp(`/network-access/settings\\?scope=retained&tab=${tab}#network-settings$`),
+    )
+    await expect(page.getByRole('tab', { selected: true })).toHaveText(
+      tab === 'radius-services' ? 'RADIUS 接入' : tab === 'ssids' ? 'SSID' : '网络设备',
+    )
+    verifyBrowserEvidence(evidence)
+  })
+}
+test('intranet containers prune denied children and retain custom navigation', async ({
+  context,
+  page,
+}) => {
+  const { state, evidence } = await setup(context, page)
+  state.permissions = ['workbench.security.view', 'network_access.spaces.view']
+  state.menus.push(
+    {
+      id: 'operator-folder',
+      parentId: 'identity',
+      path: '/operator/network',
+      labelZh: '运营入口',
+      section: 'vpn',
+    },
+    {
+      id: 'operator-space',
+      parentId: 'operator-folder',
+      path: '/network-access/spaces',
+      labelZh: '运营网络空间',
+    },
+  )
+  await page.goto('/network-access/spaces')
+  await expect(page.getByRole('menuitem', { name: /站点与网络/ })).toBeVisible()
+  await expect(page.getByRole('menuitem', { name: /运营入口/ })).toBeVisible()
+  await expect(page.locator('aside').getByText('访问控制', { exact: true })).toHaveCount(0)
+  await expect(page.locator('aside').getByText('VPN 配置', { exact: true })).toHaveCount(0)
+  await expect(page.locator('aside').getByText('网关', { exact: true })).toHaveCount(0)
+  expect(state.reads).not.toContain('/network-access/gateways')
+  expect(state.reads).not.toContain('/network-access/access-grants')
+  verifyBrowserEvidence(evidence)
+})
+test('RADIUS-only readers keep the authorized tab without NAS queries', async ({
+  context,
+  page,
+}) => {
+  const { state, evidence } = await setup(context, page)
+  state.permissions = ['workbench.security.view', 'network_access.enrollments.view']
+  await page.goto('/network-access/settings')
+  await expect(page.getByRole('tab')).toHaveCount(1)
+  await expect(page.getByRole('tab', { name: 'RADIUS 接入', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  )
+  await page.getByRole('button', { name: '接入说明', exact: true }).click()
+  await expect(page.getByText(/这里展示注册令牌状态，不代表服务健康/)).toBeVisible()
+  await expect(page.getByRole('button', { name: '创建接入令牌', exact: true })).toHaveCount(0)
+  expect(state.reads).not.toContain('/network-access/nas-bindings')
+  verifyBrowserEvidence(evidence)
+})
+
+for (const dark of [false, true]) {
+  test(`RADIUS enrollment remains readable at 390 ${dark ? 'dark' : 'light'}`, async ({
+    context,
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 1000 })
+    const { evidence } = await setup(context, page)
+    await page.goto('/network-access/settings?tab=radius-services')
+    if (dark) await page.getByRole('button', { name: '切换到深色模式', exact: true }).click()
+    const guide = page.getByRole('button', { name: '接入说明', exact: true })
+    await guide.focus()
+    await page.keyboard.press('Enter')
+    await expect(page.getByText(/这里展示注册令牌状态，不代表服务健康/)).toBeVisible()
+    await page.screenshot({ animations: 'disabled' })
+    await verifyGeometry(page, guide)
+    verifyBrowserEvidence(evidence)
+  })
+}

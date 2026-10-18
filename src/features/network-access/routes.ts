@@ -79,7 +79,7 @@ export const networkAccessRoutes = defineRoutes([
     meta: {
       id: 'network-access-settings',
       path: '/network-access/settings',
-      title: '入网设置',
+      title: '入网配置',
       navVisible: true,
       menuId: 'network-access-settings',
       permissionKeysAny: ['network_access.sites.view', 'network_access.enrollments.view'],
@@ -125,7 +125,7 @@ export const networkAccessRoutes = defineRoutes([
     },
     shell: 'app',
     inheritMetaFrom: 'network-access',
-    redirectTo: '/network-access/settings',
+    load: () => import('./admission-settings-redirect'),
   },
   {
     meta: {
@@ -138,20 +138,20 @@ export const networkAccessRoutes = defineRoutes([
     },
     shell: 'app',
     inheritMetaFrom: 'network-access',
-    redirectTo: '/network-access/settings',
+    load: () => import('./admission-settings-redirect'),
   },
   {
     meta: {
       id: 'network-access-radius-services',
       path: '/network-access/radius-services',
-      title: 'RADIUS 服务',
+      title: 'RADIUS 接入',
       navVisible: false,
       menuId: 'network-access-radius-services',
       permissionKey: 'network_access.enrollments.view',
     },
     shell: 'app',
     inheritMetaFrom: 'network-access',
-    redirectTo: '/network-access/settings',
+    load: () => import('./admission-settings-redirect'),
   },
   {
     meta: {
@@ -209,7 +209,7 @@ export const networkAccessRoutes = defineRoutes([
     meta: {
       id: 'network-access-resources',
       path: '/network-access/resources',
-      title: '资源',
+      title: '网络资源',
       navVisible: true,
       menuId: 'network-access-resources',
       permissionKey: 'network_access.resources.view',
@@ -235,7 +235,7 @@ export const networkAccessRoutes = defineRoutes([
     meta: {
       id: 'network-access-enrollments',
       path: '/network-access/enrollments',
-      title: '运行时注册',
+      title: '运行时接入',
       navVisible: true,
       menuId: 'network-access-enrollments',
       permissionKey: 'network_access.enrollments.view',
@@ -322,7 +322,43 @@ export const networkAccessRoutes = defineRoutes([
     inheritMetaFrom: 'network-access',
     load: () => import('./proxy-runtime/connections-page'),
   },
-  { meta: { id: 'network-access-vpn-profiles', path: '/network-access/vpn/profiles', title: 'VPN 连接方案', navVisible: true, menuId: 'network-access-vpn-profiles', permissionKey: 'network_access.vpn_profiles.view' }, shell: 'app', inheritMetaFrom: 'network-access', load: () => import('./vpn-documents-page') },
-  { meta: { id: 'network-access-vpn-selection-policies', path: '/network-access/vpn/selection-policies', title: 'VPN Auto 策略', navVisible: true, menuId: 'network-access-vpn-selection-policies', permissionKey: 'network_access.vpn_selection_policies.view' }, shell: 'app', inheritMetaFrom: 'network-access', load: () => import('./vpn-documents-page') },
-  { meta: { id: 'network-access-vpn-dashboard', path: '/network-access/vpn/dashboard', title: 'VPN Dashboard', navVisible: true, menuId: 'network-access-vpn-dashboard', permissionKey: 'network_access.vpn_dashboard.view' }, shell: 'app', inheritMetaFrom: 'network-access', load: () => import('./vpn-dashboard-page') },
+  {
+    meta: {
+      id: 'network-access-vpn-profiles',
+      path: '/network-access/vpn/profiles',
+      title: 'VPN 连接方案',
+      navVisible: true,
+      menuId: 'network-access-vpn-profiles',
+      permissionKey: 'network_access.vpn_profiles.view',
+    },
+    shell: 'app',
+    inheritMetaFrom: 'network-access',
+    load: () => import('./vpn-documents-page'),
+  },
+  {
+    meta: {
+      id: 'network-access-vpn-selection-policies',
+      path: '/network-access/vpn/selection-policies',
+      title: 'VPN Auto 策略',
+      navVisible: true,
+      menuId: 'network-access-vpn-selection-policies',
+      permissionKey: 'network_access.vpn_selection_policies.view',
+    },
+    shell: 'app',
+    inheritMetaFrom: 'network-access',
+    load: () => import('./vpn-documents-page'),
+  },
+  {
+    meta: {
+      id: 'network-access-vpn-dashboard',
+      path: '/network-access/vpn/dashboard',
+      title: 'VPN 看板',
+      navVisible: true,
+      menuId: 'network-access-vpn-dashboard',
+      permissionKey: 'network_access.vpn_dashboard.view',
+    },
+    shell: 'app',
+    inheritMetaFrom: 'network-access',
+    load: () => import('./vpn-dashboard-page'),
+  },
 ] as const)
