@@ -190,6 +190,16 @@ function TopologyCanvas({
         fitView
         minZoom={0.15}
         maxZoom={1.8}
+        onNodesChange={(changes) => {
+          const selection = changes.find((change) => change.type === 'select' && change.selected)
+          if (selection?.type === 'select') onSelect(selection.id)
+          else if (
+            changes.some(
+              (change) => change.type === 'select' && change.id === selected && !change.selected,
+            )
+          )
+            onSelect('')
+        }}
         onNodeClick={(_, node) => onSelect(node.id)}
         onPaneClick={() => onSelect('')}
         onEdgeClick={(_, edge) => onSelect(edge.target)}
