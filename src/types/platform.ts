@@ -39,6 +39,7 @@ export interface Cluster {
 }
 
 export interface ClusterDiagnostics {
+  actionChecks?: import('@opensoha/contracts/gen/ts/sohaapi').components['schemas']['KubernetesAgentActionCheck'][]
   transport: string
   syncStrategy: string
   cacheStatus: string
@@ -49,6 +50,7 @@ export interface ClusterDiagnostics {
 }
 
 export interface ClusterConnectionDetail {
+  actionProfile?: import('@opensoha/contracts/gen/ts/sohaapi').components['schemas']['KubernetesAgentActionProfile']
   customResourceRules?: import('@opensoha/contracts/gen/ts/sohaapi').components['schemas']['KubernetesAgentCustomResourceRule'][]
   mode: string
   credentialType: string

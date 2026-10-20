@@ -2,6 +2,7 @@ import dayjs from 'dayjs'
 import { describe, expect, it } from 'vitest'
 import {
   buildAnnouncementDateRange,
+  getMenuDerivedPermissionKeys,
   MENU_WORKBENCH_LABELS,
   MENU_WORKBENCH_ORDER,
   prettifyAction,
@@ -36,6 +37,15 @@ describe('prettifyAction', () => {
 })
 
 describe('menu workbench presentation', () => {
+  it('includes all-of prerequisites with the monitoring view alternatives', () => {
+    const keys = getMenuDerivedPermissionKeys({
+      id: 'resource-monitoring',
+      path: '/resource-monitoring',
+    })
+    expect(keys).toContain('platform.nodes.view')
+    expect(keys).toContain('platform.resource-monitoring.cpu.view')
+    expect(keys).toContain('platform.resource-monitoring.memory.view')
+  })
   it('uses the product order and portal label', () => {
     expect(MENU_WORKBENCH_ORDER.slice(0, 8)).toEqual([
       'home',

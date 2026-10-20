@@ -1,14 +1,17 @@
+import type { ReactNode } from 'react'
 import { Button } from 'antd'
 import { ManagementKeywordField, ManagementQueryPanel } from '@/components/management-list'
 import { useI18n } from '@/i18n'
 
 interface ResourceQueryPanelProps {
+  children?: ReactNode
   placeholder: string
   searchKeyword: string
   setSearchKeyword: (value: string) => void
 }
 
 export function ResourceQueryPanel({
+  children,
   placeholder,
   searchKeyword,
   setSearchKeyword,
@@ -34,6 +37,7 @@ export function ResourceQueryPanel({
         </>
       }
     >
+      {children}
       <ManagementKeywordField
         label={localeCode === 'zh_CN' ? '关键词' : 'Keyword'}
         value={searchKeyword}

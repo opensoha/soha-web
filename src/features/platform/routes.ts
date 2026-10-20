@@ -1,3 +1,4 @@
+import { resourceMonitoringRoutes } from './resource-monitoring/routes'
 import { defineRoutes } from '@/routes/definitions'
 import { accessControlRoutes } from './access-control/routes'
 import { clusterResourceRoutes } from './cluster-resources/routes'
@@ -89,7 +90,10 @@ export const platformShellRoutes = defineRoutes([
       workspace: 'resource',
     },
     shell: 'app',
-    redirectTo: '/network/topology',
+    load: async () => {
+      const module = await import('./network/group-entry')
+      return { default: module.NetworkEntry }
+    },
   },
   {
     meta: {
@@ -121,6 +125,7 @@ export const platformRouteManifests = [
   configurationRoutes,
   extensionRoutes,
   networkRoutes,
+  resourceMonitoringRoutes,
   storageRoutes,
   resourceCreationRoutes,
 ] as const

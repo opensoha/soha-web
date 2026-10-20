@@ -19,6 +19,64 @@ export const networkViewPermissions = [
 export const networkRoutes = defineRoutes([
   {
     meta: {
+      id: 'network-backends',
+      path: '/network/backends',
+      title: '服务与后端',
+      description: '服务与后端',
+      icon: 'IconConnection',
+      group: 'platform',
+      requiresAuth: true,
+      tabbar: false,
+      navVisible: false,
+      parentId: 'network',
+      menuId: 'network-backends',
+      permissionKeysAny: [
+        'platform.network.services.view',
+        'platform.network.endpoint-slices.view',
+      ],
+      scopeMode: 'namespace',
+      workspace: 'resource',
+    },
+    shell: 'app',
+    load: async () => {
+      const module = await import('./group-entry')
+      return { default: module.NetworkBackendsEntry }
+    },
+  },
+  {
+    meta: {
+      id: 'network-routing',
+      path: '/network/routing',
+      title: '入口与路由',
+      description: '入口与路由',
+      icon: 'IconConnection',
+      group: 'platform',
+      requiresAuth: true,
+      tabbar: false,
+      navVisible: false,
+      parentId: 'network',
+      menuId: 'network-routing',
+      permissionKeysAny: [
+        'platform.network.ingresses.view',
+        'platform.network.ingress-classes.view',
+        'platform.network.gateway-classes.view',
+        'platform.network.gateways.view',
+        'platform.network.http-routes.view',
+        'platform.network.grpc-routes.view',
+        'platform.network.backend-tls-policies.view',
+        'platform.network.reference-grants.view',
+      ],
+      scopeMode: 'namespace',
+      workspace: 'resource',
+    },
+    shell: 'app',
+    load: async () => {
+      const module = await import('./group-entry')
+      return { default: module.NetworkRoutingEntry }
+    },
+  },
+  {
+    meta: {
       id: 'network-services',
       path: '/network/services',
       title: 'Services',

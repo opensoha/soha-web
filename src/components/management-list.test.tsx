@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import {
   ManagementQueryField,
+  ManagementKeywordField,
   ManagementQueryGrid,
   ManagementQueryScope,
   ManagementSearchableListPane,
@@ -133,6 +134,64 @@ describe('ManagementQueryScope', () => {
         ?.style.getPropertyValue('--soha-management-query-collapsed-height'),
     ).toBe('52px')
 
+    rectSpy.mockRestore()
+    await act(async () => root.unmount())
+  })
+
+  it.each([undefined, 360])(
+    'lets keyword fields inherit the shared minimum unless overridden (%s)',
+    async (minWidth) => {
+      const container = document.createElement('div')
+      document.body.appendChild(container)
+      const root = createRoot(container)
+      await act(async () => root.render(<ManagementKeywordField minWidth={minWidth} />))
+      expect(
+        container
+          .querySelector<HTMLElement>('.soha-management-query-field')
+          ?.style.getPropertyValue('--soha-management-query-field-min-width'),
+      ).toBe(minWidth ? `${minWidth}px` : '')
+      await act(async () => root.unmount())
+    },
+  )
+
+  it('does not offer collapse when fractional measurements fit one row', async () => {
+    const rectSpy = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: HTMLElement) {
+        const width = this.classList.contains('soha-management-query-grid')
+          ? 540
+          : this.classList.contains('soha-management-query-field')
+            ? this.style.getPropertyValue('--soha-management-query-field-width') === '240px'
+              ? 240
+              : 300.00003
+            : 64
+        return {
+          x: 0,
+          y: 0,
+          left: 0,
+          top: 0,
+          bottom: 32,
+          right: width,
+          width,
+          height: 32,
+          toJSON: () => undefined,
+        }
+      })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    await act(async () =>
+      root.render(
+        <ManagementQueryGrid actions={<button type="button">Search</button>}>
+          <ManagementQueryField label="Namespace" width={240}>
+            <input />
+          </ManagementQueryField>
+          <ManagementKeywordField />
+        </ManagementQueryGrid>,
+      ),
+    )
+    expect(container.querySelector('.soha-management-query-more-button')).toBeNull()
+    expect(container.querySelectorAll('.soha-management-query-field')).toHaveLength(2)
     rectSpy.mockRestore()
     await act(async () => root.unmount())
   })

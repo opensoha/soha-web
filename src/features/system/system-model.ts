@@ -169,7 +169,11 @@ export interface Announcement {
 }
 
 export type AnnouncementDurationPreset =
-  'one-day' | 'three-days' | 'one-week' | 'one-month' | 'forever'
+  | 'one-day'
+  | 'three-days'
+  | 'one-week'
+  | 'one-month'
+  | 'forever'
 
 export type AnnouncementDateRange = [dayjs.Dayjs | null, dayjs.Dayjs | null]
 
@@ -384,19 +388,21 @@ export function buildWorkbenchMenuTree(items: MenuItem[]) {
         if (sectionCompare !== 0) return sectionCompare
         return resolveMenuSectionLabel(left).localeCompare(resolveMenuSectionLabel(right))
       })
-      .map(([section, sectionItems]): MenuItem => ({
-        id: `__section__${workbenchKey}__${section}`,
-        labelZh: resolveMenuSectionLabel(section),
-        labelEn: resolveMenuSectionLabel(section, 'en_US'),
-        path: '',
-        iconKey: '',
-        section,
-        sortOrder: 0,
-        enabled: true,
-        syntheticKind: 'section',
-        syntheticWorkbenchKey: workbenchKey,
-        children: [...sectionItems].sort(compareMenuItems),
-      }))
+      .map(
+        ([section, sectionItems]): MenuItem => ({
+          id: `__section__${workbenchKey}__${section}`,
+          labelZh: resolveMenuSectionLabel(section),
+          labelEn: resolveMenuSectionLabel(section, 'en_US'),
+          path: '',
+          iconKey: '',
+          section,
+          sortOrder: 0,
+          enabled: true,
+          syntheticKind: 'section',
+          syntheticWorkbenchKey: workbenchKey,
+          children: [...sectionItems].sort(compareMenuItems),
+        }),
+      )
 
     return {
       id: `__workbench__${workbenchKey}`,
@@ -560,9 +566,10 @@ export function getMenuDerivedPermissionKeys(
         .filter((child) => child.parentId === route.id)
         .flatMap(permissionKeysForRoute)
     }
-    return route.permissionKeysAny?.length
+    const viewKeys = route.permissionKeysAny?.length
       ? route.permissionKeysAny
       : [resolveRoutePermission(route)].filter((value): value is string => Boolean(value))
+    return [...(route.permissionKeysAll ?? []), ...viewKeys]
   }
 
   return compactUniqueStrings(

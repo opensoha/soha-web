@@ -158,7 +158,7 @@ export const api = {
   postResponse: (path: string, body: unknown, signal: AbortSignal) =>
     requestResponse(path, { method: 'POST', body: JSON.stringify(body), signal }),
   getText: (path: string) => request<string>(path, {}, false, 'text'),
-  get: <T>(path: string) => request<T>(path),
+  get: <T>(path: string, options?: Pick<RequestInit, 'signal'>) => request<T>(path, options),
   getEnvelope: <T>(path: string) => request<T>(path, {}, false),
   post: <T>(path: string, body?: unknown) =>
     request<T>(path, {

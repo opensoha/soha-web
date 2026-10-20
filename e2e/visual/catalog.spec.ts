@@ -1,6 +1,149 @@
 import { test, expect, definitions } from '../fixtures/crd-app'
 import { verifyGeometry } from '../fixtures/geometry'
 
+for (const variant of [
+  { localeCode: 'zh_CN', themeMode: 'light', sidebarCollapsed: false, userName: 'OpenSoha' },
+  {
+    localeCode: 'en_US',
+    themeMode: 'dark',
+    sidebarCollapsed: true,
+    userName: 'browser-regression',
+  },
+])
+  test(`header keeps scope in the compact right action group (${variant.localeCode})`, async ({
+    page,
+    context,
+    catalog,
+  }, info) => {
+    catalog.data[0].group = 'gateway.networking.k8s.io'
+    catalog.data[0].name = `widgets.${catalog.data[0].group}`
+    catalog.extraPermissions.push('platform.pods.logs', 'platform.resource-creation.use')
+    const { userName, ...prefs } = variant
+    catalog.userName = userName
+    await context.addInitScript(
+      (state) => localStorage.setItem('soha-prefs', JSON.stringify({ state, version: 0 })),
+      { ...prefs, themeId: 'soha' },
+    )
+    await page.setViewportSize({ width: 990, height: 1000 })
+    await page.goto(`/extensions/apis/${catalog.data[0].group}`)
+    await expect(page.getByText('sample-widget', { exact: true })).toBeVisible()
+    const header = page.locator('.soha-header')
+    const measurements = []
+    await expect(header.locator('.soha-header-right > .soha-header-context')).toHaveCount(1)
+    for (const width of [1440, 1201, 1200, 1141, 1132, 1020, 990, 769, 768, 640, 320, 714]) {
+      await page.setViewportSize({ width, height: 1000 })
+      await expect
+        .poll(() => header.evaluate((e) => e.scrollWidth - e.clientWidth))
+        .toBeLessThanOrEqual(1)
+      const boxes = await header.evaluate((e) => {
+        const rect = (selector: string) => {
+          const { x, y, width, height } = e.querySelector(selector)!.getBoundingClientRect()
+          return { x, y, width, height }
+        }
+        return {
+          main: rect('.soha-header-main'),
+          scope: rect('.soha-header-context'),
+          actions: rect('.soha-header-right'),
+          firstAction: rect('.soha-header-realtime-sessions'),
+          row: rect('.soha-header-top-row'),
+        }
+      })
+      measurements.push({ width, ...boxes })
+      if (
+        [990, 1020, 1132, 1141, 1200].includes(width) ||
+        (width === 714 && variant.localeCode === 'zh_CN')
+      ) {
+        expect(
+          Math.abs(
+            boxes.scope.y + boxes.scope.height / 2 - boxes.actions.y - boxes.actions.height / 2,
+          ),
+          `scope and tools share second row at ${width}px`,
+        ).toBeLessThanOrEqual(1)
+        expect(boxes.actions.height, `one tools row at ${width}px`).toBeLessThanOrEqual(34)
+        expect(
+          boxes.firstAction.x - boxes.scope.x - boxes.scope.width,
+          'shared 6px action gap',
+        ).toBeCloseTo(6, 1)
+      }
+      if (width > 768)
+        expect(
+          Math.abs(boxes.row.x + boxes.row.width - boxes.actions.x - boxes.actions.width),
+          'right group alignment',
+        ).toBeLessThanOrEqual(1)
+      for (const control of await header
+        .locator('button:visible, [role="combobox"]:visible')
+        .all()) {
+        const box = (await control.boundingBox())!
+        expect(box.x).toBeGreaterThanOrEqual(-1)
+        expect(box.x + box.width).toBeLessThanOrEqual(width + 1)
+      }
+    }
+    await info.attach('header-geometry', {
+      body: JSON.stringify(measurements),
+      contentType: 'application/json',
+    })
+    await page.screenshot({
+      path: info.outputPath('header-714.png'),
+      clip: { x: 0, y: 0, width: 714, height: 400 },
+    })
+    await page.setViewportSize({ width: 990, height: 1000 })
+    await page.goto('/workloads/deployments/api')
+    await expect(header.getByRole('combobox')).toHaveCount(2)
+    await verifyGeometry(page, header.getByRole('combobox').first())
+    await verifyGeometry(page, header.getByRole('combobox').last())
+    await page.goto('/clusters')
+    await expect(header.getByRole('combobox')).toHaveCount(0)
+    await expect(header.locator('.soha-header-context')).toHaveCount(0)
+  })
+
+test('query keeps fitting fields visible and preserves hidden input across container resize', async ({
+  page,
+  context,
+  catalog,
+}) => {
+  catalog.data[0].group = 'gateway.networking.k8s.io'
+  catalog.data[0].name = `widgets.${catalog.data[0].group}`
+  await context.addInitScript(() =>
+    localStorage.setItem(
+      'soha-prefs',
+      JSON.stringify({
+        state: {
+          localeCode: 'zh_CN',
+          themeMode: 'light',
+          themeId: 'soha',
+          sidebarCollapsed: false,
+        },
+        version: 0,
+      }),
+    ),
+  )
+  await page.setViewportSize({ width: 1141, height: 1000 })
+  await page.goto(`/extensions/apis/${catalog.data[0].group}`)
+  await expect(page.getByText('sample-widget', { exact: true })).toBeVisible()
+  const grid = page.locator('.soha-crd-instance-list .soha-management-query-grid')
+  const keyword = grid.getByPlaceholder('搜索实例 / 命名空间 / 摘要')
+  await expect(keyword).toBeVisible()
+  await expect(grid.locator('.soha-management-query-more-button')).toHaveCount(0)
+  const rows = await grid
+    .locator('.soha-management-query-field')
+    .evaluateAll((fields) => fields.map((e) => e.getBoundingClientRect().y))
+  expect(Math.abs(rows[0] - rows[1])).toBeLessThanOrEqual(1)
+  await keyword.fill('sample')
+  const input = await keyword.elementHandle()
+  await page.setViewportSize({ width: 990, height: 1000 })
+  const more = grid.locator('.soha-management-query-more-button')
+  await expect(more).toBeVisible()
+  await expect(keyword).toBeHidden()
+  await expect(keyword).toHaveCount(1)
+  await more.click()
+  await expect(keyword).toBeVisible()
+  await expect(keyword).toHaveValue('sample')
+  await page.setViewportSize({ width: 1141, height: 1000 })
+  await expect(grid.locator('.soha-management-query-more-button')).toHaveCount(0)
+  await expect(keyword).toBeVisible()
+  expect(await input!.evaluate((e) => e.isConnected)).toBe(true)
+})
+
 for (const theme of ['light', 'dark'])
   for (const width of [1440, 1280])
     test(`V01–V03: ${theme} ${width}px candidate and geometry`, async ({

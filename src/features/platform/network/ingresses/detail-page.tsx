@@ -48,7 +48,7 @@ export function IngressDetailPage() {
   const name = (params.name as string | undefined) ?? ''
   const detailNamespace = resolveNetworkNamespace(namespace, searchParams.get('namespace'))
   const scope = toScopeKey(clusterId, detailNamespace)
-  const [activeTabKey, setActiveTabKey] = useState('overview')
+  const [activeTabKey, setActiveTabKey] = useState(() => searchParams.get('tab') === 'yaml' ? 'yaml' : 'overview')
   const detailQuery = useQuery(ingressQueries.detail(scope, name))
   const visibleDetailQueryData = readableQueryData(detailQuery)
   const ingress = visibleDetailQueryData

@@ -20,6 +20,7 @@ const monaco = vi.hoisted(() => ({
 }))
 
 vi.mock('@monaco-editor/react', () => ({
+  loader: { config: vi.fn() },
   useMonaco: () => null,
   default: (props: ComponentProps<typeof Editor>) => {
     monaco.editProps = props
@@ -61,6 +62,7 @@ vi.mock('@monaco-editor/react', () => ({
   },
 }))
 vi.mock('monaco-yaml', () => ({ configureMonacoYaml: vi.fn() }))
+vi.mock('monaco-editor', () => ({}))
 vi.mock('@/i18n', () => ({
   useI18n: () => ({ localeCode: 'en_US', t: (_: string, fallback: string) => fallback }),
 }))

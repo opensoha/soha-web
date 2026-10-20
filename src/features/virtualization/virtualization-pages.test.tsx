@@ -13,7 +13,11 @@ import { VirtualizationClustersPage } from './clusters/list-page'
 import { VirtualizationFlavorsPage } from './flavors/list-page'
 import { VirtualizationImagesPage } from './images/list-page'
 import { VirtualizationVmDetailPage } from './virtual-machines/detail-page'
-import { defaultRootDisk, pveVMSourceRef, VirtualizationVmsPage } from './virtual-machines/list-page'
+import {
+  defaultRootDisk,
+  pveVMSourceRef,
+  VirtualizationVmsPage,
+} from './virtual-machines/list-page'
 import {
   buildClusterPayload,
   buildCreateVmPayload,
@@ -941,7 +945,7 @@ describe('virtualization pages', () => {
       fields.map((field) =>
         field.style.getPropertyValue('--soha-management-query-field-min-width'),
       ),
-    ).toEqual(['300px', '180px', '136px', '160px'])
+    ).toEqual(['', '180px', '136px', '160px'])
   })
 
   it('uses the aligned query shell across virtualization list pages', async () => {

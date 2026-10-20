@@ -450,6 +450,8 @@ describe('app layout workspace navigation', () => {
     })
 
     const headerActions = container.querySelector('.soha-header-right')
+    expect(headerActions?.firstElementChild?.classList.contains('soha-header-context')).toBe(true)
+    expect(headerActions?.querySelector('[data-testid="platform-scope-trigger"]')).not.toBeNull()
     const sessionButton = headerActions?.querySelector<HTMLButtonElement>(
       '.soha-header-realtime-sessions',
     )

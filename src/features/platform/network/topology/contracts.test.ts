@@ -25,9 +25,11 @@ describe('Network Topology contracts', () => {
     }
     apiMocks.get.mockResolvedValue({ data: topology })
 
-    await expect(getNetworkTopology(scope)).resolves.toBe(topology)
+    const controller = new AbortController()
+    await expect(getNetworkTopology(scope, controller.signal)).resolves.toBe(topology)
     expect(apiMocks.get).toHaveBeenCalledWith(
       '/clusters/cluster-a/network/topology?namespace=team-a',
+      { signal: controller.signal },
     )
     expect(topologyKeys.detail(scope)).toEqual([
       'platform',

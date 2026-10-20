@@ -367,6 +367,7 @@ for (const mode of ['light', 'dark', 'narrow'] as const)
     state.readStatus = 503
     await page.getByRole('button', { name: '刷新', exact: true }).press('Enter')
     await expect(page.getByText('列表未更新，正在展示上次读取结果')).toBeVisible()
+    await expect(page.locator('.ant-notification-notice')).toHaveCount(0)
     if (mode === 'dark')
       await expect(page.locator('html')).toHaveAttribute('data-theme-mode', 'dark')
     await verifyGeometry(page, page.getByRole('button', { name: '刷新', exact: true }))

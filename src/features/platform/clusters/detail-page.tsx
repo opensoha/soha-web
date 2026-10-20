@@ -13,6 +13,7 @@ import type { TableColumnsType } from 'antd'
 import { Button, Card, Descriptions, Spin, Tag, Typography } from 'antd'
 import { useNavigate, useParams } from 'react-router-dom'
 import { LogCollectionCard } from './log-collection-card'
+import { AgentActionsCard } from './agent-actions-card'
 import {
   clusterTypeOf,
   formatClusterRuntimeValue,
@@ -259,6 +260,10 @@ export function ClusterDetailPage() {
           />
         </Card>
       </div>
+
+      {summary.connectionMode === 'agent' ? (
+        <AgentActionsCard checks={detail.diagnostics.actionChecks} />
+      ) : null}
 
       <Card className="soha-detail-card" title={localeCode === 'zh_CN' ? '监控配置' : 'Monitoring'}>
         <Descriptions

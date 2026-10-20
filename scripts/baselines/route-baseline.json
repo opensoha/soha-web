@@ -41,6 +41,7 @@
       "src/features/platform/manifests/routes.ts",
       "src/features/platform/network/routes.ts",
       "src/features/platform/resource-creation/routes.ts",
+      "src/features/platform/resource-monitoring/routes.ts",
       "src/features/platform/routes.ts",
       "src/features/platform/storage/routes.ts",
       "src/features/platform/workloads/routes.ts",
@@ -53,14 +54,14 @@
     ]
   },
   "summary": {
-    "runtimePaths": 284,
-    "metadataPaths": 284,
-    "overlappingPaths": 284,
+    "runtimePaths": 292,
+    "metadataPaths": 292,
+    "overlappingPaths": 292,
     "runtimeOnlyPaths": 0,
     "metadataOnlyPaths": 0,
     "inlineJsxPaths": 0,
-    "lazyRouteLoads": 227,
-    "lazySourceModules": 222
+    "lazyRouteLoads": 239,
+    "lazySourceModules": 225
   },
   "paths": {
     "runtime": [
@@ -243,6 +244,7 @@
       "/network-access/vpn/selection-policies",
       "/network-access/wifi",
       "/network-access/wired",
+      "/network/backends",
       "/network/endpointslices",
       "/network/endpointslices/:name",
       "/network/gateway-api",
@@ -266,6 +268,7 @@
       "/network/networkpolicies",
       "/network/networkpolicies/:name",
       "/network/port-forward",
+      "/network/routing",
       "/network/services",
       "/network/services/:serviceName",
       "/network/topology",
@@ -301,6 +304,12 @@
       "/releases",
       "/releases/:releaseId",
       "/resource-creation",
+      "/resource-monitoring",
+      "/resource-monitoring/conntrack",
+      "/resource-monitoring/cpu",
+      "/resource-monitoring/memory",
+      "/resource-monitoring/overview",
+      "/resource-monitoring/pods",
       "/settings",
       "/settings/about",
       "/settings/branding",
@@ -529,6 +538,7 @@
       "/network-access/vpn/selection-policies",
       "/network-access/wifi",
       "/network-access/wired",
+      "/network/backends",
       "/network/endpointslices",
       "/network/endpointslices/:name",
       "/network/gateway-api",
@@ -552,6 +562,7 @@
       "/network/networkpolicies",
       "/network/networkpolicies/:name",
       "/network/port-forward",
+      "/network/routing",
       "/network/services",
       "/network/services/:serviceName",
       "/network/topology",
@@ -587,6 +598,12 @@
       "/releases",
       "/releases/:releaseId",
       "/resource-creation",
+      "/resource-monitoring",
+      "/resource-monitoring/conntrack",
+      "/resource-monitoring/cpu",
+      "/resource-monitoring/memory",
+      "/resource-monitoring/overview",
+      "/resource-monitoring/pods",
       "/settings",
       "/settings/about",
       "/settings/branding",
@@ -815,6 +832,7 @@
       "/network-access/vpn/selection-policies",
       "/network-access/wifi",
       "/network-access/wired",
+      "/network/backends",
       "/network/endpointslices",
       "/network/endpointslices/:name",
       "/network/gateway-api",
@@ -838,6 +856,7 @@
       "/network/networkpolicies",
       "/network/networkpolicies/:name",
       "/network/port-forward",
+      "/network/routing",
       "/network/services",
       "/network/services/:serviceName",
       "/network/topology",
@@ -873,6 +892,12 @@
       "/releases",
       "/releases/:releaseId",
       "/resource-creation",
+      "/resource-monitoring",
+      "/resource-monitoring/conntrack",
+      "/resource-monitoring/cpu",
+      "/resource-monitoring/memory",
+      "/resource-monitoring/overview",
+      "/resource-monitoring/pods",
       "/settings",
       "/settings/about",
       "/settings/branding",
@@ -1573,6 +1598,11 @@
         "source": "@/features/observability/overview/page"
       },
       {
+        "exportName": "network-access-nas-bindings:default",
+        "moduleExport": "default",
+        "source": "@/features/network-access/admission-settings-redirect"
+      },
+      {
         "exportName": "network-access-proxy-connections:default",
         "moduleExport": "default",
         "source": "@/features/network-access/proxy-runtime/connections-page"
@@ -1586,6 +1616,16 @@
         "exportName": "network-access-proxy-overview:default",
         "moduleExport": "default",
         "source": "@/features/network-access/proxy-runtime/overview-page"
+      },
+      {
+        "exportName": "network-access-radius-services:default",
+        "moduleExport": "default",
+        "source": "@/features/network-access/admission-settings-redirect"
+      },
+      {
+        "exportName": "network-access-ssids:default",
+        "moduleExport": "default",
+        "source": "@/features/network-access/admission-settings-redirect"
       },
       {
         "exportName": "network-access-vpn-dashboard:default",
@@ -1603,6 +1643,11 @@
         "source": "@/features/network-access/vpn-documents-page"
       },
       {
+        "exportName": "NetworkBackendsEntry",
+        "moduleExport": "NetworkBackendsEntry",
+        "source": "@/features/platform/network/group-entry"
+      },
+      {
         "exportName": "NetworkBackendTLSPoliciesPage",
         "moduleExport": "NetworkBackendTLSPoliciesPage",
         "source": "@/features/platform/network/gateway-api/backend-tls-policies-page"
@@ -1611,6 +1656,11 @@
         "exportName": "NetworkEndpointSlicesPage",
         "moduleExport": "NetworkEndpointSlicesPage",
         "source": "@/features/platform/network/resources/endpointslices-list-page"
+      },
+      {
+        "exportName": "NetworkEntry",
+        "moduleExport": "NetworkEntry",
+        "source": "@/features/platform/network/group-entry"
       },
       {
         "exportName": "NetworkGatewayClassesPage",
@@ -1661,6 +1711,11 @@
         "exportName": "NetworkReferenceGrantsPage",
         "moduleExport": "NetworkReferenceGrantsPage",
         "source": "@/features/platform/network/gateway-api/reference-grants-page"
+      },
+      {
+        "exportName": "NetworkRoutingEntry",
+        "moduleExport": "NetworkRoutingEntry",
+        "source": "@/features/platform/network/group-entry"
       },
       {
         "exportName": "NetworkServicesPage",
@@ -1881,6 +1936,36 @@
         "exportName": "ResourceCreationModalRedirect",
         "moduleExport": "ResourceCreationModalRedirect",
         "source": "@/features/platform/resource-creation/modal-redirect"
+      },
+      {
+        "exportName": "ResourceMonitoringConntrackPage",
+        "moduleExport": "ResourceMonitoringConntrackPage",
+        "source": "@/features/platform/resource-monitoring/page"
+      },
+      {
+        "exportName": "ResourceMonitoringCPUPage",
+        "moduleExport": "ResourceMonitoringCPUPage",
+        "source": "@/features/platform/resource-monitoring/page"
+      },
+      {
+        "exportName": "ResourceMonitoringEntry",
+        "moduleExport": "ResourceMonitoringEntry",
+        "source": "@/features/platform/resource-monitoring/page"
+      },
+      {
+        "exportName": "ResourceMonitoringMemoryPage",
+        "moduleExport": "ResourceMonitoringMemoryPage",
+        "source": "@/features/platform/resource-monitoring/page"
+      },
+      {
+        "exportName": "ResourceMonitoringOverviewPage",
+        "moduleExport": "ResourceMonitoringOverviewPage",
+        "source": "@/features/platform/resource-monitoring/page"
+      },
+      {
+        "exportName": "ResourceMonitoringPodsPage",
+        "moduleExport": "ResourceMonitoringPodsPage",
+        "source": "@/features/platform/resource-monitoring/page"
       },
       {
         "exportName": "RuntimeConfigurationPage",
@@ -2149,6 +2234,7 @@
       "@/features/identity/overview/page",
       "@/features/identity/providers/list-page",
       "@/features/identity/software/page",
+      "@/features/network-access/admission-settings-redirect",
       "@/features/network-access/proxy-runtime/connections-page",
       "@/features/network-access/proxy-runtime/instances-page",
       "@/features/network-access/proxy-runtime/overview-page",
@@ -2226,6 +2312,7 @@
       "@/features/platform/network/gateway-api/httproutes-page",
       "@/features/platform/network/gateway-api/reference-grant-detail-page",
       "@/features/platform/network/gateway-api/reference-grants-page",
+      "@/features/platform/network/group-entry",
       "@/features/platform/network/ingresses/detail-page",
       "@/features/platform/network/ingresses/list-page",
       "@/features/platform/network/port-forward/page",
@@ -2240,6 +2327,7 @@
       "@/features/platform/network/topology/page",
       "@/features/platform/overview-page",
       "@/features/platform/resource-creation/modal-redirect",
+      "@/features/platform/resource-monitoring/page",
       "@/features/platform/storage/persistent-volume-claims/detail-page",
       "@/features/platform/storage/persistent-volume-claims/list-page",
       "@/features/platform/storage/persistent-volumes/detail-page",
@@ -2375,6 +2463,11 @@
       "@/features/identity/overview/page": ["IdentityOverviewPage"],
       "@/features/identity/providers/list-page": ["IdentityProvidersPage"],
       "@/features/identity/software/page": ["SoftwareLibraryPage"],
+      "@/features/network-access/admission-settings-redirect": [
+        "network-access-nas-bindings:default",
+        "network-access-radius-services:default",
+        "network-access-ssids:default"
+      ],
       "@/features/network-access/proxy-runtime/connections-page": [
         "network-access-proxy-connections:default"
       ],
@@ -2516,6 +2609,11 @@
       "@/features/platform/network/gateway-api/reference-grants-page": [
         "NetworkReferenceGrantsPage"
       ],
+      "@/features/platform/network/group-entry": [
+        "NetworkBackendsEntry",
+        "NetworkEntry",
+        "NetworkRoutingEntry"
+      ],
       "@/features/platform/network/ingresses/detail-page": ["IngressDetailPage"],
       "@/features/platform/network/ingresses/list-page": ["NetworkIngressesPage"],
       "@/features/platform/network/port-forward/page": ["NetworkPortForwardPage"],
@@ -2538,6 +2636,14 @@
       "@/features/platform/network/topology/page": ["NetworkTopologyPage"],
       "@/features/platform/overview-page": ["OverviewPage"],
       "@/features/platform/resource-creation/modal-redirect": ["ResourceCreationModalRedirect"],
+      "@/features/platform/resource-monitoring/page": [
+        "ResourceMonitoringConntrackPage",
+        "ResourceMonitoringCPUPage",
+        "ResourceMonitoringEntry",
+        "ResourceMonitoringMemoryPage",
+        "ResourceMonitoringOverviewPage",
+        "ResourceMonitoringPodsPage"
+      ],
       "@/features/platform/storage/persistent-volume-claims/detail-page": ["StoragePvcDetailPage"],
       "@/features/platform/storage/persistent-volume-claims/list-page": ["StoragePvcPage"],
       "@/features/platform/storage/persistent-volumes/detail-page": ["StoragePvDetailPage"],
@@ -2595,5 +2701,5 @@
       "@/features/virtualization/virtual-machines/list-page": ["VirtualizationVmsPage"]
     }
   },
-  "generatedAt": "2026-10-09T16:33:25.669Z"
+  "generatedAt": "2026-10-19T15:48:23.079Z"
 }

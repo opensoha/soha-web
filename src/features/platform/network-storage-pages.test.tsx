@@ -7,6 +7,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { api } from '@/services/api-client'
 import { NetworkGatewayClassesPage } from './network/gateway-api/gatewayclasses-list-page'
 import { NetworkServicesPage } from './network/services/list-page'
 import { StoragePvcPage } from './storage/persistent-volume-claims/list-page'
@@ -289,6 +290,12 @@ describe('network resource list pages', () => {
     ).not.toBeNull()
     expect(container.querySelector('[data-testid="pagination-summary"]')).toBeNull()
     expect(container.textContent).not.toContain('集群级资源')
+    expect(api.post).toHaveBeenCalledWith('/clusters/cluster-a/resource-creation/scope-decision', {
+      apiVersion: 'gateway.networking.k8s.io/v1',
+      action: 'create',
+      kind: 'GatewayClass',
+      resourceGroup: 'network',
+    })
   })
 
   it('keeps storage PVC filters in a separate query card with create before table utilities', async () => {

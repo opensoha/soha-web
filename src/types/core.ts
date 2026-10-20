@@ -32,6 +32,7 @@ export interface RouteMeta {
   menuId?: string
   permissionKey?: string
   permissionKeysAny?: string[]
+  permissionKeysAll?: string[]
   permissionStrategy?: 'self' | 'any-child'
   scopeMode?: 'hidden' | 'passive' | 'cluster' | 'namespace'
   workspace?: WorkspaceType

@@ -7,7 +7,8 @@ import {
   ManagementTableToolbar,
 } from '@/components/management-list'
 import { ReadFeedback } from '@/components/request-feedback'
-import { MetadataTag, StatusTag } from '@/components/status-tag'
+import { MetadataTag, type MetadataTagTone } from '@/components/status-tag'
+import { NodeStateTags } from '@/features/platform/shared/node-state-tags'
 import { hasAllowedAction } from '@/features/auth'
 import { useAIPageContext } from '@/features/copilot'
 import {
@@ -40,17 +41,40 @@ import {
 } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { TableColumnsType } from 'antd'
-import { Alert, Button, Checkbox, Form, Input, Modal, Popconfirm, Space, Spin } from 'antd'
+import {
+  Alert,
+  Button,
+  Checkbox,
+  Form,
+  Grid,
+  Input,
+  InputNumber,
+  Modal,
+  Popconfirm,
+  Popover,
+  Space,
+  Spin,
+  Typography,
+  Tooltip,
+} from 'antd'
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import './nodes-list-page.css'
 import { nodeMutations } from './mutations'
 import { nodeQueries } from './queries'
 import { toClusterScope } from './scope'
 import type { ClusterNode } from './types'
 
+const taintTones: Record<string, MetadataTagTone> = {
+  NoSchedule: 'purple',
+  PreferNoSchedule: 'blue',
+  NoExecute: 'orange',
+}
+
 export function ClusterNodesPage() {
   const { t, localeCode } = useI18n()
   const navigate = useNavigate()
+  const pinColumns = Boolean(Grid.useBreakpoint().md)
   const queryClient = useQueryClient()
   const { clusterId } = usePlatformScopeStore()
   const scope = toClusterScope(clusterId)
@@ -90,6 +114,12 @@ export function ClusterNodesPage() {
     label: ['排空节点', 'Drain node'],
     target: platformResourceTarget,
   })
+  const failedDrainName =
+    drainNodeMutation.isError && drainNodeMutation.variables?.scope.clusterId === scope.clusterId
+      ? drainNodeMutation.variables.name
+      : ''
+  const drainStateQuery = useQuery(nodeQueries.detail(scope, failedDrainName))
+  const drainState = readableQueryData(drainStateQuery)
   const platformWriteBlocked =
     updateNodeMutation.blocked ||
     deleteNodeMutation.blocked ||
@@ -131,7 +161,7 @@ export function ClusterNodesPage() {
           updated: '节点配置已更新',
           drained: '节点已禁止调度，可迁移 Pod 已完成驱逐',
           drainWarning:
-            '节点会先进入禁止调度状态，再驱逐可迁移的 Pod。DaemonSet 和静态 Pod 不会被驱逐。',
+            '节点会先进入禁止调度状态，再驱逐可迁移的 Pod。DaemonSet 和静态 Pod 不会被驱逐。失败或超时后请核对最新调度状态和剩余 Pod，再决定是否恢复调度。',
           deleteDescription: '这会删除 Kubernetes 中的 Node 对象，不会自动回收底层机器。',
         }
       : {
@@ -143,7 +173,7 @@ export function ClusterNodesPage() {
           updated: 'Node configuration updated',
           drained: 'Node cordoned and evictable pods drained',
           drainWarning:
-            'The node will be cordoned before evictable pods are drained. DaemonSet and static pods are not evicted.',
+            'The node will be cordoned before evictable pods are drained. DaemonSet and static pods are not evicted. After a failure or timeout, inspect the current schedulability and remaining pods before uncordoning.',
           deleteDescription:
             'This deletes the Kubernetes Node object without reclaiming the underlying machine.',
         }
@@ -152,26 +182,81 @@ export function ClusterNodesPage() {
     {
       title: t('common.name', '名称'),
       dataIndex: 'name',
+      fixed: pinColumns ? 'left' : undefined,
+      ellipsis: { showTitle: false },
       render: (name: string) => (
-        <Button type="text" onClick={() => navigate(detailPath(name))}>
-          {name}
-        </Button>
+        <Tooltip title={name} trigger={['hover', 'focus']}>
+          <Link className="soha-node-name" to={detailPath(name)}>
+            {name}
+          </Link>
+        </Tooltip>
       ),
     },
     {
       ...tableColumnPresets.status,
+      width: 80,
       title: t('common.status', '状态'),
       dataIndex: 'status',
       render: (status: string, record) => (
-        <Space size={4} wrap>
-          <StatusTag value={status} />
-          {record.unschedulable ? <StatusTag label={copy.unschedulable} value="warning" /> : null}
-        </Space>
+        <NodeStateTags
+          status={status}
+          cordoned={record.unschedulable}
+          conditions={record.conditions}
+          draining={
+            drainNodeMutation.isPending && drainNodeMutation.variables?.name === record.name
+          }
+        />
       ),
+    },
+    {
+      title: localeCode === 'zh_CN' ? '污点' : 'Taints',
+      key: 'taints',
+      width: 144,
+      render: (_, node) =>
+        node.taints == null ? (
+          <Typography.Text type="secondary">
+            {localeCode === 'zh_CN' ? '未提供' : 'Not reported'}
+          </Typography.Text>
+        ) : node.taints.length === 0 ? (
+          <Typography.Text type="secondary">
+            {localeCode === 'zh_CN' ? '无污点' : 'None'}
+          </Typography.Text>
+        ) : (
+          <div className="soha-node-taints">
+            {node.taints.map((taint) => {
+              const label = `${taint.key}${taint.value ? `=${taint.value}` : ''}:${taint.effect}`
+              const shortLabel = `${taint.key.split('/').pop()}${taint.value ? `=${taint.value}` : ''}`
+              return (
+                <Popover
+                  key={`${taint.key}:${taint.effect}`}
+                  trigger={['hover', 'click']}
+                  title={localeCode === 'zh_CN' ? '节点污点' : 'Node taint'}
+                  content={
+                    <Typography.Text className="soha-node-taint-full" code>
+                      {label}
+                    </Typography.Text>
+                  }
+                >
+                  <button
+                    type="button"
+                    className="soha-node-taint-trigger"
+                    aria-label={`${localeCode === 'zh_CN' ? '查看污点' : 'View taint'} ${label}`}
+                  >
+                    <MetadataTag
+                      tone={taintTones[taint.effect] || 'default'}
+                      label={<span className="soha-node-taint-label">{shortLabel}</span>}
+                    />
+                  </button>
+                </Popover>
+              )
+            })}
+          </div>
+        ),
     },
     {
       title: t('common.role', '角色'),
       dataIndex: 'roles',
+      width: 96,
       className: 'soha-table-cell-wrap',
       render: (roles: string[]) =>
         roles?.length ? (
@@ -184,15 +269,17 @@ export function ClusterNodesPage() {
           '-'
         ),
     },
-    { title: 'IP', dataIndex: 'internalIp', render: (value: string) => value || '-' },
+    { title: 'IP', width: 100, dataIndex: 'internalIp', render: (value: string) => value || '-' },
     {
       title: t('common.version', '版本'),
       dataIndex: 'version',
+      width: 112,
       render: (value: string) => value || '-',
     },
-    { title: t('common.pods', 'Pods'), dataIndex: 'podCount' },
+    { title: t('common.pods', 'Pods'), width: 48, dataIndex: 'podCount' },
     {
       ...tableColumnPresets.datetime,
+      width: 68,
       title: t('common.age', '时长'),
       dataIndex: 'ageSeconds',
       render: (value: number) => formatAgeSeconds(value),
@@ -202,7 +289,8 @@ export function ClusterNodesPage() {
       title: t('common.actions', '操作'),
       dataIndex: 'name',
       key: 'actions',
-      width: 176,
+      width: 152,
+      fixed: pinColumns ? 'right' : undefined,
       render: (name: string, record) => {
         const deleting = deleteNodeMutation.isPending && deleteNodeMutation.variables?.name === name
         const changingSchedulability =
@@ -267,6 +355,7 @@ export function ClusterNodesPage() {
                 size="small"
                 tooltip={copy.drain}
                 onClick={() => {
+                  drainNodeMutation.reset()
                   drainForm.resetFields()
                   setDrainingNodeName(name)
                 }}
@@ -314,13 +403,13 @@ export function ClusterNodesPage() {
   ]
 
   return (
-    <div className="soha-page">
+    <div className="soha-page soha-cluster-nodes-page">
       <ReadFeedback canRead={nodeDetailQuery.isEnabled} query={nodeDetailQuery} label="节点详情" />
 
       {updateNodeMutation.feedback}
       {deleteNodeMutation.feedback}
       {schedulabilityMutation.feedback}
-      {drainNodeMutation.feedback}
+      {!drainingNodeName && drainNodeMutation.feedback}
 
       {!clusterId ? (
         <ManagementState
@@ -371,7 +460,9 @@ export function ClusterNodesPage() {
           localSorting
           pageSize={K8S_TABLE_PAGE_SIZE}
           tableSize={nodeTableSize}
-          scroll={{ x: 'max-content' }}
+          tableLayout="fixed"
+          scroll={{ x: 960 }}
+          expandable={{ columnWidth: 48, fixed: pinColumns ? 'left' : undefined }}
           viewportScroll
           expandedRowRender={(record: ClusterNode) => <NodeResourcePanel node={record} />}
           hideExpandedColumn={false}
@@ -391,7 +482,6 @@ export function ClusterNodesPage() {
         {updateNodeMutation.feedback}
         {deleteNodeMutation.feedback}
         {schedulabilityMutation.feedback}
-        {drainNodeMutation.feedback}
 
         {nodeDetailQuery.isLoading && !nodeDetail ? (
           <div className="flex items-center justify-center h-48">
@@ -451,16 +541,51 @@ export function ClusterNodesPage() {
         }}
         onOk={() => drainForm.submit()}
       >
-        {updateNodeMutation.feedback}
-        {deleteNodeMutation.feedback}
-        {schedulabilityMutation.feedback}
         {drainNodeMutation.feedback}
+
+        {failedDrainName === drainingNodeName && (
+          <>
+            <ReadFeedback
+              query={drainStateQuery}
+              label={localeCode === 'zh_CN' ? '排水后的节点状态' : 'Node state after drain'}
+            />
+            {drainStateQuery.isFetching && <Spin size="small" />}
+            {drainState && (
+              <Alert
+                type="info"
+                showIcon
+                title={
+                  localeCode === 'zh_CN' ? '失败后的节点观测' : 'Node observation after failure'
+                }
+                description={
+                  <Space orientation="vertical">
+                    <NodeStateTags
+                      status={drainState.status}
+                      cordoned={drainState.unschedulable}
+                      conditions={drainState.conditions}
+                    />
+                    <Typography.Text>
+                      {localeCode === 'zh_CN'
+                        ? `当前绑定 Pod：${drainState.podCount}（含未参与驱逐的 DaemonSet / 静态 Pod）`
+                        : `Currently bound pods: ${drainState.podCount} (includes DaemonSet / static pods excluded from eviction)`}
+                    </Typography.Text>
+                    <Link to={detailPath(failedDrainName)}>
+                      {localeCode === 'zh_CN'
+                        ? '查看节点与剩余 Pod'
+                        : 'Inspect node and remaining pods'}
+                    </Link>
+                  </Space>
+                }
+              />
+            )}
+          </>
+        )}
 
         <Alert type="warning" showIcon title={copy.drainWarning} />
         <Form
           form={drainForm}
           layout="vertical"
-          initialValues={{ deleteEmptyDirData: false, force: false }}
+          initialValues={{ deleteEmptyDirData: false, force: false, timeoutSeconds: 300 }}
           onFinish={(values) => {
             if (!drainingNodeName) return
             drainNodeMutation.mutate(
@@ -469,7 +594,7 @@ export function ClusterNodesPage() {
                 name: drainingNodeName,
                 force: Boolean(values.force),
                 deleteEmptyDirData: Boolean(values.deleteEmptyDirData),
-                timeoutSeconds: 300,
+                timeoutSeconds: values.timeoutSeconds,
               },
               {
                 onSuccess: () => {
@@ -479,6 +604,13 @@ export function ClusterNodesPage() {
             )
           }}
         >
+          <Form.Item
+            name="timeoutSeconds"
+            label={localeCode === 'zh_CN' ? '排水超时（秒）' : 'Drain timeout (seconds)'}
+            rules={[{ required: true, type: 'number', min: 30, max: 1800 }]}
+          >
+            <InputNumber min={30} max={1800} step={30} />
+          </Form.Item>
           <Form.Item name="deleteEmptyDirData" valuePropName="checked">
             <Checkbox>
               {localeCode === 'zh_CN'

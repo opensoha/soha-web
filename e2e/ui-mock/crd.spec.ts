@@ -1,4 +1,79 @@
 import { test, expect, definitions } from '../fixtures/crd-app'
+import { verifyGeometry } from '../fixtures/geometry'
+
+for (const variant of [
+  { theme: 'light', width: 1232, scope: 'Cluster', long: false },
+  { theme: 'dark', width: 1020, scope: 'Namespaced', long: true },
+  { theme: 'light', width: 390, scope: 'Namespaced', long: true },
+  { theme: 'light', width: 640, scope: 'Cluster', long: false },
+])
+  test(`resource summary keeps metadata and read-only actions usable (${variant.theme}, ${variant.width}px)`, async ({
+    page,
+    context,
+    catalog,
+  }, info) => {
+    const name = `task113-envoy${variant.long ? '-long-resource-name'.repeat(8) : ''}`
+    const finalizer = 'gateway-exists-finalizer.gateway.networking.k8s.io'
+    const definition = catalog.data[0]
+    definition.group = variant.long
+      ? `${'long-api-group.'.repeat(4)}quality.example`
+      : 'gateway.networking.k8s.io'
+    definition.kind = variant.scope === 'Cluster' ? 'GatewayClass' : 'Gateway'
+    definition.name = `${variant.scope === 'Cluster' ? 'gatewayclasses' : 'gateways'}.${definition.group}`
+    definition.scope = variant.scope
+    catalog.resource = {
+      name,
+      allowedActions: ['view'],
+      apiVersion: `${definition.group}/v1`,
+      finalizers: variant.long ? [finalizer, `cleanup.${definition.group}`] : [],
+      summary: { controller: 'gateway.envoyproxy.io/gatewayclass-controller' },
+    }
+    await context.addInitScript(
+      (themeMode) =>
+        localStorage.setItem(
+          'soha-prefs',
+          JSON.stringify({ state: { themeMode, localeCode: 'zh_CN' }, version: 0 }),
+        ),
+      variant.theme,
+    )
+    await page.setViewportSize({ width: variant.width, height: 1000 })
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.goto(`/extensions/apis/${definition.group}`)
+    await page.getByRole('button', { name, exact: true }).click()
+    const heading = page.locator('.soha-crd-resource-heading')
+    await expect(heading.getByRole('heading', { name, exact: true })).toBeVisible()
+    await expect(page.getByText('YAML · 只读', { exact: true })).toBeVisible()
+    await expect(page.getByLabel('资源 YAML，只读', { exact: true })).toBeVisible()
+    if (variant.long) {
+      const identity = await heading.locator('.soha-crd-resource-identity').boundingBox()
+      const summary = await heading.boundingBox()
+      expect(identity!.width / summary!.width).toBeGreaterThanOrEqual(0.5)
+    }
+    await expect(heading).toContainText(variant.scope === 'Cluster' ? '集群范围' : 'monitoring')
+    await expect(heading).toContainText('controller')
+    await expect(heading).toContainText('gateway.envoyproxy.io/gatewayclass-controller')
+    await expect(heading.getByRole('button', { name: '编辑', exact: true })).toBeDisabled()
+    await expect(heading.getByRole('button', { name: '删除', exact: true })).toHaveCount(0)
+    const metadata = heading.locator('details')
+    await expect(metadata).not.toHaveAttribute('open')
+    const disclosure = metadata.locator('summary')
+    await disclosure.scrollIntoViewIfNeeded()
+    await verifyGeometry(page, disclosure)
+    await disclosure.focus()
+    await disclosure.press('Enter')
+    await expect(metadata).toHaveAttribute('open', '')
+    await expect(metadata).toContainText('支持版本')
+    await expect(metadata).toContainText('Finalizers')
+    if (variant.long) await expect(metadata).toContainText(finalizer)
+    else await expect(metadata).toContainText('—')
+    await verifyGeometry(page, disclosure)
+    await page.screenshot({ path: info.outputPath('resource-summary.png'), fullPage: true })
+    const back = heading.getByRole('button', { name: /返回实例列表/ })
+    await back.scrollIntoViewIfNeeded()
+    await verifyGeometry(page, back)
+    await back.click()
+    await expect(page.getByRole('button', { name, exact: true })).toBeVisible()
+  })
 
 test('U07: multiple kinds switch the exact scoped resource request', async ({
   page,
@@ -149,4 +224,54 @@ test('U12: catalog failure stays distinguishable from empty results', async ({ p
   await expect(page.getByText(/加载失败|Synthetic catalog unavailable/).first()).toBeVisible({
     timeout: 15_000,
   })
+})
+
+test('instance namespace selection changes exact list and access requests without enabling writes', async ({
+  page,
+  evidence,
+}) => {
+  await page.goto(`/extensions/apis/${definitions[0].group}`)
+  const picker = page.getByRole('combobox', { name: '选择资源命名空间', exact: true })
+  await picker.click()
+  await page.locator('.ant-select-dropdown').getByText('全部命名空间', { exact: true }).click()
+  await expect(picker).toHaveAttribute('aria-expanded', 'false')
+  await expect
+    .poll(() =>
+      evidence.requests.some(
+        (url) =>
+          url.includes(`/widgets.${definitions[0].group}/resources`) && !url.includes('namespace='),
+      ),
+    )
+    .toBe(true)
+  await expect
+    .poll(() =>
+      evidence.requests.some(
+        (url) =>
+          url.includes(`/widgets.${definitions[0].group}/access`) && !url.includes('namespace='),
+      ),
+    )
+    .toBe(true)
+  await expect(page.getByRole('button', { name: '新建实例', exact: true })).toBeDisabled()
+})
+
+test('a cluster-scoped kind hides the namespace picker and ignores its filter', async ({
+  page,
+  catalog,
+  evidence,
+}) => {
+  catalog.data.push({
+    ...definitions[0],
+    name: `clusterwidgets.${definitions[0].group}`,
+    kind: 'ClusterWidget',
+    plural: 'clusterwidgets',
+    scope: 'Cluster',
+  })
+  await page.goto(`/extensions/apis/${definitions[0].group}`)
+  await expect(page.getByText('sample-clusterwidget', { exact: true })).toBeVisible()
+  await expect(page.getByRole('combobox', { name: '选择资源命名空间', exact: true })).toHaveCount(0)
+  const requests = evidence.requests.filter((url) =>
+    url.includes(`/clusterwidgets.${definitions[0].group}/resources`),
+  )
+  expect(requests).toHaveLength(1)
+  expect(requests[0]).not.toContain('namespace=')
 })

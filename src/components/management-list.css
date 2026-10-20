@@ -130,18 +130,20 @@
 }
 
 .soha-management-query-field.ant-form-item {
-  flex: 0 1
+  flex: 1 1 0;
+  max-width: min(
+    100%,
     var(
       --soha-management-query-field-width,
       var(--soha-management-query-field-default-width, 300px)
-    );
-  max-width: 100%;
+    )
+  );
   min-width: min(var(--soha-management-query-field-min-width, 240px), 100%);
   margin-bottom: 0;
 }
 
 .soha-management-query-field.is-fluid.ant-form-item {
-  flex-grow: 1;
+  max-width: 100%;
 }
 
 .soha-management-query-scope.ant-form-item {

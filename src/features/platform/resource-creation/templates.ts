@@ -1,4 +1,54 @@
 const templates: Record<string, string> = {
+  GatewayClass: `apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: example-gateway-class
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+`,
+  Gateway: `apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: example-gateway
+spec:
+  gatewayClassName: example-gateway-class
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+`,
+  HTTPRoute: `apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: example-http-route
+spec:
+  parentRefs:
+    - name: example-gateway
+  hostnames:
+    - example.local
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: example-service
+          port: 80
+`,
+  GRPCRoute: `apiVersion: gateway.networking.k8s.io/v1
+kind: GRPCRoute
+metadata:
+  name: example-grpc-route
+spec:
+  parentRefs:
+    - name: example-gateway
+  hostnames:
+    - grpc.example.local
+  rules:
+    - backendRefs:
+        - name: example-grpc-service
+          port: 9000
+`,
   Deployment: `apiVersion: apps/v1
 kind: Deployment
 metadata:

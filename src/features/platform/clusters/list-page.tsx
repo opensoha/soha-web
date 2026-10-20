@@ -401,6 +401,7 @@ export function ClustersPage() {
         connectionMode: 'direct_kubeconfig',
         prometheusTransport: 'direct',
         agentCustomResourceRules: [],
+        agentActionProfile: 'workbench',
         provider: 'standard_kubernetes',
       }
     }
@@ -414,6 +415,7 @@ export function ClustersPage() {
         'direct_kubeconfig',
       prometheusTransport: detail?.monitoring.prometheus.transport || 'direct',
       agentCustomResourceRules: detail?.connection.customResourceRules || [],
+      agentActionProfile: detail?.connection.actionProfile || 'legacy',
       prometheusBaseUrl: detail?.monitoring.prometheus.baseUrl || '',
     }
   }, [editingCluster, visibleClusterDetailQueryData])
@@ -849,6 +851,32 @@ export function ClustersPage() {
                     editingCluster ? '留空则沿用现有 kubeconfig' : '请输入 kubeconfig 内容'
                   }
                   rows={8}
+                />
+              </Form.Item>
+            ) : null}
+
+            {connectionMode === 'agent' ? (
+              <Form.Item
+                name="agentActionProfile"
+                label={localeCode === 'zh_CN' ? 'Agent 动作预设' : 'Agent action preset'}
+                extra={
+                  localeCode === 'zh_CN'
+                    ? '工作台预设启用资源 CRUD、维护/排水、终端、转发与 Helm；只读预设关闭写入和执行。保存不会改变运行中的 Agent，需重新生成并核对安装清单后应用。CRD 定义删除仍需单独启用。'
+                    : 'Workbench enables resource CRUD, maintenance/drain, terminal, forwarding and Helm; read-only disables writes and execution. Saving does not change a running Agent. Regenerate and review its installation manifest before applying. CRD definition deletion remains a separate opt-in.'
+                }
+              >
+                <Select
+                  options={[
+                    { value: 'workbench', label: localeCode === 'zh_CN' ? '工作台' : 'Workbench' },
+                    { value: 'read-only', label: localeCode === 'zh_CN' ? '只读' : 'Read-only' },
+                    {
+                      value: 'legacy',
+                      label:
+                        localeCode === 'zh_CN'
+                          ? '保留原安装权限'
+                          : 'Preserve legacy installation permissions',
+                    },
+                  ]}
                 />
               </Form.Item>
             ) : null}
