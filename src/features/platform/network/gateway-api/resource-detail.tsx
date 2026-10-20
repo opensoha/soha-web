@@ -32,7 +32,7 @@ export function GatewayAPIResourceDetail<T extends NetworkResourceRecord>({
   const [searchParams] = useSearchParams()
   const detailNamespace = resolveNetworkNamespace(namespace, searchParams.get('namespace'))
   const scope = toScopeKey(clusterId, detailNamespace)
-  const [activeTabKey, setActiveTabKey] = useState('overview')
+  const [activeTabKey, setActiveTabKey] = useState(() => searchParams.get('tab') === 'yaml' ? 'yaml' : 'overview')
   const query = useQuery(gatewayAPIQueries.detail<T>(kind, scope, name))
   const visibleQueryData = readableQueryData(query)
   const detail = visibleQueryData

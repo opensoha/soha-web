@@ -1,6 +1,83 @@
 import type { Dictionary } from '../types'
 
 export const enUS: Dictionary = {
+  'resourceMonitoring.reason.container_coverage_unverified':
+    'Only identified container samples are summed. Entirely uncollected containers cannot be ruled out',
+  'resourceMonitoring.reason.container_coverage_incomplete':
+    'Observed container or CPU dimensions have gaps; totals have partial coverage',
+  'network.topology.resolution.resolved': 'Resolved',
+  'network.topology.resolution.unresolved': 'Unresolved reference',
+  'network.topology.resolution.not_found': 'Resource absent',
+  'network.topology.resolution.not_visible': 'Reference not visible',
+  'network.topology.resolution.no_ready_endpoints': 'No ready endpoints',
+  'network.topology.resolution.external': 'External backend',
+  'network.topology.resolution.unsupported_fragment': 'Unsupported configuration',
+  'network.topology.resolution.unknown': 'Unconfirmed',
+  'network.topology.coverage.available': 'Readable',
+  'network.topology.coverage.partial': 'Partial data',
+  'network.topology.coverage.denied': 'Access denied',
+  'network.topology.coverage.not_installed': 'API not installed',
+  'network.topology.coverage.unsupported': 'Unsupported version',
+  'network.topology.coverage.error': 'Read failed',
+  'resourceMonitoring.quality.valid': 'Available',
+  'resourceMonitoring.quality.partial': 'Partial data',
+  'resourceMonitoring.quality.stale': 'Stale data',
+  'resourceMonitoring.quality.not_configured': 'Source not configured',
+  'resourceMonitoring.quality.not_collected': 'Not collected',
+  'resourceMonitoring.quality.unsupported': 'Unsupported',
+  'resourceMonitoring.quality.denied': 'Access denied',
+  'resourceMonitoring.quality.error': 'Read failed',
+  'resourceMonitoring.quality.empty': 'No data',
+  'resourceMonitoring.reason.cluster_identity_mismatch':
+    'Series with a different cluster identity were excluded',
+  'resourceMonitoring.reason.cpu_coverage_incomplete':
+    'Some CPU dimensions are missing; incomplete totals are not shown',
+  'resourceMonitoring.reason.node_snapshot_unavailable':
+    'Node snapshot failed. Check Agent connectivity and Kubernetes RBAC',
+  'resourceMonitoring.reason.cluster_label_required':
+    'Configure the cluster metric label. Queries never retry without it',
+  'resourceMonitoring.reason.prometheus_not_configured':
+    'Configure Prometheus for this cluster to view historical trends',
+  'resourceMonitoring.reason.metric_not_collected':
+    'The source did not return this metric. Check collectors and metric names',
+  'resourceMonitoring.reason.no_verified_samples': 'No valid samples with verified node identities',
+  'resourceMonitoring.reason.no_verified_node_identity': 'No verified node identity',
+  'resourceMonitoring.reason.upgrade_agent':
+    'Upgrade the Agent to read the current capacity snapshot',
+  'resourceMonitoring.reason.container_identity_unverified':
+    'Containers without a Pod UID were excluded',
+  'resourceMonitoring.reason.replica_values_differ':
+    'Replica values differ. A deterministic source is used with partial coverage',
+  'resourceMonitoring.reason.insufficient_counter_samples':
+    'Insufficient samples in the five-minute counter window',
+  'resourceMonitoring.reason.container_allocations_only':
+    'Historical container allocations exclude init, Pod-level resources and overhead. See the current snapshot for scheduling totals',
+  'resourceMonitoring.reason.sample_gaps': 'The selected window contains gaps',
+  'resourceMonitoring.reason.stale_samples': 'Source samples are stale',
+  'resourceMonitoring.reason.node_coverage_incomplete': 'This metric is missing for some nodes',
+  'resourceMonitoring.reason.linux_collector_required':
+    'Linux nodes and the node_exporter conntrack collector are required',
+  'resourceMonitoring.reason.node_os_unverified': 'Node operating system is unverified',
+  'resourceMonitoring.reason.pod_snapshot_incomplete':
+    'The Pod snapshot is incomplete. Counts and allocations remain null',
+  'resourceMonitoring.reason.point_budget':
+    'Time series point budget reached. Select a node or shorten the window',
+  'resourceMonitoring.reason.response_budget':
+    'Metric response exceeded its budget. Narrow the scope',
+  'resourceMonitoring.reason.query_unavailable': 'The metric source is temporarily unavailable',
+  'resourceMonitoring.reason.prometheus_denied': 'The metric source denied access',
+  'resourceMonitoring.reason.query_timeout': 'Query timed out',
+  'resourceMonitoring.reason.freshness_unverified': 'Source sample freshness could not be verified',
+  'resourceMonitoring.reason.invalid_sample': 'Invalid samples were excluded',
+  'route.network-routing.title': 'Routing and gateways',
+  'route.network-backends.title': 'Services and backends',
+  'route.resource-monitoring.title': 'Resource monitoring',
+  'route.resource-monitoring-overview.title': 'Overview',
+  'route.resource-monitoring-cpu.title': 'CPU',
+  'route.resource-monitoring-memory.title': 'Memory',
+  'route.resource-monitoring-conntrack.title': 'Conntrack',
+  'route.resource-monitoring-pods.title': 'Pod capacity',
+
   'layout.group.overview': 'Overview',
   'layout.group.platform': 'Platform',
   'layout.group.catalog': 'Catalog',

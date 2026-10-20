@@ -107,7 +107,23 @@ export function NetworkResourceListPage<T extends NetworkResourceRecord>({
   })
   const platformWriteBlocked = removeMutation.blocked
   const densityLabel = localeCode === 'zh_CN' ? '切换表格密度' : 'Toggle table density'
-  const createKind = kind === 'services' ? 'Service' : kind === 'ingresses' ? 'Ingress' : null
+  const createKind = [
+    'services',
+    'ingresses',
+    'gatewayclasses',
+    'gateways',
+    'httproutes',
+    'grpcroutes',
+  ].includes(kind)
+    ? NETWORK_ENTITY_KINDS[kind]
+    : null
+  const createAPIVersion =
+    kind === 'services'
+      ? 'v1'
+      : kind === 'ingresses'
+        ? 'networking.k8s.io/v1'
+        : 'gateway.networking.k8s.io/v1'
+  const createScope = kind === 'gatewayclasses' ? 'cluster' : 'namespace'
   const effectiveEmpty = !clusterId
     ? localeCode === 'zh_CN'
       ? '请选择集群'
@@ -245,11 +261,12 @@ export function NetworkResourceListPage<T extends NetworkResourceRecord>({
                 <CreateEntry
                   context={{
                     clusterId: clusterId || '',
-                    defaultNamespace: namespace || undefined,
-                    expectedApiVersion: createKind === 'Service' ? 'v1' : 'networking.k8s.io/v1',
+                    defaultNamespace:
+                      createScope === 'namespace' ? namespace || undefined : undefined,
+                    expectedApiVersion: createAPIVersion,
                     expectedKind: createKind,
                     resourceGroup: 'network',
-                    scopeMode: 'namespace',
+                    scopeMode: createScope,
                     source: 'list',
                   }}
                   defaultTemplate={getResourceCreateTemplate(createKind)}

@@ -22,6 +22,27 @@ import {
 
 const workbenchEntryPermissions = Object.values(WORKBENCH_ENTRY_PERMISSION_KEYS)
 
+it('requires node and exact view permissions for every resource monitoring route', () => {
+  for (const view of ['overview', 'cpu', 'memory', 'conntrack', 'pods']) {
+    const route = getRoute(`resource-monitoring-${view}`)
+    const permission = `platform.resource-monitoring.${view}.view`
+    expect(canAccessRoute(route, buildSnapshot({ permissionKeys: [permission] }))).toBe(false)
+    expect(canAccessRoute(route, buildSnapshot({ permissionKeys: ['platform.nodes.view'] }))).toBe(
+      false,
+    )
+    expect(
+      canAccessRoute(route, buildSnapshot({ permissionKeys: [permission, 'platform.nodes.view'] })),
+    ).toBe(true)
+    expect(
+      canAccessRoute(
+        route,
+        buildSnapshot({ permissionKeys: [permission, 'platform.nodes.view'] }, false),
+      ),
+    ).toBe(false)
+    expect(route.scopeMode).toBe('cluster')
+  }
+})
+
 it('keeps application login records in the internal workbench and requires audit permission', () => {
   const route = getRoute('identity-login-records')
   expect(getRouteWorkbenchId(route)).toBe('security')
@@ -1620,4 +1641,27 @@ describe('access route authorization', () => {
     expect(getRouteScopeMode(getRoute('system-menus'))).toBe('passive')
     expect(getRouteScopeMode(getRoute('login'))).toBe('hidden')
   })
+})
+
+it('keeps network resource leaves flat while preserving legacy group routes', () => {
+  for (const id of ['network-services', 'network-ingresses', 'network-gateway-api-gateways', 'network-gateway-api-httproutes']) {
+    expect(getRoute(id).parentId).toBe('network')
+  }
+  for (const id of ['network-routing', 'network-backends']) {
+    expect(getRoute(id).navVisible).toBe(false)
+    expect(getRoute(id).path).toMatch(/^\/network\//)
+  }
+  const visibleMenus = [
+    { id: 'network', path: '/network' },
+    { id: 'network-topology', parentId: 'network', path: '/network/topology' },
+    { id: 'network-services', parentId: 'network', path: '/network/services' },
+  ]
+  const snapshot = buildSnapshot({
+    permissionKeys: ['workspace.resource.view', 'workbench.platform.view', 'platform.network.topology.view', 'platform.network.services.view'],
+    visibleMenuIds: visibleMenus.map((menu) => menu.id),
+    visibleMenus,
+  })
+  const network = getAccessibleSidebarNav(snapshot).find((menu) => menu.id === 'network')
+  expect(network?.children?.map((menu) => menu.id)).toEqual(['network-services', 'network-topology'])
+  expect(network?.children?.every((menu) => !menu.children)).toBe(true)
 })

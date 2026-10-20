@@ -1,6 +1,7 @@
 import { test, expect, type BrowserContext, type Page } from '@playwright/test'
 import { installMocks, verifyBrowserEvidence } from '../fixtures/mock-app'
 import { verifyGeometry } from '../fixtures/geometry'
+import type { NetworkTopologyView } from '../../src/features/platform/network/topology/types'
 
 const cases = [
   ['/ai-workbench/knowledge', '/ai/knowledge-bases', '知识库样板'],
@@ -177,41 +178,81 @@ async function mocks(context: BrowserContext, page: Page) {
         body: {
           data: {
             clusterId: 'cluster-a',
-            source: 'live',
+            namespace: 'monitoring',
+            graphVersion: 'v1',
+            source: 'kubernetes-snapshot',
             generatedAt: new Date().toISOString(),
+            observedAt: new Date().toISOString(),
             summary: {
               entryCount: 1,
               routeCount: 1,
-              serviceCount: 1,
+              serviceCount: 2,
               missingServiceCount: 0,
               backendPodCount: 0,
               pendingRouteCount: 0,
             },
-            traces: [
+            nodes: [
               {
-                id: 'qa-trace',
-                state: 'live',
-                sourceType: 'ingress',
-                entry: { id: 'qa-entry', name: 'qa.example.test', kind: 'entry', state: 'live' },
-                route: {
-                  id: 'qa-route',
-                  name: 'qa-ingress',
-                  kind: 'ingress-route',
-                  state: 'live',
+                id: 'qa-entry',
+                type: 'entry',
+                label: 'qa.example.test',
+                provider: 'kubernetes',
+                protocol: 'HTTP',
+                resolutionState: 'resolved',
+              },
+              {
+                id: 'qa-route',
+                type: 'rule',
+                label: 'qa-ingress',
+                provider: 'kubernetes',
+                protocol: 'HTTP',
+                resolutionState: 'resolved',
+              },
+              {
+                id: 'qa-service',
+                type: 'service',
+                label: 'qa-service',
+                provider: 'kubernetes',
+                resolutionState: 'resolved',
+                resource: {
+                  clusterId: 'cluster-a',
+                  apiVersion: 'v1',
+                  kind: 'Service',
                   namespace: 'monitoring',
-                },
-                service: {
-                  id: 'qa-service',
                   name: 'qa-service',
-                  kind: 'service',
-                  state: 'live',
-                  namespace: 'monitoring',
-                  resourceName: 'qa-service',
+                  uid: 'qa-service-uid',
+                  scopeMode: 'namespace',
                 },
-                backendPods: [],
+              },
+              {
+                id: 'qa-unrelated',
+                type: 'service',
+                label: 'qa-unrelated',
+                provider: 'kubernetes',
+                resolutionState: 'resolved',
               },
             ],
-          },
+            edges: [
+              {
+                id: 'qa-match',
+                source: 'qa-entry',
+                target: 'qa-route',
+                relation: 'matches',
+                protocol: 'HTTP',
+                resolutionState: 'resolved',
+              },
+              {
+                id: 'qa-backend',
+                source: 'qa-route',
+                target: 'qa-service',
+                relation: 'weights',
+                protocol: 'HTTP',
+                resolutionState: 'resolved',
+              },
+            ],
+            traces: [],
+            coverage: [],
+          } satisfies NetworkTopologyView,
         },
       }
     if (path === '/auth/login-options')
@@ -360,10 +401,13 @@ test('Task52 topology keyboard selection, relation highlight and viewport surviv
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.goto('/network/topology?clusterId=cluster-a&namespace=monitoring')
   const node = page.locator('.react-flow__node').filter({ hasText: 'qa-service' }).first()
+  const unrelated = page.locator('.react-flow__node').filter({ hasText: 'qa-unrelated' })
   await expect(node).toBeVisible()
   await node.focus()
   await page.keyboard.press('Enter')
   await expect(node).toHaveClass(/selected/)
+  await expect(page.locator('.soha-topology-evidence')).toContainText('qa-service')
+  await expect(unrelated).toHaveCSS('opacity', '0.4')
   const viewport = page.locator('.react-flow__viewport')
   const before = await viewport.getAttribute('style')
   await page.locator('.react-flow__controls-zoomin').click()
@@ -381,6 +425,14 @@ test('Task52 topology keyboard selection, relation highlight and viewport surviv
   await expect(node).toHaveClass(/selected/)
   await expect(viewport).toHaveAttribute('style', zoomed || '')
   await node.focus()
+  await page.keyboard.press('Escape')
+  await expect(node).not.toHaveClass(/selected/)
+  await expect(page.locator('.soha-topology-evidence')).toHaveCount(0)
+  await expect(unrelated).toHaveCSS('opacity', '1')
+  await node.focus()
+  await page.keyboard.press('Space')
+  await expect(node).toHaveClass(/selected/)
+  await expect(page.locator('.soha-topology-evidence')).toContainText('qa-service')
   await page.keyboard.press('Escape')
   await expect(node).not.toHaveClass(/selected/)
   await test.info().attach('topology-preview', {

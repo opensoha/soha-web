@@ -1,6 +1,7 @@
 import { AdminTable } from '@/components/admin-table'
 import {
   ManagementIconButton,
+  ManagementQueryField,
   ManagementSearchableListPane,
   ManagementState,
   ManagementTableToolbar,
@@ -9,6 +10,8 @@ import { ReadFeedback } from '@/components/request-feedback'
 import { StatusTag } from '@/components/status-tag'
 import { hasAllowedAction, hasPermission, usePermissionSnapshot } from '@/features/auth'
 import { useClusterCapability } from '@/features/platform/cluster-capabilities'
+import { namespaceQueries } from '@/features/platform/cluster-resources/queries'
+import { toClusterScope } from '@/features/platform/cluster-resources/scope'
 import { K8S_TABLE_PAGE_SIZE } from '@/features/platform/shared/table-config'
 import {
   platformResourceTarget,
@@ -21,7 +24,7 @@ import { formatAgeSeconds, formatRelativeTime } from '@/utils/time'
 import { ArrowLeftOutlined, DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { TableColumnsType, TableProps } from 'antd'
-import { App, Button, Card, Descriptions, Popconfirm, Space, Spin } from 'antd'
+import { App, Button, Card, Descriptions, Popconfirm, Select, Space, Spin } from 'antd'
 import { lazy, Suspense, useDeferredValue, useEffect, useState } from 'react'
 import { ResourceQueryPanel } from '../shared/resource-query-panel'
 import { includesSearch, normalizeSearchKeyword } from '../shared/search'
@@ -29,7 +32,7 @@ import './instance-workspace.css'
 import { crdMutations } from './mutations'
 import { crdQueries } from './queries'
 import type { CRD, CRDResourceInstance } from './types'
-import { getServedVersions } from './utils'
+import { getServedVersions, isNamespacedCRD } from './utils'
 
 const CRDResourceEditorModal = lazy(async () => ({
   default: (await import('./resource-editor-modal')).CRDResourceEditorModal,
@@ -138,7 +141,7 @@ function CRDInstancesWorkspace({
 }) {
   const { t, localeCode } = useI18n()
   const zh = localeCode === 'zh_CN'
-  const { clusterId, namespace } = usePlatformScopeStore()
+  const { clusterId, namespace, setNamespace } = usePlatformScopeStore()
   const queryClient = useQueryClient()
   const capability = useClusterCapability('custom.resources', localeCode)
   const [createOpen, setCreateOpen] = useState(false)
@@ -150,6 +153,11 @@ function CRDInstancesWorkspace({
   const [pagination, setPagination] = useState({ current: 1, pageSize: K8S_TABLE_PAGE_SIZE })
   const keyword = normalizeSearchKeyword(useDeferredValue(searchKeyword))
   const disabled = capability.disabled
+  const namespacesQuery = useQuery({
+    ...namespaceQueries.list(toClusterScope(clusterId)),
+    enabled: Boolean(clusterId) && isNamespacedCRD(crd) && !capability.disabled,
+  })
+  const namespaces = readableQueryData(namespacesQuery) ?? []
   const accessQuery = useQuery(
     crdQueries.access(clusterId, crd, namespace, !capability.isLoading && !disabled),
   )
@@ -372,8 +380,8 @@ function CRDInstancesWorkspace({
   const header = selected ? (
     <div className="soha-crd-resource-heading">
       <div className="soha-crd-resource-identity">
-        <div>
-          <strong>{selected.name}</strong>{' '}
+        <div className="soha-crd-resource-title">
+          <h2>{selected.name}</h2>
           {selected.status || selected.deletingAt ? (
             <StatusTag value={selected.deletingAt ? 'deleting' : selected.status!} />
           ) : null}
@@ -410,23 +418,15 @@ function CRDInstancesWorkspace({
       </ManagementTableToolbar>
       <Descriptions
         className="soha-crd-resource-facts"
-        column={{ xs: 1, sm: 2 }}
+        column={1}
         size="small"
         items={[
           {
             key: 'api',
-            label: 'API',
+            label: zh ? 'API 版本' : 'API version',
             children: selected.apiVersion || `${crd.group}/${crd.version}`,
           },
-          { key: 'crd', label: 'CRD', children: crd.name },
-          { key: 'versions', label: 'Versions', children: getServedVersions(crd).join(', ') },
-          { key: 'scope', label: 'Scope', children: crd.scope },
-          {
-            key: 'finalizers',
-            label: 'Finalizers',
-            children: selected.finalizers?.join(', ') || '—',
-            span: 2,
-          },
+          { key: 'crd', label: zh ? '资源定义' : 'CRD definition', children: crd.name },
           ...Object.entries(selected.summary ?? {}).map(([key, value]) => ({
             key: `summary/${key}`,
             label: key,
@@ -434,6 +434,34 @@ function CRDInstancesWorkspace({
           })),
         ]}
       />
+      <details className="soha-crd-resource-metadata">
+        <summary>{zh ? '更多元数据' : 'More metadata'}</summary>
+        <Descriptions
+          className="soha-crd-resource-facts"
+          column={1}
+          size="small"
+          items={[
+            {
+              key: 'versions',
+              label: zh ? '支持版本' : 'Served versions',
+              children: getServedVersions(crd).join(', '),
+            },
+            {
+              key: 'finalizers',
+              label: 'Finalizers',
+              children: selected.finalizers?.length ? (
+                <div className="soha-crd-resource-finalizers">
+                  {selected.finalizers.map((value) => (
+                    <span key={value}>{value}</span>
+                  ))}
+                </div>
+              ) : (
+                '—'
+              ),
+            },
+          ]}
+        />
+      </details>
     </div>
   ) : null
   return (
@@ -448,6 +476,13 @@ function CRDInstancesWorkspace({
       ) : null}
 
       {deleteMutation.feedback}
+      {isNamespacedCRD(crd) ? (
+        <ReadFeedback
+          canRead={namespacesQuery.isEnabled}
+          query={namespacesQuery}
+          label={zh ? '命名空间' : 'Namespaces'}
+        />
+      ) : null}
 
       <div className="soha-crd-instance-list" hidden={Boolean(selection)}>
         <ResourceQueryPanel
@@ -457,7 +492,30 @@ function CRDInstancesWorkspace({
             setPagination((current) => ({ ...current, current: 1 }))
           }}
           placeholder={zh ? '搜索实例 / 命名空间 / 摘要' : 'Search instance / namespace / summary'}
-        />
+        >
+          {isNamespacedCRD(crd) ? (
+            <ManagementQueryField label={zh ? '命名空间' : 'Namespace'} width={240}>
+              <Select
+                aria-label={zh ? '选择资源命名空间' : 'Select resource namespace'}
+                disabled={!clusterId || busy}
+                loading={namespacesQuery.isLoading}
+                showSearch={{ optionFilterProp: 'label' }}
+                value={namespace ?? ''}
+                options={[
+                  { value: '', label: zh ? '全部命名空间' : 'All namespaces' },
+                  ...namespaces.map((item) => ({ value: item.name, label: item.name })),
+                ]}
+                onChange={(value) =>
+                  onLeave(() => {
+                    setSelection(undefined)
+                    setPagination((current) => ({ ...current, current: 1 }))
+                    setNamespace(value || null)
+                  })
+                }
+              />
+            </ManagementQueryField>
+          ) : null}
+        </ResourceQueryPanel>
         <AdminTable
           columns={columns}
           dataSource={filtered}
@@ -525,7 +583,7 @@ function CRDInstancesWorkspace({
                 header={header}
                 onStateChange={setEditorState}
                 customResourceMutationsDisabled={disabled}
-                customResourceCapabilityReason={capability.reason}
+                customResourceCapabilityReason={canUpdate ? undefined : capability.reason}
                 onClose={editing ? () => setEditing(false) : undefined}
               />
             </Suspense>
@@ -556,7 +614,7 @@ function CRDInstancesWorkspace({
             mode="create"
             onClose={() => setCreateOpen(false)}
             customResourceMutationsDisabled={disabled}
-            customResourceCapabilityReason={capability.reason}
+            customResourceCapabilityReason={canCreate ? undefined : capability.reason}
           />
         </Suspense>
       ) : null}

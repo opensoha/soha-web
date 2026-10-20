@@ -26,13 +26,14 @@ describe('route registry validation', () => {
         .filter((permission) => permission.status === 'active' && permission.assignable)
         .map((permission) => permission.key),
     )
-    const guardedKeys = routeMeta.flatMap((meta) =>
-      meta.permissionKeysAny?.length
+    const guardedKeys = routeMeta.flatMap((meta) => [
+      ...(meta.permissionKeysAll ?? []),
+      ...(meta.permissionKeysAny?.length
         ? meta.permissionKeysAny
         : meta.permissionKey
           ? [meta.permissionKey]
-          : [],
-    )
+          : []),
+    ])
 
     expect(guardedKeys.filter((key) => !assignableKeys.has(key))).toEqual([])
   })
@@ -119,10 +120,11 @@ describe('route registry validation', () => {
     ).toEqual([
       ['workloads', '/workloads/overview'],
       ['configuration', '/configuration/configmaps'],
-      ['network', '/network/topology'],
+      ['network', undefined],
       ['storage', '/storage/persistentvolumeclaims'],
       ['cluster-resources', '/cluster-resources/nodes'],
     ])
+    expect(byId.get('network')?.load).toBeTypeOf('function')
     expect(byId.get('observability-alert-event-detail-compat')).toMatchObject({
       shell: 'app',
       meta: {

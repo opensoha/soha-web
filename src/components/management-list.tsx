@@ -323,6 +323,7 @@ export function ManagementQueryGrid({
         )
       }
       const gridWidth = grid.getBoundingClientRect().width
+      const measurementTolerance = 1
       const gridColumnGap = Number.parseFloat(window.getComputedStyle(grid).columnGap) || 0
       const fieldColumnGap = Number.parseFloat(window.getComputedStyle(fields).columnGap) || 0
       const actionColumnGap = Number.parseFloat(window.getComputedStyle(actionBar).columnGap) || 0
@@ -348,17 +349,20 @@ export function ManagementQueryGrid({
           ?.getBoundingClientRect().width ?? 64
       const baseSideBySideFieldWidth = gridWidth - baseActionWidth - gridColumnGap
       const shouldStackWithoutToggle =
-        firstTwoFields.length > 1 && baseSideBySideFieldWidth < firstTwoFieldsWidth
+        firstTwoFields.length > 1 &&
+        baseSideBySideFieldWidth + measurementTolerance < firstTwoFieldsWidth
       const availableWithoutToggle = shouldStackWithoutToggle ? gridWidth : baseSideBySideFieldWidth
-      const needsToggle = allFieldsWidth > availableWithoutToggle
+      const needsToggle = allFieldsWidth > availableWithoutToggle + measurementTolerance
       const finalActionWidth =
         baseActionWidth +
         (needsToggle && baseActionItems.length > 0 ? actionColumnGap + toggleButtonWidth : 0)
       const finalSideBySideFieldWidth = gridWidth - finalActionWidth - gridColumnGap
       const nextStackActions =
-        firstTwoFields.length > 1 && finalSideBySideFieldWidth < firstTwoFieldsWidth
+        firstTwoFields.length > 1 &&
+        finalSideBySideFieldWidth + measurementTolerance < firstTwoFieldsWidth
       const finalAvailableFieldWidth = nextStackActions ? gridWidth : finalSideBySideFieldWidth
-      const nextCanExpand = collapsible && allFieldsWidth > finalAvailableFieldWidth
+      const nextCanExpand =
+        collapsible && allFieldsWidth > finalAvailableFieldWidth + measurementTolerance
 
       setCanExpand((current) => (current === nextCanExpand ? current : nextCanExpand))
       setStackActions((current) => (current === nextStackActions ? current : nextStackActions))
@@ -509,7 +513,7 @@ export function ManagementKeywordField({
   grow = false,
   inputProps,
   label,
-  minWidth = 300,
+  minWidth,
   name,
   onChange,
   placeholder,

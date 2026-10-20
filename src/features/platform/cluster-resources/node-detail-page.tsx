@@ -1,3 +1,4 @@
+import { ResourceMonitoringLink } from '../resource-monitoring'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementDetailHeader, ManagementState } from '@/components/management-list'
 import { ReadFeedback } from '@/components/request-feedback'
@@ -212,6 +213,7 @@ export function NodeDetailPage() {
   return (
     <div className="soha-page">
       <ReadFeedback canRead={nodeDetailQuery.isEnabled} query={nodeDetailQuery} label="节点详情" />
+      <ResourceMonitoringLink clusterId={clusterId || ''} nodeName={nodeName} />
 
       {updateNodeMutation.feedback}
 

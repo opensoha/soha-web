@@ -54,7 +54,10 @@ vi.mock('@/features/platform/node-resource-utils', () => ({
   stringifyTaints: () => '[]',
 }))
 vi.mock('@/components/status-tag', () => ({
-  StatusTag: ({ value }: { value?: string }) => <span>{value}</span>,
+  MetadataTag: ({ label, tone }: { label: ReactNode; tone?: string }) => <span data-tone={tone}>{label}</span>,
+  StatusTag: ({ value, label }: { value?: string; label?: string }) => (
+    <span>{label || value}</span>
+  ),
 }))
 vi.mock('@/components/admin-table', () => ({
   AdminTable: ({
@@ -190,6 +193,37 @@ describe('cluster resource list pages', () => {
     ).toBe('1')
     expect(apiMocks.get).toHaveBeenCalledWith('/clusters/cluster-a/infrastructure/nodes')
     expect(apiMocks.get).toHaveBeenCalledWith('/clusters/cluster-a/namespaces')
+  })
+
+  it('shows Ready independently of cordon, pressure and actual taints', async () => {
+    testState.scope.clusterId = 'cluster-a'
+    testState.responses['/clusters/cluster-a/infrastructure/nodes'] = [
+      {
+        name: 'maintenance-node',
+        status: 'ready',
+        unschedulable: true,
+        taints: [{ key: 'maintenance', value: 'task113', effect: 'NoSchedule' }],
+        conditions: [
+          { type: 'Ready', status: 'True' },
+          { type: 'DiskPressure', status: 'True' },
+        ],
+      },
+      { name: 'legacy-node', status: 'unknown', unschedulable: false },
+    ]
+    const nodes = await renderPage(<ClusterNodesPage />)
+    expect(nodes.textContent).toContain('ready')
+    expect(nodes.textContent).toContain('禁止调度')
+    expect(nodes.textContent).toContain('磁盘压力')
+    expect(nodes.querySelector('.soha-node-taints')?.textContent).toContain('maintenance=task113')
+    expect(nodes.querySelector('[data-tone="purple"]')).not.toBeNull()
+    expect(nodes.textContent).toContain('未提供')
+    expect(nodes.textContent).not.toContain('排水中')
+    await act(async () => {
+      ;(
+        nodes.querySelector('[aria-label="查看污点 maintenance=task113:NoSchedule"]') as HTMLButtonElement
+      ).click()
+    })
+    expect(document.body.textContent).toContain('maintenance=task113:NoSchedule')
   })
 
   it('provides density and refresh through the shared namespace table toolbar', async () => {

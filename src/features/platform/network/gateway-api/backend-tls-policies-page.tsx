@@ -71,7 +71,6 @@ export function NetworkBackendTLSPoliciesPage() {
           pinnedData: { total: items.length },
         })}
         columns={columns}
-        deletable={false}
         emptyDescription={{
           zh_CN: '当前范围没有 BackendTLSPolicy，或未安装 Gateway API CRD',
           en_US:

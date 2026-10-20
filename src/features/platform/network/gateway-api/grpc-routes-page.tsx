@@ -71,7 +71,6 @@ export function NetworkGRPCRoutesPage() {
           pinnedData: { total: items.length },
         })}
         columns={columns}
-        deletable={false}
         emptyDescription={{
           zh_CN: '当前范围没有 GRPCRoute，或未安装 Gateway API CRD',
           en_US: 'No GRPCRoutes in the current scope, or Gateway API CRDs are not installed',

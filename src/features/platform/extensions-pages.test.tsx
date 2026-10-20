@@ -1157,4 +1157,50 @@ describe('CRD catalog page', () => {
     expect(container.textContent).toContain('prometheus')
     expect(container.textContent).not.toContain('nginx ingress chart')
   })
+
+  it('exposes a namespace picker without granting create from user permission alone', async () => {
+    testState.scope.namespace = null
+    testState.permissions = ['platform.extensions.custom-resources.create']
+    widgetResponses()
+    Object.assign(testState.responses, {
+      '/clusters/cluster-a/namespaces': [{ name: 'team-a' }, { name: 'team-b' }],
+      '/clusters/cluster-a/extensions/crds/widgets.example.io/resources?version=v1': [],
+      '/clusters/cluster-a/extensions/crds/widgets.example.io/access?version=v1': {
+        allowedActions: ['view'],
+      },
+    })
+    const container = await renderWithProviders(
+      <CRDKindWorkspace crd={widgetCRD} kinds={[widgetCRD]} onKindSelect={() => undefined} />,
+    )
+    expect(container.querySelector('[aria-label="选择资源命名空间"]')).not.toBeNull()
+    expect(apiGetMock.mock.calls.map(([path]) => path)).toContain('/clusters/cluster-a/namespaces')
+    expect(container.querySelector<HTMLButtonElement>('[aria-label="新建实例"]')?.disabled).toBe(
+      true,
+    )
+  })
+
+  it('keeps cluster-scoped custom resources independent of the stored namespace', async () => {
+    testState.scope.namespace = 'team-a'
+    testState.permissions = ['platform.extensions.custom-resources.create']
+    widgetResponses()
+    Object.assign(testState.responses, {
+      '/clusters/cluster-a/extensions/crds/widgets.example.io/resources?version=v1': [],
+      '/clusters/cluster-a/extensions/crds/widgets.example.io/access?version=v1': {
+        allowedActions: ['view', 'create'],
+      },
+    })
+    const clusterCRD = { ...widgetCRD, scope: 'Cluster' }
+    const container = await renderWithProviders(
+      <CRDKindWorkspace crd={clusterCRD} kinds={[clusterCRD]} onKindSelect={() => undefined} />,
+    )
+    expect(container.querySelector('[aria-label="选择资源命名空间"]')).toBeNull()
+    expect(apiGetMock.mock.calls.map(([path]) => path)).not.toContain(
+      '/clusters/cluster-a/namespaces',
+    )
+    await vi.waitFor(() =>
+      expect(container.querySelector<HTMLButtonElement>('[aria-label="新建实例"]')?.disabled).toBe(
+        false,
+      ),
+    )
+  })
 })

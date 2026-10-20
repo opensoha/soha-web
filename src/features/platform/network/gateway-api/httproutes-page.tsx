@@ -70,7 +70,6 @@ export function NetworkHTTPRoutesPage() {
           pinnedData: { total: items.length },
         })}
         columns={columns}
-        deletable={false}
         emptyDescription={{
           zh_CN: '当前范围没有 HTTPRoute，或未安装 Gateway API CRD',
           en_US: 'No HTTPRoutes in the current scope, or Gateway API CRDs are not installed',

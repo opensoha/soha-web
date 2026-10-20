@@ -507,7 +507,7 @@ a {
 .soha-header-top-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 8px;
   min-width: 0;
   width: 100%;

@@ -1,4 +1,5 @@
 import { test as base, expect } from '@playwright/test'
+import type { CRDResourceInstance } from '../../src/features/platform/extensions/crds/types'
 import { baselineResponse } from './baseline-data'
 import { installMocks, verifyBrowserEvidence, type BrowserEvidence } from './mock-app'
 
@@ -19,6 +20,9 @@ export type CRDState = {
   deleteFailureStatus: 409 | 503
   allowDelete: boolean
   failCatalog: boolean
+  extraPermissions: string[]
+  userName?: string
+  resource?: Partial<CRDResourceInstance>
 }
 export const test = base.extend<{ catalog: CRDState; evidence: BrowserEvidence }>({
   catalog: async ({ browserName: _browserName }, provide) =>
@@ -29,6 +33,7 @@ export const test = base.extend<{ catalog: CRDState; evidence: BrowserEvidence }
       deleteFailureStatus: 409,
       allowDelete: true,
       failCatalog: false,
+      extraPermissions: [],
     }),
   evidence: [
     async ({ context, page, catalog }, use) => {
@@ -42,6 +47,11 @@ export const test = base.extend<{ catalog: CRDState; evidence: BrowserEvidence }
         ),
       )
       const evidence = await installMocks(context, page, (url, method) => {
+        if (url.pathname === '/api/v1/auth/refresh' && catalog.userName) {
+          const result = baselineResponse(url.pathname) as { data: { user: { userName: string } } }
+          result.data.user.userName = catalog.userName
+          return { body: result }
+        }
         if (url.pathname === '/api/v1/clusters/capabilities')
           return {
             body: {
@@ -61,6 +71,7 @@ export const test = base.extend<{ catalog: CRDState; evidence: BrowserEvidence }
           const result = baselineResponse(url.pathname) as any
           result.data.permissionKeys.push(
             'platform.extensions.view',
+            ...catalog.extraPermissions,
             ...(catalog.allowDelete ? ['platform.extensions.crds.delete'] : []),
           )
           result.data.visibleMenuIds.push('extensions')
@@ -77,21 +88,44 @@ export const test = base.extend<{ catalog: CRDState; evidence: BrowserEvidence }
           }
         if (url.pathname.startsWith(path + '/') && url.pathname.endsWith('/access'))
           return { body: { data: { allowedActions: ['get', 'list'] } } }
-        if (url.pathname.startsWith(path + '/') && url.pathname.endsWith('/resources'))
+        if (method === 'GET' && url.pathname.endsWith('/yaml')) {
+          const definition = catalog.data.find((item) =>
+            url.pathname.startsWith(`${path}/${item.name}/resources/`),
+          )
+          if (definition)
+            return {
+              body: {
+                data: {
+                  content: `apiVersion: ${definition.group}/${definition.version}\nkind: ${definition.kind}\nmetadata:\n  name: ${catalog.resource?.name ?? 'sample-widget'}\n`,
+                },
+              },
+            }
+        }
+        if (url.pathname.startsWith(path + '/') && url.pathname.endsWith('/resources')) {
+          const definition = catalog.data.find(
+            (item) => url.pathname === `${path}/${item.name}/resources`,
+          )
           return {
             body: {
               data: [
                 {
                   uid: 'synthetic-widget',
-                  name: url.pathname.includes('/gadgets.') ? 'sample-gadget' : 'sample-widget',
-                  namespace: 'monitoring',
-                  kind: 'Widget',
+                  name:
+                    definition?.kind === 'ClusterWidget'
+                      ? 'sample-clusterwidget'
+                      : url.pathname.includes('/gadgets.')
+                        ? 'sample-gadget'
+                        : 'sample-widget',
+                  ...(definition?.scope === 'Cluster' ? {} : { namespace: 'monitoring' }),
+                  kind: definition?.kind ?? 'Widget',
                   status: 'Ready',
                   allowedActions: ['get'],
+                  ...catalog.resource,
                 },
               ],
             },
           }
+        }
         if (url.pathname.startsWith(path + '/') && method === 'DELETE') {
           catalog.deleteCalls.push(url.pathname + url.search)
           const item = catalog.data.find((row) => url.pathname === path + '/' + row.name)

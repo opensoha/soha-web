@@ -88,6 +88,7 @@ function getCompatibleVisibleMenus(snapshot?: PermissionSnapshot | null): Visibl
       ? route.permissionKeysAny
       : [resolveRoutePermission(route)]
     if (!permissionKeys.some((key) => key && snapshot.permissionKeys.includes(key))) return []
+    if (route.permissionKeysAll?.some((key) => !snapshot.permissionKeys.includes(key))) return []
 
     return [
       {
@@ -496,6 +497,7 @@ export function canAccessRoute(route: RouteMeta, snapshot?: PermissionSnapshot |
   if (!snapshot) {
     return false
   }
+  if (route.permissionKeysAll?.some((key) => !snapshot.permissionKeys.includes(key))) return false
   if (route.permissionStrategy === 'any-child') {
     return routeMeta
       .filter((child) => child.parentId === route.id)

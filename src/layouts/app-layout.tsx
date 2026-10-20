@@ -1243,12 +1243,12 @@ export function AppLayout() {
                     )}
                   </div>
                 </div>
-                {resourceHeaderScopeMode !== 'hidden' && !isAccountUtilityRoute ? (
-                  <div className="soha-header-context">
-                    <PlatformScopeTrigger scopeMode={resourceHeaderScopeMode} />
-                  </div>
-                ) : null}
                 <div className="soha-header-right">
+                  {resourceHeaderScopeMode !== 'hidden' && !isAccountUtilityRoute ? (
+                    <div className="soha-header-context">
+                      <PlatformScopeTrigger scopeMode={resourceHeaderScopeMode} />
+                    </div>
+                  ) : null}
                   {showRealtimeSessionsAction ? <RealtimeSessionDockTrigger /> : null}
                   {showResourceCreateAction ? (
                     <HeaderActionButton

@@ -3,10 +3,11 @@ import { Select, Space, Tag, Typography } from 'antd'
 import { ApartmentOutlined, KubernetesOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { clusterQueries } from '@/features/platform/clusters/queries'
+import { namespaceQueries } from '@/features/platform/cluster-resources/queries'
+import { toClusterScope } from '@/features/platform/cluster-resources/scope'
 import { useI18n } from '@/i18n'
-import { api } from '@/services/api-client'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
-import type { ApiResponse, Namespace, RouteMeta } from '@/types'
+import type { RouteMeta } from '@/types'
 
 const { Text } = Typography
 
@@ -47,11 +48,7 @@ function usePlatformScopeData() {
 
   const clustersQuery = useQuery(clusterQueries.list())
 
-  const namespacesQuery = useQuery({
-    queryKey: ['namespaces', clusterId],
-    queryFn: () => api.get<ApiResponse<Namespace[]>>(`/clusters/${clusterId}/namespaces`),
-    enabled: !!clusterId,
-  })
+  const namespacesQuery = useQuery(namespaceQueries.list(toClusterScope(clusterId)))
 
   useEffect(() => {
     if (!clustersQuery.data) return
@@ -70,13 +67,13 @@ function usePlatformScopeData() {
 
   useEffect(() => {
     if (!namespacesQuery.data || !clusterId || namespace == null || namespace === '') return
-    const namespaces = namespacesQuery.data.data ?? []
+    const namespaces = namespacesQuery.data
     if (namespaces.some((item) => item.name === namespace)) return
     setNamespace(null)
   }, [clusterId, namespace, namespacesQuery.data, setNamespace])
 
   const clusters = clustersQuery.data ?? []
-  const namespaces = namespacesQuery.data?.data ?? []
+  const namespaces = namespacesQuery.data ?? []
   const currentCluster = useMemo(
     () => clusters.find((item) => item.id === clusterId) ?? null,
     [clusterId, clusters],

@@ -6,6 +6,15 @@ import { MemoryRouter, useLocation } from 'react-router-dom'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { AppRouter } from './index'
 
+vi.mock('@/features/auth/permission-snapshot', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/features/auth/permission-snapshot')>()),
+  usePermissionSnapshot: () => ({
+    data: { data: { permissionKeys: ['platform.network.topology.view'] } },
+    isLoading: false,
+    error: null,
+  }),
+}))
+
 vi.mock('@/features/auth/auth-guard', async () => {
   const { createElement } = await import('react')
   const { Outlet } = await import('react-router-dom')

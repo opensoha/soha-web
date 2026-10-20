@@ -42,7 +42,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   padding-bottom: 16px;
 }
@@ -50,14 +50,37 @@
   display: grid;
   gap: 4px;
   min-width: 0;
-  flex: 1;
+  flex: 1 1 auto;
 }
-.soha-crd-resource-identity strong {
-  font-size: 16px;
+.soha-crd-resource-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.soha-crd-resource-title h2 {
+  margin: 0;
+  font-size: var(--soha-font-size-section);
+  line-height: 24px;
+  font-weight: 600;
   overflow-wrap: anywhere;
 }
-.soha-crd-resource-facts {
+.soha-crd-resource-facts,
+.soha-crd-resource-metadata {
   flex-basis: 100%;
+  min-width: 0;
+  width: 100%;
+  overflow-wrap: anywhere;
+}
+.soha-crd-resource-metadata summary {
+  color: var(--soha-text-secondary);
+  cursor: pointer;
+}
+.soha-crd-resource-metadata .soha-crd-resource-facts {
+  padding-top: 12px;
+}
+.soha-crd-resource-finalizers {
+  display: grid;
   min-width: 0;
 }
 .soha-crd-resource-secondary {

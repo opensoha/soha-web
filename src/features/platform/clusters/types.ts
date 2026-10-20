@@ -3,6 +3,7 @@ import type { Cluster, ClusterDetail, Node, ScopeKey } from '@/types'
 export type ConnectionMode = 'direct_kubeconfig' | 'agent'
 
 export interface ClusterFormValues {
+  agentActionProfile?: import('@opensoha/contracts/gen/ts/sohaapi').components['schemas']['KubernetesAgentActionProfile']
   name?: string
   provider?: string
   environment?: string

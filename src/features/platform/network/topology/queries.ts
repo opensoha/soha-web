@@ -5,10 +5,12 @@ import { getNetworkTopology } from './api'
 import { topologyKeys } from './keys'
 
 export const topologyQueries = {
-  detail: (scope: ScopeKey) =>
+  detail: (scope: ScopeKey, principal?: string, permissions?: string) =>
     queryOptions({
-      queryKey: topologyKeys.detail(scope),
-      queryFn: () => getNetworkTopology(scope),
+      queryKey: topologyKeys.snapshot(scope, principal, permissions),
+      queryFn: ({ signal }) => getNetworkTopology(scope, signal),
       enabled: hasNetworkCluster(scope),
+      staleTime: 0,
+      gcTime: 0,
     }),
 }

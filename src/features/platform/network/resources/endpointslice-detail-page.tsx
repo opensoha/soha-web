@@ -24,7 +24,7 @@ export function EndpointSliceDetailPage() {
   const [searchParams] = useSearchParams()
   const detailNamespace = resolveNetworkNamespace(namespace, searchParams.get('namespace'))
   const scope = toScopeKey(clusterId, detailNamespace)
-  const [activeTabKey, setActiveTabKey] = useState('overview')
+  const [activeTabKey, setActiveTabKey] = useState(() => searchParams.get('tab') === 'yaml' ? 'yaml' : 'overview')
   const query = useQuery(
     networkCoreQueries.detail<EndpointSliceDetail>('endpointslices', scope, name),
   )

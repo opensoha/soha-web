@@ -36,6 +36,7 @@ function inheritedMeta(parent: RouteMeta, definition: AppRouteDefinition): Route
     menuId: parent.menuId,
     permissionKey: parent.permissionKey,
     permissionKeysAny: parent.permissionKeysAny,
+    permissionKeysAll: parent.permissionKeysAll,
     permissionStrategy: parent.permissionStrategy,
     scopeMode: parent.scopeMode,
     workspace: parent.workspace,
@@ -79,7 +80,9 @@ export function resolveRouteDefinitions(
 }
 
 function routeHasPermission(meta: RouteMeta) {
-  return Boolean(meta.permissionKey || meta.permissionKeysAny?.length)
+  return Boolean(
+    meta.permissionKey || meta.permissionKeysAny?.length || meta.permissionKeysAll?.length,
+  )
 }
 
 export function validateRouteDefinitions(

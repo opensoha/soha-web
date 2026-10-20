@@ -1,12 +1,14 @@
+import { localeText, useI18n } from '@/i18n'
+import { StatusTag } from '@/components/status-tag'
 import { AdminTable } from '@/components/admin-table'
 import { ManagementRefreshButton, ManagementState } from '@/components/management-list'
 import { ReadFeedback } from '@/components/request-feedback'
-import { StatGrid } from '@/components/stat-grid'
 import { hasPermission, usePermissionSnapshot } from '@/features/auth'
-import { useI18n } from '@/i18n'
+import { useAuthStore } from '@/stores/auth-store'
 import { usePlatformScopeStore } from '@/stores/platform-scope-store'
 import { toScopeKey } from '@/types'
-import { readableQueryData } from '@/utils/query-feedback'
+import { queryAccessDenied, readableQueryData } from '@/utils/query-feedback'
+import { formatDateTime } from '@/utils/time'
 import { useQuery } from '@tanstack/react-query'
 import {
   Background,
@@ -15,1476 +17,672 @@ import {
   MarkerType,
   Position,
   ReactFlow,
-  ReactFlowProvider,
-  useReactFlow,
-  type Edge,
   type Node,
   type NodeProps,
+  type Edge,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import type { TableColumnsType } from 'antd'
-import { Button, Card, Input, Space, Tag, Typography } from 'antd'
+import {
+  Alert,
+  Button,
+  Card,
+  Drawer,
+  Empty,
+  Grid,
+  Input,
+  Segmented,
+  Select,
+  Space,
+  Switch,
+  Tag,
+  Typography,
+  type TableColumnsType,
+} from 'antd'
 import dagre from 'dagre'
-import { useDeferredValue, useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import {
+  connectedPath,
+  coverageLabels,
+  edgeLabel,
+  filterTopology,
+  resolutionLabels,
+  topologyEntrySummary,
+} from './model'
 import { topologyQueries } from './queries'
+import type { TopologyNode, TopologyEdge } from './types'
+import { NodeEvidence, Resolution } from './node-evidence'
 import './topology.css'
 
 const { Text } = Typography
-
-type TopologyDataState = 'live' | 'pending' | 'demo'
-type LocaleCode = 'zh_CN' | 'en_US'
-type TopologySourceType = 'ingress' | 'httproute' | 'gateway' | 'demo'
-type TopologyNodeKind =
-  | 'entry'
-  | 'ingress-route'
-  | 'http-route'
-  | 'pending-route'
-  | 'service'
-  | 'missing-service'
-  | 'backend-group'
-  | 'empty-backend'
-  | 'pod'
-
-interface NetworkTopologyNodeView {
-  id: string
-  name: string
-  kind: string
-  state: string
-  namespace?: string
-  resourceName?: string
-  subtitle?: string
-  badge?: string
-}
-
-interface NetworkTopologyTraceView {
-  id: string
-  sourceType: string
-  state: string
-  entry: NetworkTopologyNodeView
-  route: NetworkTopologyNodeView
-  service?: NetworkTopologyNodeView
-  backendPods?: NetworkTopologyNodeView[]
-  note?: string
-}
-
-interface TopologyNode {
-  id: string
-  name: string
-  kind: TopologyNodeKind
-  state: TopologyDataState
-  namespace?: string
-  resourceName?: string
-  subtitle?: string
-  badge?: string
-}
-
-interface TopologyTrace {
-  id: string
-  entry: TopologyNode
-  route: TopologyNode
-  service?: TopologyNode
-  terminals: TopologyNode[]
-  sourceType: TopologySourceType
-  state: TopologyDataState
-  notes: string
-}
-
-interface TableRow {
-  id: string
-  entry: TopologyNode
-  route: TopologyNode
-  service?: TopologyNode
-  terminals: TopologyNode[]
-  sourceType: TopologySourceType
-  state: TopologyDataState
-  notes: string
-}
-
-interface TopologySelectionDetail {
-  notes: string[]
-  relatedEntries: TopologyNode[]
-  relatedRoutes: TopologyNode[]
-  relatedServices: TopologyNode[]
-  summary: string
-  terminalNodes: TopologyNode[]
-}
-
-interface TopologyGraphNodeData extends Record<string, unknown> {
-  name: string
-  kind: TopologyNodeKind
-  state: TopologyDataState
-  subtitle?: string
-  badge?: string
-  namespace?: string
-  resourceName?: string
-  serviceId?: string
-  terminalNodes?: TopologyNode[]
-}
-
-interface TopologyGraphEdgeData extends Record<string, unknown> {
-  sourceKind: TopologyNodeKind
-  state: TopologyDataState
-}
-
-interface TopologyGraphData {
-  edges: TopologyFlowEdge[]
-  entryCount: number
-  fitKey: string
-  nodeMap: Map<string, TopologyGraphNodeData>
-  nodes: TopologyFlowNode[]
-  podCount: number
-  routeCount: number
-  serviceCount: number
-}
-
-type TopologyFlowNode = Node<TopologyGraphNodeData, 'topologyNode'>
-type TopologyFlowEdge = Edge<TopologyGraphEdgeData>
-
-const NODE_WIDTH = 256
-const NODE_HEIGHT = 118
-
-const NODE_COLORS: Record<TopologyNodeKind, string> = {
+const colors: Record<string, string> = {
   entry: 'var(--soha-graph-scope)',
-  'ingress-route': 'var(--soha-graph-service)',
-  'http-route': 'var(--soha-warning)',
-  'pending-route': 'var(--soha-warning)',
+  rule: 'var(--soha-graph-service)',
+  processor: 'var(--soha-warning)',
   service: 'var(--soha-graph-metric)',
-  'missing-service': 'var(--soha-danger)',
-  'backend-group': 'var(--soha-success)',
-  'empty-backend': 'var(--soha-graph-muted)',
   pod: 'var(--soha-success)',
+  external: 'var(--soha-graph-muted)',
 }
-
-const LEGEND_TAG_COLORS: Record<Exclude<TopologyNodeKind, 'pod'>, string> = {
-  entry: 'blue',
-  'ingress-route': 'cyan',
-  'http-route': 'orange',
-  'pending-route': 'gold',
-  service: 'blue',
-  'missing-service': 'red',
-  'backend-group': 'green',
-  'empty-backend': 'default',
-}
-
-function colorWithAlpha(color: string, alpha: number) {
-  const boundedAlpha = Math.max(0, Math.min(1, alpha))
-  return `color-mix(in srgb, ${color} ${Math.round(boundedAlpha * 100)}%, transparent)`
-}
-
-function mergeTopologyState(current: TopologyDataState, next: TopologyDataState) {
-  if (current === next) {
-    return current
-  }
-  if (current === 'live' || next === 'live') {
-    return 'live'
-  }
-  if (current === 'pending' || next === 'pending') {
-    return 'pending'
-  }
-  return 'demo'
-}
-
-function uniqueTopologyNodes(items: Array<TopologyNode | undefined>) {
-  const map = new Map<string, TopologyNode>()
-  items.forEach((item) => {
-    if (item) {
-      map.set(item.id, item)
-    }
-  })
-  return Array.from(map.values())
-}
-
-function uniqueStrings(items: string[]) {
-  return Array.from(new Set(items.filter(Boolean)))
-}
-
-function resolveNodeColor(kind: TopologyNodeKind) {
-  return NODE_COLORS[kind] ?? NODE_COLORS.entry
-}
-
-function getTopologyKindLabel(kind: TopologyNodeKind, localeCode: LocaleCode) {
-  if (localeCode === 'en_US') {
-    switch (kind) {
-      case 'entry':
-        return 'Entry'
-      case 'ingress-route':
-        return 'Ingress Route'
-      case 'http-route':
-        return 'HTTPRoute'
-      case 'pending-route':
-        return 'Pending Route'
-      case 'service':
-        return 'Service'
-      case 'missing-service':
-        return 'Missing Service'
-      case 'backend-group':
-        return 'Backend Pods'
-      case 'empty-backend':
-        return 'No Backend'
-      case 'pod':
-        return 'Pod'
-    }
-  }
-
-  switch (kind) {
-    case 'entry':
-      return '入口'
-    case 'ingress-route':
-      return 'Ingress 路由'
-    case 'http-route':
-      return 'HTTPRoute'
-    case 'pending-route':
-      return '待接路由'
-    case 'service':
-      return 'Service'
-    case 'missing-service':
-      return '缺失 Service'
-    case 'backend-group':
-      return '后端 Pods'
-    case 'empty-backend':
-      return '无后端'
-    case 'pod':
-      return 'Pod'
-  }
-}
-
-function getTopologyStateLabel(state: TopologyDataState, localeCode: LocaleCode) {
-  if (state === 'live') {
-    return localeCode === 'zh_CN' ? '已验证' : 'Verified'
-  }
-  if (state === 'pending') {
-    return localeCode === 'zh_CN' ? '待接入' : 'Pending'
-  }
-  return localeCode === 'zh_CN' ? '演示' : 'Preview'
-}
-
-function buildServiceDetailPath(
-  name: string,
-  selectedNamespace: string | null,
-  rowNamespace: string,
-) {
-  const params = new URLSearchParams()
-  const namespace = selectedNamespace && selectedNamespace !== '' ? selectedNamespace : rowNamespace
-  if (namespace) {
-    params.set('namespace', namespace)
-  }
-  const query = params.toString()
-  return query ? `/network/services/${name}?${query}` : `/network/services/${name}`
-}
-
-function buildPodDetailPath(name: string, selectedNamespace: string | null, rowNamespace: string) {
-  const params = new URLSearchParams()
-  const namespace = selectedNamespace && selectedNamespace !== '' ? selectedNamespace : rowNamespace
-  if (namespace) {
-    params.set('namespace', namespace)
-  }
-  const query = params.toString()
-  return query ? `/workloads/pods/${name}?${query}` : `/workloads/pods/${name}`
-}
-
-function formatBackendSubtitle(pods: TopologyNode[], localeCode: LocaleCode) {
-  if (pods.length === 0) {
-    return localeCode === 'zh_CN'
-      ? 'Service 已解析，但 selector 暂未命中 Pod。'
-      : 'Service resolved, but the selector does not match any pods yet.'
-  }
-
-  const previewNames = pods.slice(0, 2).map((pod) => pod.name)
-  const remain = pods.length - previewNames.length
-
-  if (remain > 0) {
-    return localeCode === 'zh_CN'
-      ? `${previewNames.join(' · ')} · +${remain} 个`
-      : `${previewNames.join(' · ')} · +${remain}`
-  }
-
-  return previewNames.join(' · ')
-}
-
-function normalizeTopologyState(state?: string): TopologyDataState {
-  if (state === 'live' || state === 'pending' || state === 'demo') {
-    return state
-  }
-  return 'pending'
-}
-
-function normalizeTopologySourceType(sourceType?: string): TopologySourceType {
-  if (
-    sourceType === 'ingress' ||
-    sourceType === 'httproute' ||
-    sourceType === 'gateway' ||
-    sourceType === 'demo'
-  ) {
-    return sourceType
-  }
-  return 'demo'
-}
-
-function normalizeTopologyNodeKind(kind?: string): TopologyNodeKind {
-  switch (kind) {
-    case 'entry':
-    case 'ingress-route':
-    case 'http-route':
-    case 'pending-route':
-    case 'service':
-    case 'missing-service':
-    case 'backend-group':
-    case 'empty-backend':
-    case 'pod':
-      return kind
-    default:
-      return 'entry'
-  }
-}
-
-function normalizeTopologyNode(node: NetworkTopologyNodeView): TopologyNode {
-  return {
-    id: node.id,
-    name: node.name,
-    kind: normalizeTopologyNodeKind(node.kind),
-    state: normalizeTopologyState(node.state),
-    namespace: node.namespace,
-    resourceName: node.resourceName,
-    subtitle: node.subtitle,
-    badge: node.badge,
-  }
-}
-
-function normalizeBackendTraces(traces: NetworkTopologyTraceView[] | undefined): TopologyTrace[] {
-  return (traces ?? []).map((trace) => ({
-    id: trace.id,
-    entry: normalizeTopologyNode(trace.entry),
-    route: normalizeTopologyNode(trace.route),
-    service: trace.service ? normalizeTopologyNode(trace.service) : undefined,
-    terminals: (trace.backendPods ?? []).map(normalizeTopologyNode),
-    sourceType: normalizeTopologySourceType(trace.sourceType),
-    state: normalizeTopologyState(trace.state),
-    notes: trace.note ?? '',
-  }))
-}
-
-function filterTraces(traces: TopologyTrace[], keyword: string) {
-  if (!keyword) {
-    return traces
-  }
-
-  return traces.filter((trace) => {
-    const fields = [
-      trace.entry.name,
-      trace.route.name,
-      trace.route.badge ?? '',
-      trace.service?.name ?? '',
-      trace.notes,
-      ...trace.terminals.map((item) => item.name),
-    ]
-    return fields.some((field) => field.toLowerCase().includes(keyword))
-  })
-}
-
-function layoutTopologyGraph(nodes: TopologyFlowNode[], edges: TopologyFlowEdge[]) {
-  const graph = new dagre.graphlib.Graph()
-  graph.setDefaultEdgeLabel(() => ({}))
-  graph.setGraph({ rankdir: 'LR', ranksep: 120, nodesep: 42 })
-
-  nodes.forEach((node) => {
-    graph.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT })
-  })
-
-  edges.forEach((edge) => {
-    graph.setEdge(edge.source, edge.target)
-  })
-
-  dagre.layout(graph)
-
-  return nodes.map((node) => {
-    const position = graph.node(node.id) ?? { x: NODE_WIDTH / 2, y: NODE_HEIGHT / 2 }
-    return {
-      ...node,
-      position: {
-        x: position.x - NODE_WIDTH / 2,
-        y: position.y - NODE_HEIGHT / 2,
-      },
-      sourcePosition: Position.Right,
-      targetPosition: Position.Left,
-    }
-  })
-}
-
-function buildTopologyGraph(traces: TopologyTrace[]): TopologyGraphData {
-  const nodeMap = new Map<string, TopologyGraphNodeData>()
-  const edgeMap = new Map<string, TopologyFlowEdge>()
-  const serviceMap = new Map<string, TopologyNode>()
-  const backendPodsByService = new Map<string, Map<string, TopologyNode>>()
-
-  const addNode = (id: string, data: TopologyGraphNodeData) => {
-    const current = nodeMap.get(id)
-    if (!current) {
-      nodeMap.set(id, data)
-      return
-    }
-
-    nodeMap.set(id, {
-      ...current,
-      ...data,
-      state: mergeTopologyState(current.state, data.state),
-      subtitle: current.subtitle || data.subtitle,
-      badge: current.badge || data.badge,
-      terminalNodes: uniqueTopologyNodes([
-        ...(current.terminalNodes ?? []),
-        ...(data.terminalNodes ?? []),
-      ]),
-    })
-  }
-
-  const addEdge = (
-    source: string,
-    target: string,
-    sourceKind: TopologyNodeKind,
-    state: TopologyDataState,
-  ) => {
-    const key = `${source}->${target}`
-    const color = resolveNodeColor(sourceKind)
-    const current = edgeMap.get(key)
-    const nextState = current ? mergeTopologyState(current.data?.state ?? 'demo', state) : state
-
-    edgeMap.set(key, {
-      id: key,
-      source,
-      target,
-      type: 'smoothstep',
-      markerEnd: {
-        type: MarkerType.ArrowClosed,
-        color,
-      },
-      style: {
-        stroke: color,
-        strokeWidth: nextState === 'live' ? 1.9 : 1.5,
-        strokeDasharray: nextState === 'pending' ? '8 6' : undefined,
-        opacity: nextState === 'demo' ? 0.72 : 0.96,
-      },
-      data: {
-        sourceKind,
-        state: nextState,
-      },
-    })
-  }
-
-  traces.forEach((trace) => {
-    addNode(trace.entry.id, {
-      name: trace.entry.name,
-      kind: trace.entry.kind,
-      state: trace.entry.state,
-      subtitle: trace.entry.subtitle || trace.entry.namespace || '-',
-      badge: trace.entry.badge,
-      namespace: trace.entry.namespace,
-      resourceName: trace.entry.resourceName,
-    })
-
-    addNode(trace.route.id, {
-      name: trace.route.name,
-      kind: trace.route.kind,
-      state: trace.route.state,
-      subtitle: trace.route.subtitle || trace.route.namespace || '-',
-      badge: trace.route.badge,
-      namespace: trace.route.namespace,
-      resourceName: trace.route.resourceName,
-    })
-
-    addEdge(trace.entry.id, trace.route.id, trace.entry.kind, trace.state)
-
-    if (!trace.service) {
-      return
-    }
-
-    addNode(trace.service.id, {
-      name: trace.service.name,
-      kind: trace.service.kind,
-      state: trace.service.state,
-      subtitle: trace.service.subtitle || trace.service.namespace || '-',
-      badge: trace.service.badge,
-      namespace: trace.service.namespace,
-      resourceName: trace.service.resourceName,
-    })
-    addEdge(trace.route.id, trace.service.id, trace.route.kind, trace.state)
-
-    if (trace.service.kind !== 'service') {
-      return
-    }
-
-    serviceMap.set(trace.service.id, trace.service)
-    if (trace.terminals.length === 0) {
-      return
-    }
-
-    const pods = backendPodsByService.get(trace.service.id) ?? new Map<string, TopologyNode>()
-    trace.terminals.forEach((terminal) => {
-      pods.set(terminal.id, terminal)
-    })
-    backendPodsByService.set(trace.service.id, pods)
-  })
-
-  serviceMap.forEach((serviceNode, serviceID) => {
-    const pods = Array.from(backendPodsByService.get(serviceID)?.values() ?? [])
-    if (pods.length > 0) {
-      const backendID = `backend:${serviceID}`
-      addNode(backendID, {
-        name: `${pods.length} backend pods`,
-        kind: 'backend-group',
-        state: 'live',
-        subtitle: formatBackendSubtitle(pods, 'en_US'),
-        badge: 'Backend group',
-        namespace: serviceNode.namespace,
-        resourceName: serviceNode.resourceName,
-        serviceId: serviceID,
-        terminalNodes: pods,
-      })
-      addEdge(serviceID, backendID, serviceNode.kind, 'live')
-      return
-    }
-
-    const backendID = `backend-empty:${serviceID}`
-    addNode(backendID, {
-      name: 'No matching backend pods',
-      kind: 'empty-backend',
-      state: 'pending',
-      subtitle: 'Service resolved, but selector has not matched any pod yet.',
-      badge: 'Selector not matched',
-      namespace: serviceNode.namespace,
-      resourceName: serviceNode.resourceName,
-      serviceId: serviceID,
-      terminalNodes: [],
-    })
-    addEdge(serviceID, backendID, serviceNode.kind, 'pending')
-  })
-
-  const flowNodes = Array.from(nodeMap.entries()).map(([id, data]) => ({
-    id,
-    type: 'topologyNode' as const,
-    position: { x: 0, y: 0 },
-    data,
-  }))
-  const flowEdges = Array.from(edgeMap.values())
-  const nodes = layoutTopologyGraph(flowNodes, flowEdges)
-  const podIDs = new Set<string>()
-  backendPodsByService.forEach((pods) => {
-    pods.forEach((pod) => podIDs.add(pod.id))
-  })
-
-  return {
-    nodes,
-    edges: flowEdges,
-    nodeMap,
-    fitKey: `${nodes.map((node) => node.id).join(',')}::${flowEdges.map((edge) => edge.id).join(',')}`,
-    entryCount: Array.from(nodeMap.values()).filter((node) => node.kind === 'entry').length,
-    routeCount: Array.from(nodeMap.values()).filter((node) =>
-      ['ingress-route', 'http-route', 'pending-route'].includes(node.kind),
-    ).length,
-    serviceCount: Array.from(nodeMap.values()).filter((node) =>
-      ['service', 'missing-service'].includes(node.kind),
-    ).length,
-    podCount: podIDs.size,
-  }
-}
-
-function renderTraceState(state: TopologyDataState, localeCode: LocaleCode) {
-  if (state === 'live') {
-    return <Tag color="green">{localeCode === 'zh_CN' ? '已验证' : 'Verified'}</Tag>
-  }
-  if (state === 'pending') {
-    return <Tag color="orange">{localeCode === 'zh_CN' ? '待接入' : 'Pending'}</Tag>
-  }
-  return <Tag color="blue">{localeCode === 'zh_CN' ? '演示' : 'Preview'}</Tag>
-}
-
-function buildSelectionDetail(
-  nodeID: string | null,
-  nodeData: TopologyGraphNodeData | null,
-  traces: TopologyTrace[],
-  localeCode: LocaleCode,
-): TopologySelectionDetail | null {
-  if (!nodeID || !nodeData) {
-    return null
-  }
-
-  switch (nodeData.kind) {
-    case 'entry': {
-      const relatedTraces = traces.filter((trace) => trace.entry.id === nodeID)
-      const relatedRoutes = uniqueTopologyNodes(relatedTraces.map((trace) => trace.route))
-      const relatedServices = uniqueTopologyNodes(relatedTraces.map((trace) => trace.service))
-      const terminalNodes = uniqueTopologyNodes(relatedTraces.flatMap((trace) => trace.terminals))
-      return {
-        relatedEntries: [],
-        relatedRoutes,
-        relatedServices,
-        terminalNodes,
-        notes: uniqueStrings(relatedTraces.map((trace) => trace.notes)),
-        summary:
-          localeCode === 'zh_CN'
-            ? `该入口当前连接 ${relatedRoutes.length} 条路由、${relatedServices.length} 个 Service，并覆盖 ${terminalNodes.length} 个后端 Pod。`
-            : `This entry currently connects to ${relatedRoutes.length} routes, ${relatedServices.length} services, and ${terminalNodes.length} backend pods.`,
-      }
-    }
-    case 'ingress-route':
-    case 'http-route':
-    case 'pending-route': {
-      const relatedTraces = traces.filter((trace) => trace.route.id === nodeID)
-      const relatedEntries = uniqueTopologyNodes(relatedTraces.map((trace) => trace.entry))
-      const relatedServices = uniqueTopologyNodes(relatedTraces.map((trace) => trace.service))
-      const terminalNodes = uniqueTopologyNodes(relatedTraces.flatMap((trace) => trace.terminals))
-      return {
-        relatedEntries,
-        relatedRoutes: [],
-        relatedServices,
-        terminalNodes,
-        notes: uniqueStrings(relatedTraces.map((trace) => trace.notes)),
-        summary:
-          nodeData.kind === 'pending-route'
-            ? localeCode === 'zh_CN'
-              ? `当前待接路由节点关联 ${relatedEntries.length} 个入口，但还没有接到可见的 Service。`
-              : `This pending-route node is attached to ${relatedEntries.length} entries but is not connected to any visible service yet.`
-            : localeCode === 'zh_CN'
-              ? `该路由节点当前承接 ${relatedEntries.length} 个入口，并连接 ${relatedServices.length} 个 Service。`
-              : `This route node currently receives ${relatedEntries.length} entries and connects to ${relatedServices.length} services.`,
-      }
-    }
-    case 'service':
-    case 'missing-service': {
-      const relatedTraces = traces.filter((trace) => trace.service?.id === nodeID)
-      const relatedEntries = uniqueTopologyNodes(relatedTraces.map((trace) => trace.entry))
-      const relatedRoutes = uniqueTopologyNodes(relatedTraces.map((trace) => trace.route))
-      const terminalNodes = uniqueTopologyNodes(relatedTraces.flatMap((trace) => trace.terminals))
-      return {
-        relatedEntries,
-        relatedRoutes,
-        relatedServices: [],
-        terminalNodes,
-        notes: uniqueStrings(relatedTraces.map((trace) => trace.notes)),
-        summary:
-          nodeData.kind === 'service'
-            ? localeCode === 'zh_CN'
-              ? `该 Service 当前被 ${relatedRoutes.length} 条路由引用，并汇总 ${terminalNodes.length} 个后端 Pod。`
-              : `This service is referenced by ${relatedRoutes.length} routes and aggregates ${terminalNodes.length} backend pods.`
-            : localeCode === 'zh_CN'
-              ? `当前有 ${relatedRoutes.length} 条路由指向一个在 scope 内不可见的 Service。`
-              : `${relatedRoutes.length} routes currently point to a service that is not visible in the current scope.`,
-      }
-    }
-    case 'backend-group':
-    case 'empty-backend': {
-      const serviceID = String(nodeData.serviceId ?? '')
-      const relatedTraces = traces.filter((trace) => trace.service?.id === serviceID)
-      const relatedEntries = uniqueTopologyNodes(relatedTraces.map((trace) => trace.entry))
-      const relatedRoutes = uniqueTopologyNodes(relatedTraces.map((trace) => trace.route))
-      const terminalNodes = uniqueTopologyNodes(nodeData.terminalNodes ?? [])
-      return {
-        relatedEntries,
-        relatedRoutes,
-        relatedServices: uniqueTopologyNodes(relatedTraces.map((trace) => trace.service)),
-        terminalNodes,
-        notes: uniqueStrings(relatedTraces.map((trace) => trace.notes)),
-        summary:
-          nodeData.kind === 'backend-group'
-            ? localeCode === 'zh_CN'
-              ? `总览图把后端收敛成一个集合节点，当前包含 ${terminalNodes.length} 个 Pod。`
-              : `The overview graph collapses the backend into one aggregate node that currently contains ${terminalNodes.length} pods.`
-            : localeCode === 'zh_CN'
-              ? 'Service 已解析，但 selector 还没有命中任何后端 Pod。'
-              : 'The service is resolved, but its selector has not matched any backend pod yet.',
-      }
-    }
-    case 'pod':
-    default:
-      return null
-  }
-}
-
-function TopologyCanvasNode({ data, selected }: NodeProps<TopologyFlowNode>) {
-  const { localeCode } = useI18n()
-  const accent = resolveNodeColor(data.kind)
-
+type FlowNode = Node<
+  { item: TopologyNode; entrySummary: string; onSelect: (id: string) => void },
+  'topology'
+>
+function TopologyFlowNode({ data, selected }: NodeProps<FlowNode>) {
+  const { localeCode, t } = useI18n()
+  const { item } = data
   return (
-    <div className={`soha-topology-node ${selected ? 'is-selected' : ''} is-${data.state}`}>
-      <Handle
-        type="target"
-        position={Position.Left}
-        isConnectable={false}
-        style={{ opacity: 0, background: 'transparent', border: 0 }}
-      />
-      <div
+    <div
+      className={`soha-topology-node ${selected ? 'is-selected' : ''} ${data.entrySummary ? 'has-entry' : ''}`}
+    >
+      <Handle type="target" position={Position.Left} />
+      <button
+        type="button"
         className="soha-topology-node-card"
-        style={{
-          borderColor: colorWithAlpha(accent, selected ? 0.9 : 0.28),
-          background: `linear-gradient(180deg, ${colorWithAlpha(accent, 0.14)} 0%, color-mix(in srgb, var(--soha-bg-surface) 96%, transparent) 100%)`,
-        }}
+        onClick={() => data.onSelect(item.id)}
+        style={{ borderLeftColor: colors[item.type] ?? 'var(--soha-border-color)' }}
       >
-        <div className="soha-topology-node-head">
-          <span
-            className="soha-topology-node-kind"
-            style={{ color: accent, background: colorWithAlpha(accent, 0.12) }}
-          >
-            {getTopologyKindLabel(data.kind, localeCode)}
+        <span className="soha-topology-node-head">
+          <span>
+            {item.provider} · {item.protocol || item.type}
           </span>
-          <span className={`soha-topology-node-state is-${data.state}`}>
-            {getTopologyStateLabel(data.state, localeCode)}
+          <span>
+            {t(
+              `network.topology.resolution.${item.resolutionState}`,
+              resolutionLabels[item.resolutionState],
+            )}
           </span>
-        </div>
-        <div className="soha-topology-node-title">{data.name}</div>
-        {data.subtitle ? <div className="soha-topology-node-subtitle">{data.subtitle}</div> : null}
-        {data.badge ? <div className="soha-topology-node-badge">{data.badge}</div> : null}
-      </div>
-      <Handle
-        type="source"
-        position={Position.Right}
-        isConnectable={false}
-        style={{ opacity: 0, background: 'transparent', border: 0 }}
-      />
+        </span>
+        <span className="soha-topology-node-title">{item.label}</span>
+        {data.entrySummary && (
+          <span className="soha-topology-node-entry" title={data.entrySummary}>
+            {data.entrySummary}
+          </span>
+        )}
+        <span
+          className="soha-topology-node-subtitle"
+          title={`${item.resource?.namespace || localeText(localeCode, '集群', 'Cluster')} · ${item.resource?.kind || item.type}`}
+        >
+          {item.resource?.namespace || localeText(localeCode, '集群', 'Cluster')} ·{' '}
+          {item.resource?.kind || item.type}
+        </span>
+      </button>
+      <Handle type="source" position={Position.Right} />
     </div>
   )
 }
+const nodeTypes = { topology: TopologyFlowNode }
 
-const TOPOLOGY_NODE_TYPES = {
-  topologyNode: TopologyCanvasNode,
-} as const
-
-function TopologyCanvasInner({
-  edges,
-  fitKey,
+function TopologyCanvas({
   nodes,
-  onSelectNode,
+  edges,
+  onSelect,
+  selected,
 }: {
-  edges: TopologyFlowEdge[]
-  fitKey: string
-  nodes: TopologyFlowNode[]
-  onSelectNode: (nodeID: string | null) => void
+  nodes: TopologyNode[]
+  edges: TopologyEdge[]
+  onSelect: (id: string) => void
+  selected: string
 }) {
-  const { fitView } = useReactFlow()
-
-  useEffect(() => {
-    if (nodes.length === 0) {
-      return
-    }
-
-    const frame = requestAnimationFrame(() => {
-      fitView({ padding: 0.16, duration: 0 })
-    })
-
-    return () => cancelAnimationFrame(frame)
-  }, [fitKey, fitView, nodes.length])
-
+  const { localeCode } = useI18n()
+  const entrySummaries = useMemo(
+    () =>
+      new Map(nodes.map((node) => [node.id, topologyEntrySummary(node, nodes, edges, localeCode)])),
+    [nodes, edges, localeCode],
+  )
+  const shape = JSON.stringify([
+    nodes.map((node) => [node.id, entrySummaries.get(node.id) ? 128 : 112]),
+    edges.map((edge) => [edge.source, edge.target]),
+  ])
+  const positions = useMemo(() => {
+    const [sizes, links] = JSON.parse(shape) as [[string, number][], [string, string][]]
+    const graph = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}))
+    graph.setGraph({ rankdir: 'LR', ranksep: 90, nodesep: 36 })
+    sizes.forEach(([id, height]) => graph.setNode(id, { width: 252, height }))
+    links.forEach(([source, target]) => graph.setEdge(source, target))
+    dagre.layout(graph)
+    return new Map(
+      sizes.map(([id, height]) => {
+        const point = graph.node(id)
+        return [id, { x: point.x - 126, y: point.y - height / 2 }]
+      }),
+    )
+  }, [shape])
+  const path = selected ? connectedPath(new Set([selected]), edges) : undefined
+  const flowNodes: FlowNode[] = nodes.map((item) => ({
+    id: item.id,
+    type: 'topology',
+    position: positions.get(item.id) ?? { x: 0, y: 0 },
+    selected: item.id === selected,
+    data: { item, entrySummary: entrySummaries.get(item.id) ?? '', onSelect },
+    style: { opacity: path && !path.has(item.id) ? 0.4 : 1 },
+  }))
+  const flowEdges: Edge[] = edges.map((edge) => ({
+    id: edge.id,
+    source: edge.source,
+    target: edge.target,
+    label: edgeLabel(edge, localeCode),
+    type: 'smoothstep',
+    animated: false,
+    markerEnd: { type: MarkerType.ArrowClosed },
+    style: {
+      stroke: 'var(--soha-text-tertiary)',
+      opacity: path && (!path.has(edge.source) || !path.has(edge.target)) ? 0.3 : 1,
+      strokeDasharray: edge.resolutionState === 'resolved' ? undefined : '6 4',
+    },
+    labelStyle: { fill: 'var(--soha-text-secondary)', fontSize: 11 },
+    labelBgStyle: { fill: 'var(--soha-bg-surface)' },
+  }))
   return (
-    <div className="soha-topology-canvas">
-      <ReactFlow<TopologyFlowNode, TopologyFlowEdge>
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={TOPOLOGY_NODE_TYPES}
-        fitView
-        elementsSelectable
+    <div
+      className="soha-topology-canvas"
+      aria-label={localeText(
+        localeCode,
+        '配置关系图，可切换关系表使用键盘查看',
+        'Configuration graph. Switch to the relationship table for keyboard access.',
+      )}
+    >
+      <ReactFlow
+        nodes={flowNodes}
+        edges={flowEdges}
+        nodeTypes={nodeTypes}
         nodesDraggable={false}
         nodesConnectable={false}
-        edgesFocusable={false}
-        deleteKeyCode={null}
-        multiSelectionKeyCode={null}
+        fitView
+        minZoom={0.15}
+        maxZoom={1.8}
         onNodesChange={(changes) => {
-          const selected = changes.find((change) => change.type === 'select' && change.selected)
-          if (selected?.type === 'select') onSelectNode(selected.id)
-          else if (changes.some((change) => change.type === 'select' && !change.selected))
-            onSelectNode(null)
+          const selection = changes.find((change) => change.type === 'select' && change.selected)
+          if (selection?.type === 'select') onSelect(selection.id)
+          else if (
+            changes.some(
+              (change) => change.type === 'select' && change.id === selected && !change.selected,
+            )
+          )
+            onSelect('')
         }}
-        proOptions={{ hideAttribution: true }}
-        onPaneClick={() => onSelectNode(null)}
-        onNodeClick={(_, node) => onSelectNode(node.id)}
+        onNodeClick={(_, node) => onSelect(node.id)}
+        onPaneClick={() => onSelect('')}
+        onEdgeClick={(_, edge) => onSelect(edge.target)}
       >
-        <Background gap={20} size={1} />
+        <Background />
         <Controls showInteractive={false} />
       </ReactFlow>
     </div>
   )
 }
 
-function TopologyCanvas({
-  edges,
-  fitKey,
-  nodes,
-  onSelectNode,
-}: {
-  edges: TopologyFlowEdge[]
-  fitKey: string
-  nodes: TopologyFlowNode[]
-  onSelectNode: (nodeID: string | null) => void
-}) {
-  return (
-    <ReactFlowProvider>
-      <TopologyCanvasInner
-        edges={edges}
-        fitKey={fitKey}
-        nodes={nodes}
-        onSelectNode={onSelectNode}
-      />
-    </ReactFlowProvider>
-  )
-}
-
 export function NetworkTopologyRuntimePage() {
-  const { localeCode } = useI18n()
-  const navigate = useNavigate()
+  const { localeCode, t } = useI18n()
   const { clusterId, namespace } = usePlatformScopeStore()
-  const scope = toScopeKey(clusterId, namespace)
   const permissionQuery = usePermissionSnapshot()
-  const permissionSnapshot = readableQueryData(permissionQuery)?.data
-  const canRead = hasPermission(permissionSnapshot, 'platform.network.topology.view')
-  const [searchKeyword, setSearchKeyword] = useState('')
-  const [selectedNodeID, setSelectedNodeID] = useState<string | null>(null)
-  const deferredSearchKeyword = useDeferredValue(searchKeyword.trim().toLowerCase())
-
-  const topologyQuery = useQuery({
-    ...topologyQueries.detail(scope),
+  const snapshot = readableQueryData(permissionQuery)?.data
+  const canRead = hasPermission(snapshot, 'platform.network.topology.view')
+  const principal = useAuthStore((state) => state.user?.userId || '')
+  const permissionSignature = `${(snapshot?.permissionKeys ?? []).slice().sort().join(',')}@${permissionQuery.dataUpdatedAt}`
+  const query = useQuery({
+    ...topologyQueries.detail(toScopeKey(clusterId, namespace), principal, permissionSignature),
     enabled: Boolean(clusterId) && canRead,
   })
-  const topologyData = canRead ? readableQueryData(topologyQuery) : undefined
-
-  const liveTraces = useMemo(
-    () => normalizeBackendTraces(topologyData?.traces),
-    [topologyData?.traces],
-  )
-  const topologySummary = topologyData?.summary
-
-  const hasLiveTopology = liveTraces.length > 0
-
-  const filteredTraces = useMemo(
-    () => filterTraces(liveTraces, deferredSearchKeyword),
-    [deferredSearchKeyword, liveTraces],
-  )
-
-  const topologyGraph = useMemo(() => buildTopologyGraph(filteredTraces), [filteredTraces])
-
-  const flowNodes = useMemo(
-    () =>
-      topologyGraph.nodes.map((node) => ({
-        ...node,
-        selected: node.id === selectedNodeID,
-        ariaRole: 'button',
-        ariaLabel: `${node.data.kind} ${node.data.name}`,
-        data: {
-          ...node.data,
-          subtitle:
-            node.data.kind === 'backend-group'
-              ? formatBackendSubtitle((node.data.terminalNodes as TopologyNode[]) ?? [], localeCode)
-              : node.data.kind === 'empty-backend'
-                ? localeCode === 'zh_CN'
-                  ? 'Service 已解析，但 selector 暂未命中 Pod。'
-                  : 'Service resolved, but selector has not matched any pod yet.'
-                : node.data.subtitle,
-          badge:
-            node.data.kind === 'backend-group'
-              ? localeCode === 'zh_CN'
-                ? '后端集合'
-                : 'Backend group'
-              : node.data.kind === 'empty-backend'
-                ? localeCode === 'zh_CN'
-                  ? '选择器未命中'
-                  : 'Selector not matched'
-                : node.data.badge,
-          name:
-            node.data.kind === 'backend-group'
-              ? localeCode === 'zh_CN'
-                ? `${((node.data.terminalNodes as TopologyNode[]) ?? []).length} 个 Backend Pods`
-                : `${((node.data.terminalNodes as TopologyNode[]) ?? []).length} backend pods`
-              : node.data.kind === 'empty-backend'
-                ? localeCode === 'zh_CN'
-                  ? '未匹配到后端 Pod'
-                  : 'No matching backend pods'
-                : node.data.name,
-        },
-      })),
-    [localeCode, selectedNodeID, topologyGraph.nodes],
-  )
-
-  const flowEdges = useMemo(
-    () =>
-      topologyGraph.edges.map((edge) =>
-        selectedNodeID && (edge.source === selectedNodeID || edge.target === selectedNodeID)
-          ? { ...edge, style: { ...edge.style, stroke: 'var(--soha-primary)', strokeWidth: 2.5 } }
-          : edge,
-      ),
-    [topologyGraph.edges, selectedNodeID],
-  )
-  useEffect(() => setSelectedNodeID(null), [clusterId, namespace])
-  const tableRows = useMemo<TableRow[]>(
-    () =>
-      filteredTraces.map((trace) => ({
-        id: trace.id,
-        entry: trace.entry,
-        route: trace.route,
-        service: trace.service,
-        terminals: trace.terminals,
-        sourceType: trace.sourceType,
-        state: trace.state,
-        notes: trace.notes,
-      })),
-    [filteredTraces],
-  )
-
+  const data = canRead ? readableQueryData(query) : undefined
+  const [params, setParams] = useSearchParams()
+  const loadedScope = useRef('')
+  const currentScope = JSON.stringify([clusterId, namespace || null])
+  const [selected, setSelected] = useState('')
+  const [coverageOpen, setCoverageOpen] = useState(false)
+  const screens = Grid.useBreakpoint()
+  const wide = Boolean(screens.xl)
+  const mode = params.get('view') || (screens.md ? 'graph' : 'table')
+  const provider = params.get('provider') || ''
+  const protocol = params.get('protocol') || ''
+  const keyword = useDeferredValue(params.get('q') || '')
+  const issues = params.get('issues') === '1'
+  const focus = params.get('focus') || ''
   useEffect(() => {
-    if (selectedNodeID && !topologyGraph.nodeMap.has(selectedNodeID)) {
-      setSelectedNodeID(null)
-    }
-  }, [selectedNodeID, topologyGraph.nodeMap])
-
-  const liveErrors = topologyData?.warnings ?? []
-  const liveLoading = clusterId && topologyQuery.isLoading
-  const topologyViewState = !clusterId
-    ? 'cluster-required'
-    : liveLoading
-      ? 'loading'
-      : hasLiveTopology
-        ? 'live'
-        : 'unavailable'
-  const viewTag =
-    topologyViewState === 'live'
-      ? localeCode === 'zh_CN'
-        ? '实时拓扑'
-        : 'Live topology'
-      : topologyViewState === 'loading'
-        ? localeCode === 'zh_CN'
-          ? '加载中'
-          : 'Loading'
-        : topologyViewState === 'cluster-required'
-          ? localeCode === 'zh_CN'
-            ? '待选集群'
-            : 'Select cluster'
-          : localeCode === 'zh_CN'
-            ? '实时不可用'
-            : 'Live unavailable'
-  const viewTagColor =
-    topologyViewState === 'live'
-      ? 'green'
-      : topologyViewState === 'loading'
-        ? 'blue'
-        : topologyViewState === 'cluster-required'
-          ? 'default'
-          : 'orange'
-
-  const emptyStateTitle =
-    topologyViewState === 'loading'
-      ? localeCode === 'zh_CN'
-        ? '实时拓扑加载中'
-        : 'Loading live topology'
-      : topologyViewState === 'cluster-required'
-        ? localeCode === 'zh_CN'
-          ? '选择集群后查看拓扑'
-          : 'Select a cluster to view topology'
-        : hasLiveTopology
-          ? localeCode === 'zh_CN'
-            ? '当前筛选条件下没有可展示的链路'
-            : 'No visible trace matches the current filter'
-          : localeCode === 'zh_CN'
-            ? '当前 scope 下没有实时入口拓扑'
-            : 'No live entry topology in the current scope'
-  const emptyStateDescription =
-    topologyViewState === 'loading'
-      ? localeCode === 'zh_CN'
-        ? '页面只展示实时链路，正在等待网络资源返回。'
-        : 'The page renders live traces only and is waiting for network resources to return.'
-      : topologyViewState === 'cluster-required'
-        ? localeCode === 'zh_CN'
-          ? '选择集群后，这里会展示 Kong、APISIX、Traefik、原生 Ingress 和 Gateway 入口路径。'
-          : 'After a cluster is selected, this view will render Kong, APISIX, Traefik, native Ingress, and Gateway entry paths.'
-        : hasLiveTopology
-          ? localeCode === 'zh_CN'
-            ? '调整搜索关键词，或清空筛选后重试。'
-            : 'Adjust the search keyword or clear the filter and try again.'
-          : localeCode === 'zh_CN'
-            ? '当前没有检测到任何可见的 Ingress 或 Gateway 入口链路，页面不会再渲染演示数据。'
-            : 'No visible ingress or gateway entry path was detected, and the page no longer renders demo data in this state.'
-
-  const selectedTopologyNode = selectedNodeID
-    ? (topologyGraph.nodeMap.get(selectedNodeID) ?? null)
-    : null
-  const selectionDetail = useMemo(
-    () => buildSelectionDetail(selectedNodeID, selectedTopologyNode, filteredTraces, localeCode),
-    [filteredTraces, localeCode, selectedNodeID, selectedTopologyNode],
+    if (!query.isSuccess || !data) return
+    const previousScope = loadedScope.current
+    loadedScope.current = currentScope
+    if (
+      !focus ||
+      !previousScope ||
+      previousScope === currentScope ||
+      data.nodes?.some((node) => node.id === focus)
+    )
+      return
+    setParams(
+      (previous) => {
+        const next = new URLSearchParams(previous)
+        next.delete('focus')
+        return next
+      },
+      { replace: true },
+    )
+  }, [data, focus, query.isSuccess, currentScope, setParams])
+  const update = (key: string, value: string) =>
+    setParams(
+      (previous) => {
+        const next = new URLSearchParams(previous)
+        if (value) next.set(key, value)
+        else next.delete(key)
+        return next
+      },
+      { replace: true },
+    )
+  const nodes = data?.nodes ?? []
+  const edges = data?.edges ?? []
+  const filtered = useMemo(
+    () => filterTopology(nodes, edges, { provider, protocol, keyword, issues, focus }),
+    [nodes, edges, provider, protocol, keyword, issues, focus],
   )
-
-  const selectedServicePath =
-    selectedTopologyNode?.resourceName &&
-    selectedTopologyNode.namespace &&
-    ['service', 'backend-group', 'empty-backend'].includes(selectedTopologyNode.kind)
-      ? buildServiceDetailPath(
-          selectedTopologyNode.resourceName,
-          namespace,
-          selectedTopologyNode.namespace,
-        )
-      : null
-
-  const columns: TableColumnsType<TableRow> = [
+  const unassociatedNodes = useMemo(() => {
+    const linkedIDs = new Set(filtered.edges.flatMap((edge) => [edge.source, edge.target]))
+    return filtered.nodes.filter((node) => !linkedIDs.has(node.id))
+  }, [filtered.nodes, filtered.edges])
+  const showPods = params.get('pods') === '1' || Boolean(keyword.trim())
+  const graphNodes = showPods
+    ? filtered.nodes
+    : filtered.nodes.filter((node) => node.type !== 'pod')
+  const graphIDs = new Set(graphNodes.map((node) => node.id))
+  const graphEdges = filtered.edges.filter(
+    (edge) => graphIDs.has(edge.source) && graphIDs.has(edge.target),
+  )
+  const selectedNode = nodes.find((node) => node.id === selected)
+  const failures = (data?.coverage ?? []).filter((item) => item.state !== 'available')
+  const ready = clusterId && canRead && !query.isLoading
+  const permissions: Record<string, string> = {
+    Service: 'platform.network.services.view',
+    Pod: 'platform.pods.view',
+    Ingress: 'platform.network.ingresses.view',
+    HTTPRoute: 'platform.network.http-routes.view',
+    GRPCRoute: 'platform.network.grpc-routes.view',
+    Gateway: 'platform.network.gateways.view',
+    EndpointSlice: 'platform.network.endpoint-slices.view',
+  }
+  const evidence = selectedNode && (
+    <NodeEvidence
+      key={selectedNode.id}
+      node={selectedNode}
+      edges={edges}
+      nodes={nodes}
+      clusterId={clusterId || ''}
+      canOpen={hasPermission(snapshot, permissions[selectedNode.resource?.kind || ''] || '')}
+      canBrowseCRD={hasPermission(snapshot, 'platform.extensions.view')}
+      canEdit={hasPermission(
+        snapshot,
+        (permissions[selectedNode.resource?.kind || ''] || '').replace(/\.view$/, '.update'),
+      )}
+      onFocus={() => update('focus', selectedNode.id)}
+      onSelect={setSelected}
+    />
+  )
+  const columns: TableColumnsType<TopologyEdge> = [
     {
-      title: localeCode === 'zh_CN' ? '入口' : 'Entry',
-      dataIndex: 'entry',
-      render: (_: TopologyNode, record: TableRow) => (
-        <div className="flex flex-col gap-1">
-          <Text strong>{record.entry.name}</Text>
-          <Text type="secondary" className="text-xs">
-            {record.entry.badge || record.entry.namespace || '-'}
-          </Text>
-        </div>
+      title: localeText(localeCode, '来源', 'Source'),
+      key: 'source',
+      render: (_, edge) => (
+        <Button type="link" onClick={() => setSelected(edge.source)}>
+          {nodes.find((node) => node.id === edge.source)?.label ||
+            localeText(localeCode, '不可见', 'Not visible')}
+        </Button>
       ),
     },
     {
-      title: localeCode === 'zh_CN' ? '路由' : 'Route',
-      dataIndex: 'route',
-      render: (_: TopologyNode, record: TableRow) => (
-        <div className="flex flex-col gap-1">
-          <Text strong>{record.route.name}</Text>
-          <Space wrap>
-            {record.route.badge ? (
-              <Tag color={LEGEND_TAG_COLORS[record.route.kind as Exclude<TopologyNodeKind, 'pod'>]}>
-                {record.route.badge}
-              </Tag>
-            ) : null}
-            {record.route.subtitle ? (
-              <Text type="secondary" className="text-xs">
-                {record.route.subtitle}
-              </Text>
-            ) : null}
-          </Space>
-        </div>
+      title: localeText(localeCode, '目标', 'Target'),
+      key: 'target',
+      render: (_, edge) => (
+        <Button type="link" onClick={() => setSelected(edge.target)}>
+          {nodes.find((node) => node.id === edge.target)?.label ||
+            localeText(localeCode, '不可见', 'Not visible')}
+        </Button>
       ),
     },
     {
-      title: 'Service',
-      dataIndex: 'service',
-      render: (_: TopologyNode | undefined, record: TableRow) => {
-        if (!record.service) {
-          return <Text type="secondary">-</Text>
-        }
-        const canNavigate =
-          record.service.kind === 'service' &&
-          record.service.resourceName &&
-          record.service.namespace
-        if (!canNavigate) {
-          return (
-            <div className="flex flex-col gap-1">
-              <Text>{record.service.name}</Text>
-              {record.service.badge ? (
-                <Text type="secondary" className="text-xs">
-                  {record.service.badge}
-                </Text>
-              ) : null}
-            </div>
-          )
-        }
-        return (
-          <Button
-            type="text"
-            onClick={() =>
-              navigate(
-                buildServiceDetailPath(
-                  record.service!.resourceName!,
-                  namespace,
-                  record.service!.namespace!,
-                ),
-              )
-            }
-          >
-            {record.service.name}
-          </Button>
-        )
-      },
+      title: localeText(
+        localeCode,
+        '关系 / 协议 / 端口 / 权重',
+        'Relationship / Protocol / Port / Weight',
+      ),
+      key: 'relation',
+      render: (_, edge) => edgeLabel(edge, localeCode),
     },
     {
-      title: localeCode === 'zh_CN' ? 'Backend' : 'Backend',
-      dataIndex: 'terminals',
-      render: (_: TopologyNode[], record: TableRow) => {
-        if (record.terminals.length === 0) {
-          return <Text type="secondary">-</Text>
-        }
-
-        const visibleItems = record.terminals.slice(0, 3)
-        const remainCount = record.terminals.length - visibleItems.length
-
-        return (
-          <Space wrap>
-            {visibleItems.map((item) =>
-              item.resourceName && item.namespace ? (
-                <Button
-                  key={item.id}
-                  variant="outlined"
-                  size="small"
-                  onClick={() =>
-                    navigate(buildPodDetailPath(item.resourceName!, namespace, item.namespace!))
-                  }
-                >
-                  {item.name}
-                </Button>
-              ) : (
-                <Tag key={item.id}>{item.name}</Tag>
-              ),
-            )}
-            {remainCount > 0 ? <Tag color="default">+{remainCount}</Tag> : null}
-          </Space>
-        )
-      },
-    },
-    {
-      title: localeCode === 'zh_CN' ? '状态' : 'State',
-      dataIndex: 'state',
-      width: 110,
-      render: (_: TopologyDataState, record: TableRow) =>
-        renderTraceState(record.state, localeCode),
-    },
-    {
-      title: localeCode === 'zh_CN' ? '说明' : 'Notes',
-      dataIndex: 'notes',
-      render: (value: string) => <Text type="secondary">{value}</Text>,
+      title: localeText(localeCode, '解析状态', 'Resolution'),
+      dataIndex: 'resolutionState',
+      render: (value: string) => <Resolution value={value} />,
     },
   ]
-
   return (
-    <div className="soha-page">
+    <div className="soha-page soha-topology-page">
       <ReadFeedback
-        label={localeCode === 'zh_CN' ? '网络拓扑' : 'Network topology'}
-        query={topologyQuery}
+        label={localeText(localeCode, '网络拓扑', 'Network topology')}
+        query={query}
         canRead={canRead && Boolean(clusterId)}
       />
-      {!canRead && !permissionQuery.isLoading ? (
+      {!clusterId ? (
+        <ManagementState
+          kind="select-scope"
+          title={localeText(
+            localeCode,
+            '选择集群查看网络拓扑',
+            'Select a cluster to view network topology',
+          )}
+        />
+      ) : !canRead && !permissionQuery.isLoading ? (
         <ManagementState
           kind="error"
-          title={
-            localeCode === 'zh_CN' ? '没有网络拓扑查看权限' : 'Network topology access unavailable'
-          }
+          title={localeText(
+            localeCode,
+            '没有网络拓扑查看权限',
+            'Network topology permission is required',
+          )}
         />
       ) : null}
-      <StatGrid
-        items={[
-          {
-            label: localeCode === 'zh_CN' ? '入口节点' : 'Entry nodes',
-            value: topologyData ? (topologySummary?.entryCount ?? topologyGraph.entryCount) : '—',
-          },
-          {
-            label: localeCode === 'zh_CN' ? '路由节点' : 'Route nodes',
-            value: topologyData ? (topologySummary?.routeCount ?? topologyGraph.routeCount) : '—',
-          },
-          {
-            label: localeCode === 'zh_CN' ? 'Service 节点' : 'Service nodes',
-            value: !topologyData
-              ? '—'
-              : topologySummary
-                ? topologySummary.serviceCount + topologySummary.missingServiceCount
-                : topologyGraph.serviceCount,
-          },
-          {
-            label: localeCode === 'zh_CN' ? '后端 Pods' : 'Backend pods',
-            value: topologyData
-              ? (topologySummary?.backendPodCount ?? topologyGraph.podCount)
-              : '—',
-          },
-        ]}
-      />
-
-      <Card className="soha-detail-card">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
-            <Input
-              value={searchKeyword}
-              onChange={(event) => setSearchKeyword(event.target.value)}
-              placeholder={
-                localeCode === 'zh_CN'
-                  ? '搜索入口 / 路由 / Service / Pod / 说明'
-                  : 'Search entry / route / service / pod / note'
-              }
-              style={{ width: 340, maxWidth: '100%' }}
-              className="soha-platform-compact-field"
-            />
+      <Card className="soha-detail-card" styles={{ body: { padding: 16 } }}>
+        <div className="soha-topology-toolbar">
+          <div>
+            <Typography.Title level={4} style={{ margin: 0 }}>
+              {localeText(localeCode, '网络拓扑', 'Network topology')}
+            </Typography.Title>
+            <Text type="secondary">
+              {localeText(
+                localeCode,
+                '配置关系与控制器观测 · 已加载',
+                'Configuration and controller observations · Loaded ',
+              )}
+              {nodes.length} {localeText(localeCode, '节点 /', ' nodes / ')}
+              {edges.length} {localeText(localeCode, '关系', ' relationships')}
+            </Text>
           </div>
           <Space wrap>
+            <Button onClick={() => setCoverageOpen(true)} disabled={!data}>
+              {localeText(localeCode, '数据覆盖', 'Data coverage')}
+              {failures.length
+                ? ` · ${failures.length} ${localeText(localeCode, '项需关注', 'need attention')}`
+                : ''}
+            </Button>
             <ManagementRefreshButton
-              aria-label="刷新网络拓扑"
-              tooltip="刷新网络拓扑"
-              disabled={!canRead || !clusterId}
-              loading={topologyQuery.isFetching}
-              onClick={() => void topologyQuery.refetch()}
+              aria-label={localeText(localeCode, '刷新网络拓扑', 'Refresh network topology')}
+              tooltip={localeText(localeCode, '刷新网络拓扑', 'Refresh network topology')}
+              disabled={!clusterId || !canRead}
+              loading={query.isFetching}
+              onClick={() => void query.refetch()}
             />
-            <Tag color={viewTagColor}>{viewTag}</Tag>
-            {liveErrors.length > 0 ? (
-              <Tag color="red">
-                {localeCode === 'zh_CN' ? '实时数据部分失败' : 'Partial live data failure'}
-              </Tag>
-            ) : null}
-            <Tag color={LEGEND_TAG_COLORS.entry}>{localeCode === 'zh_CN' ? '入口' : 'Entry'}</Tag>
-            <Tag color={LEGEND_TAG_COLORS['ingress-route']}>Ingress</Tag>
-            <Tag color={LEGEND_TAG_COLORS['http-route']}>HTTPRoute</Tag>
-            <Tag color={LEGEND_TAG_COLORS['pending-route']}>
-              {localeCode === 'zh_CN' ? '待接路由' : 'Pending route'}
-            </Tag>
-            <Tag color={LEGEND_TAG_COLORS.service}>Service</Tag>
-            <Tag color={LEGEND_TAG_COLORS['backend-group']}>
-              {localeCode === 'zh_CN' ? '后端集合' : 'Backend group'}
-            </Tag>
-            <Tag color={LEGEND_TAG_COLORS['empty-backend']}>
-              {localeCode === 'zh_CN' ? '无匹配 Pod' : 'No matching pod'}
-            </Tag>
-            <Tag color={LEGEND_TAG_COLORS['missing-service']}>
-              {localeCode === 'zh_CN' ? '缺失 Service' : 'Missing service'}
-            </Tag>
           </Space>
         </div>
-        {liveErrors.length > 0 ? (
-          <div style={{ marginTop: 12 }}>
-            <Text style={{ color: 'var(--soha-danger)' }}>
-              {localeCode === 'zh_CN' ? '实时数据错误：' : 'Live data error: '}
-              {liveErrors.join(' / ')}
-            </Text>
-          </div>
-        ) : null}
-      </Card>
-
-      <Card
-        className="soha-detail-card"
-        title={
-          localeCode === 'zh_CN'
-            ? '入口 -> 路由 -> Service -> Backend 拓扑'
-            : 'Entry -> Route -> Service -> Backend topology'
-        }
-        extra={
-          <Space wrap>
-            <Text type="secondary" className="text-xs">
-              {localeCode === 'zh_CN'
-                ? `${filteredTraces.length} 条链路`
-                : `${filteredTraces.length} traces`}
-            </Text>
-            {selectedTopologyNode ? (
-              <Tag
-                color={
-                  LEGEND_TAG_COLORS[
-                    selectedTopologyNode.kind as Exclude<TopologyNodeKind, 'pod'>
-                  ] ?? 'blue'
-                }
-              >
-                {selectedTopologyNode.name}
-              </Tag>
-            ) : null}
+        <div className="soha-topology-filters">
+          <Input
+            aria-label={localeText(localeCode, '搜索已加载节点', 'Search loaded nodes')}
+            placeholder={localeText(
+              localeCode,
+              '搜索已加载的资源、命名空间或规则',
+              'Search loaded resources, namespaces or rules',
+            )}
+            allowClear
+            value={params.get('q') || ''}
+            onChange={(event) => update('q', event.target.value)}
+          />
+          <Select
+            aria-label="Provider"
+            value={provider}
+            onChange={(value) => update('provider', value)}
+            options={[
+              { value: '', label: localeText(localeCode, '全部 Provider', 'All providers') },
+              ...['kubernetes', 'gateway', 'traefik', 'apisix'].map((value) => ({
+                value,
+                label: value,
+              })),
+            ]}
+          />
+          <Select
+            aria-label={localeText(localeCode, '协议', 'Protocol')}
+            value={protocol}
+            onChange={(value) => update('protocol', value)}
+            options={[
+              { value: '', label: localeText(localeCode, '全部协议', 'All protocols') },
+              ...['HTTP', 'GRPC', 'TCP', 'UDP', 'TLS'].map((value) => ({ value, label: value })),
+            ]}
+          />
+          <Space>
+            <Switch
+              checked={issues}
+              onChange={(value) => update('issues', value ? '1' : '')}
+              aria-label={localeText(localeCode, '只看未解析节点', 'Show unresolved nodes')}
+            />
+            <Text>{localeText(localeCode, '未解析', 'Unresolved')}</Text>
           </Space>
-        }
-        styles={{ body: { padding: 12 } }}
-      >
-        {flowNodes.length > 0 ? (
-          <>
-            <TopologyCanvas
-              nodes={flowNodes}
-              edges={flowEdges}
-              fitKey={topologyGraph.fitKey}
-              onSelectNode={setSelectedNodeID}
-            />
-            <div className="soha-topology-selection">
-              {selectedTopologyNode && selectionDetail ? (
-                <>
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="flex min-w-[240px] flex-1 flex-col gap-1">
-                      <Text strong>{selectedTopologyNode.name}</Text>
-                      <Text type="secondary" className="text-xs">
-                        {selectedTopologyNode.subtitle || '-'}
-                      </Text>
-                    </div>
-                    <Space wrap>
-                      <Tag
-                        color={
-                          LEGEND_TAG_COLORS[
-                            selectedTopologyNode.kind as Exclude<TopologyNodeKind, 'pod'>
-                          ] ?? 'blue'
-                        }
-                      >
-                        {getTopologyKindLabel(selectedTopologyNode.kind, localeCode)}
-                      </Tag>
-                      {renderTraceState(selectedTopologyNode.state, localeCode)}
-                    </Space>
-                  </div>
-
-                  <Text type="secondary">{selectionDetail.summary}</Text>
-
-                  {selectedServicePath ? (
-                    <Space wrap>
-                      <Button
-                        type="primary"
-                        variant="outlined"
-                        size="small"
-                        onClick={() => navigate(selectedServicePath)}
-                      >
-                        {localeCode === 'zh_CN' ? '查看 Service 详情' : 'Open Service detail'}
-                      </Button>
-                    </Space>
-                  ) : null}
-
-                  {selectionDetail.relatedEntries.length > 0 ? (
-                    <div className="flex flex-col gap-2">
-                      <Text strong className="text-xs">
-                        {localeCode === 'zh_CN' ? '相关入口' : 'Related entries'}
-                      </Text>
-                      <Space wrap>
-                        {selectionDetail.relatedEntries.map((item) => (
-                          <Tag key={item.id}>{item.name}</Tag>
-                        ))}
-                      </Space>
-                    </div>
-                  ) : null}
-
-                  {selectionDetail.relatedRoutes.length > 0 ? (
-                    <div className="flex flex-col gap-2">
-                      <Text strong className="text-xs">
-                        {localeCode === 'zh_CN' ? '相关路由' : 'Related routes'}
-                      </Text>
-                      <Space wrap>
-                        {selectionDetail.relatedRoutes.map((item) => (
-                          <Tag
-                            key={item.id}
-                            color={
-                              LEGEND_TAG_COLORS[item.kind as Exclude<TopologyNodeKind, 'pod'>] ??
-                              'blue'
-                            }
-                          >
-                            {item.name}
-                          </Tag>
-                        ))}
-                      </Space>
-                    </div>
-                  ) : null}
-
-                  {selectionDetail.relatedServices.length > 0 ? (
-                    <div className="flex flex-col gap-2">
-                      <Text strong className="text-xs">
-                        {localeCode === 'zh_CN' ? '相关 Service' : 'Related services'}
-                      </Text>
-                      <Space wrap>
-                        {selectionDetail.relatedServices.map((item) =>
-                          item.kind === 'service' && item.resourceName && item.namespace ? (
-                            <Button
-                              key={item.id}
-                              variant="outlined"
-                              size="small"
-                              onClick={() =>
-                                navigate(
-                                  buildServiceDetailPath(
-                                    item.resourceName!,
-                                    namespace,
-                                    item.namespace!,
-                                  ),
-                                )
-                              }
-                            >
-                              {item.name}
-                            </Button>
-                          ) : (
-                            <Tag key={item.id}>{item.name}</Tag>
-                          ),
-                        )}
-                      </Space>
-                    </div>
-                  ) : null}
-
-                  {selectionDetail.terminalNodes.length > 0 ? (
-                    <div className="flex flex-col gap-2">
-                      <Text strong className="text-xs">
-                        {localeCode === 'zh_CN' ? '后端 Pods' : 'Backend pods'}
-                      </Text>
-                      <Space wrap>
-                        {selectionDetail.terminalNodes.slice(0, 6).map((item) =>
-                          item.resourceName && item.namespace ? (
-                            <Button
-                              key={item.id}
-                              variant="outlined"
-                              size="small"
-                              onClick={() =>
-                                navigate(
-                                  buildPodDetailPath(
-                                    item.resourceName!,
-                                    namespace,
-                                    item.namespace!,
-                                  ),
-                                )
-                              }
-                            >
-                              {item.name}
-                            </Button>
-                          ) : (
-                            <Tag key={item.id}>{item.name}</Tag>
-                          ),
-                        )}
-                        {selectionDetail.terminalNodes.length > 6 ? (
-                          <Tag color="default">{`+${selectionDetail.terminalNodes.length - 6}`}</Tag>
-                        ) : null}
-                      </Space>
-                    </div>
-                  ) : null}
-
-                  {selectionDetail.notes.length > 0 ? (
-                    <div className="soha-topology-note-list">
-                      {selectionDetail.notes.slice(0, 3).map((item) => (
-                        <Text key={item} type="secondary" className="text-xs">
-                          {item}
-                        </Text>
-                      ))}
-                    </div>
-                  ) : null}
-                </>
-              ) : (
-                <ManagementState
-                  bordered={false}
-                  compact
-                  kind="select-scope"
-                  title={localeCode === 'zh_CN' ? '请选择拓扑节点' : 'Select a topology node'}
-                  description={
-                    localeCode === 'zh_CN'
-                      ? '点击上方拓扑节点，查看它的上下游关系和跳转动作'
-                      : 'Click a topology node above to inspect its upstream and downstream relations'
-                  }
-                />
-              )}
-            </div>
-          </>
-        ) : (
-          <div className="flex min-h-[320px] items-center justify-center">
-            <ManagementState
-              bordered={false}
-              compact
-              title={emptyStateTitle}
-              description={emptyStateDescription}
-            />
-          </div>
+          {mode === 'graph' && (
+            <Space>
+              <Switch
+                aria-label={localeText(localeCode, '展开 Pod 节点', 'Expand Pod nodes')}
+                checked={showPods}
+                onChange={(value) => update('pods', value ? '1' : '')}
+              />
+              <Text>{localeText(localeCode, '展开 Pod', 'Expand Pods')}</Text>
+            </Space>
+          )}
+          <Segmented
+            aria-label={localeText(localeCode, '拓扑显示方式', 'Topology display')}
+            value={mode}
+            options={[
+              { label: localeText(localeCode, '关系图', 'Graph'), value: 'graph' },
+              { label: localeText(localeCode, '关系表', 'Table'), value: 'table' },
+            ]}
+            onChange={(value) => update('view', String(value))}
+          />
+        </div>
+        {focus && (
+          <Space>
+            <Tag closable onClose={() => update('focus', '')}>
+              {localeText(localeCode, '已聚焦路径', 'Focused path')}
+            </Tag>
+            <Text type="secondary">
+              {nodes.find((node) => node.id === focus)?.label ||
+                localeText(
+                  localeCode,
+                  '所选节点已不在当前快照中',
+                  'The selected node is no longer in this snapshot',
+                )}
+            </Text>
+          </Space>
+        )}
+        {data && (!data.graphVersion || data.truncated || failures.length > 0) && (
+          <Alert
+            type="warning"
+            showIcon
+            title={
+              !data.graphVersion
+                ? localeText(
+                    localeCode,
+                    '旧版 Agent 仅提供资源摘要，请升级以查看规则级拓扑',
+                    'This older Agent only provides summaries. Upgrade for rule-level topology.',
+                  )
+                : data.truncated
+                  ? localeText(
+                      localeCode,
+                      '当前结果已达到预算，请缩小命名空间范围',
+                      'The result reached its budget. Narrow the namespace scope.',
+                    )
+                  : localeText(
+                      localeCode,
+                      '部分来源不可读取，请查看数据覆盖',
+                      'Some sources could not be read. Check data coverage.',
+                    )
+            }
+            description={localeText(
+              localeCode,
+              '计数仅包含当前已加载内容；未观测到的引用不会判定为不存在。',
+              'Counts cover loaded content only. Unobserved references are not treated as absent.',
+            )}
+          />
+        )}
+        {data && (
+          <Text type="secondary" className="soha-topology-time">
+            {localeText(localeCode, '生成于', 'Generated ')}
+            {formatDateTime(data.generatedAt)}{' '}
+            {localeText(localeCode, '· 来源采样', ' · Source observed ')}
+            {data.observedAt
+              ? formatDateTime(data.observedAt)
+              : localeText(localeCode, '未提供', 'Unavailable')}{' '}
+            {localeText(
+              localeCode,
+              '· 图中关系不表示实时流量',
+              ' · Relationships do not represent live traffic',
+            )}
+          </Text>
         )}
       </Card>
-
-      <Card
-        className="soha-detail-card"
-        title={localeCode === 'zh_CN' ? '网络拓扑明细' : 'Network topology detail'}
-        extra={
-          <Text type="secondary" className="text-xs">
-            {hasLiveTopology
-              ? localeCode === 'zh_CN'
-                ? '图上做总览收敛，路由和 Pod 明细继续在这里展开'
-                : 'The graph stays collapsed for overview, while route and pod details remain here'
-              : topologyViewState === 'loading'
-                ? localeCode === 'zh_CN'
-                  ? '等待实时资源返回后再展示明细'
-                  : 'Details appear after the live resources finish loading'
-                : topologyViewState === 'cluster-required'
-                  ? localeCode === 'zh_CN'
-                    ? '选择集群后再查看实时入口链路明细'
-                    : 'Select a cluster to inspect live entry-path details'
-                  : localeCode === 'zh_CN'
-                    ? '当前没有可展示的实时入口链路明细'
-                    : 'There are no live entry-path details to show in the current scope'}
-          </Text>
-        }
+      <div className={`soha-topology-workspace ${wide && selectedNode ? 'has-inspector' : ''}`}>
+        <Card className="soha-detail-card" styles={{ body: { padding: 12 } }}>
+          {queryAccessDenied(query) ? (
+            <ManagementState
+              kind="error"
+              title={localeText(
+                localeCode,
+                '当前范围的拓扑读取被拒绝',
+                'Topology access was denied for this scope',
+              )}
+            />
+          ) : query.isError && !data ? (
+            <ManagementState
+              kind="error"
+              title={localeText(
+                localeCode,
+                '拓扑读取失败，请查看请求反馈后重试',
+                'Topology read failed. Check request feedback and retry.',
+              )}
+            />
+          ) : ready && filtered.nodes.length === 0 ? (
+            <Empty
+              description={
+                data?.graphVersion
+                  ? localeText(
+                      localeCode,
+                      '当前筛选范围没有已加载节点',
+                      'No loaded nodes match these filters',
+                    )
+                  : localeText(localeCode, '没有规则级拓扑数据', 'No rule-level topology data')
+              }
+            />
+          ) : mode === 'graph' ? (
+            <TopologyCanvas
+              nodes={graphNodes}
+              edges={graphEdges}
+              onSelect={setSelected}
+              selected={selected}
+            />
+          ) : (
+            <AdminTable
+              rowKey="id"
+              columns={columns}
+              dataSource={filtered.edges}
+              enableColumnSelection={false}
+              pageSize={20}
+            />
+          )}
+          {mode === 'table' && unassociatedNodes.length > 0 && (
+            <details className="soha-topology-isolated" key={`${clusterId}:${namespace}`}>
+              <summary>
+                {localeText(
+                  localeCode,
+                  `未关联资源（${unassociatedNodes.length}）`,
+                  `Unassociated resources (${unassociatedNodes.length})`,
+                )}
+              </summary>
+              <div className="soha-topology-isolated-list">
+                {unassociatedNodes.map((node) => (
+                  <Button key={node.id} size="small" onClick={() => setSelected(node.id)}>
+                    {node.label}
+                  </Button>
+                ))}
+              </div>
+            </details>
+          )}
+        </Card>
+        {wide && selectedNode && (
+          <Card
+            className="soha-detail-card"
+            title={localeText(localeCode, '关系证据', 'Relationship evidence')}
+            extra={
+              <Button type="text" onClick={() => setSelected('')}>
+                {localeText(localeCode, '关闭', 'Close')}
+              </Button>
+            }
+          >
+            {evidence}
+          </Card>
+        )}
+      </div>
+      <Drawer
+        title={localeText(localeCode, '关系证据', 'Relationship evidence')}
+        open={!wide && Boolean(selectedNode)}
+        size="min(400px, 100vw)"
+        onClose={() => setSelected('')}
       >
-        <AdminTable
-          shellClassName="soha-management-table-shell"
-          columns={columns}
-          dataSource={tableRows}
-          rowKey="id"
-          pageSize={8}
-          enableColumnSelection={false}
-        />
-      </Card>
+        {evidence}
+      </Drawer>
+      <Drawer
+        title={localeText(localeCode, '数据覆盖', 'Data coverage')}
+        open={coverageOpen}
+        onClose={() => setCoverageOpen(false)}
+        size="min(500px, 100vw)"
+      >
+        <Text type="secondary">
+          {localeText(
+            localeCode,
+            '读取权限、API 安装和数据预算分别影响覆盖范围。插件读取需要 Agent 动作、已保存的自定义资源授权及 Kubernetes RBAC。',
+            'Read permissions, installed APIs and data budgets determine coverage. Provider reads require the Agent action, saved custom-resource grants and Kubernetes RBAC.',
+          )}
+        </Text>
+        <Typography.Paragraph style={{ marginTop: 12 }}>
+          Traefik：<Text code>traefik.io</Text>{' '}
+          {localeText(
+            localeCode,
+            '的 ingressroutes、ingressroutetcps、ingressrouteudps、traefikservices、middlewares、middlewaretcps。APISIX：',
+            ' resources: ingressroutes, ingressroutetcps, ingressrouteudps, traefikservices, middlewares, middlewaretcps. APISIX: ',
+          )}
+          <Text code>apisix.apache.org</Text>{' '}
+          {localeText(
+            localeCode,
+            '的 apisixroutes、apisixupstreams、apisixtls。拓扑所需最小资源动作为 list，Agent 还需',
+            ' resources: apisixroutes, apisixupstreams, apisixtls. The minimum resource verb is list; Agent also requires ',
+          )}{' '}
+          <Text code>platform.custom_resources.list</Text>
+          {localeText(
+            localeCode,
+            '。先在集群保存指定 namespace 的授权，再审查并应用生成的 RBAC；保存配置不会自动扩大运行中 Agent 权限。',
+            '. Save the required namespace grants in cluster settings, then review and apply generated RBAC. Saving settings does not expand the running Agent permissions.',
+          )}
+        </Typography.Paragraph>
+        {(data?.coverage ?? []).map((item, index) => (
+          <div
+            className="soha-topology-coverage"
+            key={`${item.sourceId}:${item.namespace}:${index}`}
+          >
+            <Space wrap>
+              <Text strong>{item.sourceId}</Text>
+              <StatusTag
+                value={item.state === 'available' ? 'healthy' : 'warning'}
+                label={t(
+                  `network.topology.coverage.${item.state}`,
+                  coverageLabels[item.state] || item.state,
+                )}
+              />
+            </Space>
+            <Text>
+              {item.namespace ||
+                localeText(localeCode, '查询范围全部命名空间', 'All namespaces in scope')}
+            </Text>
+            <Text type="secondary">
+              {item.reasonCode || localeText(localeCode, '已完成读取', 'Read completed')}
+              {item.truncated ? localeText(localeCode, '· 已截断', ' · Truncated') : ''}
+            </Text>
+            <Text type="secondary">
+              {item.observedAt || item.checkedAt
+                ? formatDateTime(item.observedAt || item.checkedAt)
+                : localeText(localeCode, '采样时间未知', 'Observation time unknown')}
+            </Text>
+          </div>
+        ))}
+      </Drawer>
     </div>
   )
 }

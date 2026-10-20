@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
-import Editor, { DiffEditor, useMonaco } from '@monaco-editor/react'
+import Editor, { DiffEditor, loader, useMonaco } from '@monaco-editor/react'
 import type * as Monaco from 'monaco-editor'
 import {
   ArrowDownOutlined,
@@ -46,6 +46,11 @@ function ensureMonacoWorkers() {
       }
     },
   }
+}
+
+if (typeof window !== 'undefined') {
+  ensureMonacoWorkers()
+  loader.config({ monaco: await import('monaco-editor') })
 }
 
 export function K8sYamlEditor({
@@ -182,8 +187,26 @@ export function K8sYamlEditor({
         },
       ],
     }
-    if (!yamlHandleRef.current) yamlHandleRef.current = configureMonacoYaml(monaco, options)
-    else yamlHandleRef.current.update(options)
+    if (!yamlHandleRef.current) {
+      // monaco-yaml uses the legacy worker options supported by Monaco's top-level factory.
+      yamlHandleRef.current = configureMonacoYaml(
+        {
+          ...monaco,
+          editor: {
+            ...monaco.editor,
+            createWebWorker: <T extends object>(
+              workerOptions:
+                | Parameters<typeof monaco.createWebWorker>[0]
+                | Monaco.editor.IInternalWebWorkerOptions,
+            ) =>
+              'worker' in workerOptions
+                ? monaco.editor.createWebWorker<T>(workerOptions)
+                : monaco.createWebWorker<T>(workerOptions),
+          },
+        },
+        options,
+      )
+    } else yamlHandleRef.current.update(options)
   }, [monaco])
 
   useEffect(() => {

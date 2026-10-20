@@ -1,116 +1,199 @@
-/* Styles moved from web/src/styles/globals.css; keep scoped to this component or feature owner. */
-
+.soha-topology-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.soha-topology-filters {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 18px 0 12px;
+}
+.soha-topology-filters > .ant-input-affix-wrapper {
+  flex: 1;
+  min-width: 200px;
+  max-width: 420px;
+}
+.soha-topology-filters > .ant-select {
+  min-width: 148px;
+}
+.soha-topology-time {
+  display: block;
+  margin-top: 12px;
+  font-size: 12px;
+}
+.soha-topology-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.soha-topology-workspace.has-inspector {
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 32%);
+}
 .soha-topology-canvas {
-  height: 600px;
+  height: clamp(440px, 65vh, 760px);
   border: 1px solid var(--soha-border-color);
-  border-radius: 14px;
+  border-radius: 8px;
   overflow: hidden;
-  background: var(--soha-workflow-canvas-glow), var(--soha-workflow-canvas-bg);
+  background: var(--soha-workflow-canvas-bg);
 }
-
-.soha-topology-canvas .react-flow__renderer,
-.soha-topology-canvas .react-flow__pane {
-  cursor: grab;
-}
-
-.soha-topology-canvas .react-flow__pane.dragging {
-  cursor: grabbing;
-}
-
-.soha-topology-canvas .react-flow__node {
-  cursor: pointer;
-}
-
 .soha-topology-node {
-  min-width: 252px;
+  width: 252px;
 }
-
 .soha-topology-node-card {
-  padding: 14px 16px;
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 12px;
   border: 1px solid var(--soha-border-color);
-  border-radius: 14px;
+  border-left: 3px solid var(--soha-graph-scope);
+  border-radius: 8px;
   background: var(--soha-bg-surface);
-  box-shadow: var(--soha-shadow-soft);
-  transition:
-    box-shadow 0.18s ease,
-    transform 0.18s ease,
-    border-color 0.18s ease;
+  color: var(--soha-text-primary);
+  cursor: pointer;
+  font: inherit;
+  min-height: 112px;
 }
-
-.soha-topology-node:hover .soha-topology-node-card {
-  transform: translateY(-1px);
-  box-shadow: var(--soha-shadow-panel);
+.soha-topology-node-card:focus-visible {
+  outline: 2px solid var(--soha-primary);
+  outline-offset: 3px;
 }
-
+.soha-topology-node.has-entry .soha-topology-node-card {
+  min-height: 128px;
+}
 .soha-topology-node.is-selected .soha-topology-node-card {
-  box-shadow:
-    0 0 0 2px var(--soha-workflow-node-selected-ring),
-    var(--soha-shadow-panel);
+  box-shadow: 0 0 0 2px var(--soha-workflow-node-selected-ring);
 }
-
 .soha-topology-node-head {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: 8px;
+  font-size: 10px;
+  color: var(--soha-text-secondary);
+  margin-bottom: 8px;
 }
-
-.soha-topology-node-kind {
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  padding: 0 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-}
-
-.soha-topology-node-state {
-  font-size: 11px;
+.soha-topology-node-title {
+  display: block;
+  font-size: 14px;
   font-weight: 600;
-  color: var(--soha-text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-.soha-topology-node-title {
-  color: var(--soha-text-primary);
-  font-size: 15px;
-  line-height: 1.35;
-  font-weight: 700;
-  word-break: break-word;
-}
-
 .soha-topology-node-subtitle {
-  margin-top: 6px;
+  display: block;
   color: var(--soha-text-tertiary);
-  font-size: 12px;
-  line-height: 1.45;
-  word-break: break-word;
+  font-size: 11px;
+  margin-top: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-
-.soha-topology-node-badge {
-  margin-top: 10px;
-  color: var(--soha-text-secondary);
+.soha-topology-node-entry {
+  display: block;
+  margin-top: 6px;
   font-size: 12px;
   font-weight: 500;
-  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-
-.soha-topology-selection {
+.soha-topology-evidence {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin-top: 14px;
-  padding: 14px 16px;
-  border: 1px solid var(--soha-border-color);
-  border-radius: 14px;
-  background: var(--soha-bg-surface-muted);
+  gap: 14px;
+  min-width: 0;
 }
-
-.soha-topology-note-list {
+.soha-topology-wrap,
+.soha-topology-match {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.soha-topology-match,
+.soha-topology-relation,
+.soha-topology-coverage {
+  border-top: 1px solid var(--soha-border-color);
+  padding: 12px 0;
   display: flex;
   flex-direction: column;
   gap: 6px;
+  overflow-wrap: anywhere;
+}
+.soha-topology-isolated {
+  margin-top: 16px;
+}
+.soha-topology-isolated-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.soha-topology-isolated-list > button {
+  max-width: 100%;
+  height: auto;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+@media (max-width: 767px) {
+  .soha-topology-filters > .ant-input-affix-wrapper {
+    max-width: none;
+    width: 100%;
+  }
+  .soha-topology-canvas {
+    height: 460px;
+  }
+  .soha-topology-filters > .ant-select {
+    flex: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .soha-topology-page * {
+    scroll-behavior: auto !important;
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+.soha-topology-resource-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-wrap: anywhere;
+}
+.soha-topology-resource-identity h3 {
+  margin: 0;
+  font-size: var(--soha-font-size-summary);
+  line-height: 1.5;
+}
+.soha-topology-metadata > summary,
+.soha-topology-isolated > summary {
+  cursor: pointer;
+  color: var(--soha-text-secondary);
+  margin-bottom: 8px;
+}
+.soha-topology-neighbors h4 {
+  margin: 0;
+  font-size: var(--soha-font-size);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.soha-topology-neighbor-name {
+  display: block;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.soha-topology-relation > .ant-btn-link {
+  align-self: flex-start;
+  height: auto;
+  max-width: 100%;
+  padding-inline: 0;
+  text-align: start;
 }

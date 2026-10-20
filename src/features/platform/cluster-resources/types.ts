@@ -32,6 +32,8 @@ export interface ClusterNode {
   name: string
   status: string
   unschedulable: boolean
+  taints?: NodeTaint[] | null
+  conditions?: NodeCondition[] | null
   roles: string[]
   version?: string
   internalIp?: string
@@ -71,10 +73,10 @@ export interface NodeCondition {
 }
 
 export interface ClusterNodeDetail extends ClusterNode {
-  labels?: Record<string, string>
-  annotations?: Record<string, string>
   taints?: NodeTaint[]
   conditions?: NodeCondition[]
+  labels?: Record<string, string>
+  annotations?: Record<string, string>
   metricsConfigured?: boolean
   metricsMessage?: string
   pods?: NodePod[]
