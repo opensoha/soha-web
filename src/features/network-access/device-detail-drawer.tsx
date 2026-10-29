@@ -224,13 +224,6 @@ export function EndpointDeviceDetailDrawer({
       <Tabs
         items={[
           {
-            key: 'channel-controls',
-            label: t('networkAccess.endpointChannels', '端点通道'),
-            children: (
-              <EndpointChannelControlsPanel deviceId={device.id} platform={device.platform} />
-            ),
-          },
-          {
             key: 'basic',
             label: t('networkAccess.device.basic', '基本信息'),
             children: (
@@ -256,6 +249,13 @@ export function EndpointDeviceDetailDrawer({
                 rowKey="name"
                 scroll={{ x: 1100 }}
               />
+            ),
+          },
+          {
+            key: 'channel-controls',
+            label: t('networkAccess.endpointChannels', '端点通道'),
+            children: (
+              <EndpointChannelControlsPanel deviceId={device.id} platform={device.platform} />
             ),
           },
         ]}

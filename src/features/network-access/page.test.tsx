@@ -350,7 +350,7 @@ describe('network access page', () => {
       (tab) => tab.textContent?.includes('基本信息'),
     )
     expect(basicTab).not.toBeUndefined()
-    await act(async () => basicTab?.click())
+    expect(basicTab?.getAttribute('aria-selected')).toBe('true')
     await act(async () => {
       await vi.waitFor(() => expect(document.body.textContent).toContain('C02TEST00001'))
     })
